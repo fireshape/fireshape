@@ -26,7 +26,7 @@ class Control(ROL.Vector):
         raise NotImplementedError()
 
     def inner(self, v):
-        return self.inner_product.eval(self, v)
+        return self.inner_product.eval(self.Tfem.vector(), v.Tfem.vector())
 
 
 class FemControl(Control):
