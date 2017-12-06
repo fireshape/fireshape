@@ -4,7 +4,7 @@ class InnerProduct(object):
 
     def __init__(self, mesh, fixed_bids=[]):
         element = mesh.coordinates.function_space().ufl_element()
-        self.V = fd.VectorFunctionSpace(mesh, element)
+        self.V = fd.FunctionSpace(mesh, element)
 
         self.dim = mesh.topological_dimension()
         if self.dim == 2:
@@ -16,12 +16,13 @@ class InnerProduct(object):
 
         a = self.get_weak_form()
 
-        nsp_functions = self.get_nullspace()
-        if len(fixed_bids) == 0 and nsp_functions is not None:
-            nsp = fd.VectorSpaceBasis(nsp_functions)
-            nsp.orthonormalize()
-        else:
-            nsp = None
+        
+        nsp = None
+        if len(fixed_bids) == 0:
+            nsp_functions = self.get_nullspace()
+            if nsp_functions is not None:
+                nsp = fd.VectorSpaceBasis(nsp_functions)
+                nsp.orthonormalize()
 
         params = self.get_params()
 
@@ -31,32 +32,38 @@ class InnerProduct(object):
 
         self.ls = fd.LinearSolver(A, solver_parameters=params, nullspace=nsp,
                 transpose_nullspace=nsp)
-        A.force_evaluation()
         self.A = fd.as_backend_type(A).mat()
 
     def get_weak_form(self):
         raise NotImplementedError
 
-    def get_nullspace():
+    def get_nullspace(self):
         return None
 
-    def get_params():
+    def get_params(self):
         return {
-                'ksp_solver': 'cg', 
-                'pc_type': 'hypre'
+                'ksp_solver': 'gmres', 
+                'pc_type': 'lu'
                 }
 
     def riesz_map(self, v, out): # dual to primal
         # expects two firedrake vector objects
-        self.ls.solve(out, v)
+        if v.fun is None or out.fun is None:
+            self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditions
+        self.ls.solve(out.fun, v.fun)
 
     def eval(self, u, v): # inner product in primal space
         # expects two firedrake vector objects
-        uvec = fd.as_backend_type(u).vec()
-        vvec = fd.as_backend_type(v).vec()
         A_u = self.A.createVecLeft()
-        self.A.mult(uvec, A_u)
-        return vvec.dot(A_u)
+        self.A.mult(u.vec, A_u)
+        return v.vec.dot(A_u)
+
+class HelmholtzInnerProduct(InnerProduct):
+
+    def get_weak_form(self):
+        u = fd.TrialFunction(self.V)
+        v = fd.TestFunction(self.V)
+        return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx + fd.inner(u, v) * fd.dx
 
 class LaplaceInnerProduct(InnerProduct):
 
@@ -88,7 +95,7 @@ class InterpolatingInnerProduct(InnerProduct):
 
 
     def riesz_map(self, v, out):
-        # temp = interp.T*v
-        # temp2 = interp*temp
+        # temp = interp*v
         # self.inner_product.riesz_map(temp2, ..)
         # return interpT*...
+        pass

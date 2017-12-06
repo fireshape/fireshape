@@ -1,28 +1,37 @@
-import ROL
+# import ROL
+import _ROL as ROL
 import firedrake as fd
 
 class Objective(ROL.Objective):
 
-    def __init__(self, q):
-        mesh = q.domain()
-        self.mesh = mesh
-        element = mesh.coordinates.function_space().ufl_element()
-        self.V = fd.FunctionSpace(mesh, element)
+    def __init__(self, q, cb=None):
+        super().__init__()
+        self.V_m = q.V()
+        self.q = q
+        self.Q = q.controlspace
+        self.cb = cb
 
-    def value(self):
+    def val(self):
         raise NotImplementedError
 
     def value(self, x, tol):
-        return self.value()
+        return self.val()
 
-    def directional_derivative(self, v):
+    def derivative_form(self, v):
         raise NotImplementedError
 
+    def derivative(self):
+        v = fd.TestFunction(self.V_m)
+        dir_deriv_fem = fd.assemble(self.derivative_form(v))
+        dir_deriv_control = self.Q.restrict(dir_deriv_fem)
+        return dir_deriv_control
+        
     def gradient(self, g, x, tol):
-        v = TestFunction(self.V)
-        dir_deriv_vals = self.directional_derivative(v)
-        q.inner_product.riesz_map(dir_deriv_vals, g)
+        dir_deriv_control = self.derivative()
+        self.Q.inner_product.riesz_map(dir_deriv_control, g)
 
     def update(self, x, flag, iteration):
-        q.set(x)
-        q.update_domain()
+        self.q.set(x)
+        self.q.update_domain()
+        if iteration > 0 and self.cb is not None:
+            self.cb()
