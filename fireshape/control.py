@@ -41,13 +41,117 @@ class FeControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
 
-    def __init__(self, mesh, inner_product):
+    def __init__(self, mesh, inner_product, bbox, orders, levels, comm):
+        """
+        bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
+              of a Cartesian grid that extends around the shape to be
+              optimised
+        orders: describe the orders (one integer per geometric dimension)
+                of the tensor-product B-spline basis. A univariate B-spline
+                has order "o" if it is a piecewise polynomial of degree
+                "o-1". For instance, a hat function is a B-spline of
+                order 2 and thus degree 1.
+        levels: describe the subdivision levels (one integers per
+                geometric dimension) used to construct the knots of
+                univariate B-splines
+        """
         super().__init__(mesh, inner_product)
+        # information on B-splines
+        self.comm = comm
+        self.dim = len(bbox)
+        self.bbox = bbox
+        self.orders = orders
+        self.levels = levels
+
+        #methods
+        self.construct knots()
+        #self.initialize_B()
         self.interp = self.build_interpolation_matrix()
 
+    def construct_knots(self):
+        """
+        construct self.knots, self.n, self.NA
+
+        self.knots is a list of np.arrays (one per geometric dimension)
+        each array corresponds to the knots used to define the spline space
+
+        """
+        self.knots = []
+        self.n = []
+        for dim in range(self.dim):
+            order = self.orders[dim]
+            level = self.levels[dim]
+
+            assert order >= 1
+            degree = order-1 #splev uses degree, not order
+            assert level >= 1 #with level=1 only bdry Bsplines
+
+            knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
+                                       np.linspace(0., 1., 2**level+1),
+                                       np.ones((order-1,), dtype=float)))
+
+            (xmin, xmax) = self.bbox[dim]
+            knots = (xmax - xmin)*knots_01 + xmin
+            self.knots.append(knots)
+            #list of dimension of univariate spline spaces
+            #the "-2" is because we want homogeneous Dir bc
+            n = len(knots) - order - 2
+            assert n > 0
+            self.n.append(n)
+
+        #dimension of multivariate spline space
+        N = reduce(lambda x, y: x*y, self.n)
+        self.N = N
+
     def build_interpolation_matrix(self):
-        # TODO
+        interp_1d = self.construct_1d_interpolation_matrices
+        self.interp = self.construct_kronecker_matrix(interp_1d)
         raise NotImplementedError
+
+    def construct_1d_interpolation_matrices(self):
+        """
+        Create a list of sparse matrices (one per geometric dimension).
+        Each matrix has size (M, n[dim]), where M is the dimension of the
+        FE interpolation space, and n[dim] is the dimension of the univariate
+        spline space associated to the dimth-geometric coordinate.
+        The ith column of such a matrix is computed by evaluating the ith
+        univariate B-spline on the dimth-geometric coordinate of the dofs of
+        the FE interpolation space
+        """
+        interp_1d = []
+
+        x_fct = SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
+        x_int = interpolate(x_fct[0], self.V_r.sub(0))
+        M = x_int.vextor().size() #no dofs for (scalar) fct in self.V_r.sub(0)
+        for dim in range(self.mesh_r.geometric_dimension()):
+            order = self.orders[dim]
+            knots = self.knots[dim]
+            n = self.n[dim]
+
+            I = PETSc.Mat().create(comm=self.comm)
+            I.setType(PETSc.Mat.Type.AIJ)
+            I.setSizes((M, n))
+            # BIG TODO: figure out the sparsity pattern
+            I.setUp()
+
+            #todo: read fecoords out of  self.id, so far
+            x_int = interpolate(x_fct[dim], self.V_r.sub(0))
+            with x_int.dat.vec_ro as x:
+                for idx in range(n):
+                    coeffs = np.zeros(knots.shape, dtype=float)
+                    coeffs[idx+1] = 1 #idx+1 because we consider hom Dir bc for splines
+                    degree = order - 1
+                    tck = (knots, coeffs, degree)
+
+                    values = splev(x.array, tck, der=0, ext=1)
+                    rows = np.where(values != 0)[0].astype(np.int32)
+                    values = values[rows]
+                    I.setValues(rows, [idx], values)
+
+            I.assemble()# lazy strategy for kron
+            interp_1d.append(I)
+
+        return interp_1d
 
     def restrict(self, residual):
         # self.interp.T * residual
