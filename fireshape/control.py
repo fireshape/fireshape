@@ -13,7 +13,7 @@ class ControlSpace(object):
 
     def restrict(self, residual):
         raise NotImplementedError
-    
+
     def interpolate(self, vector, out):
         # interpolate vector into fe space and overwrite out with result
         raise NotImplementedError
@@ -29,7 +29,7 @@ class FeControlSpace(ControlSpace):
 
     def restrict(self, residual):
         return ControlVector(self, data=residual)
-    
+
     def interpolate(self, vector, out):
         vector.copy(out)
 
@@ -52,7 +52,7 @@ class BsplineControlSpace(ControlSpace):
     def restrict(self, residual):
         # self.interp.T * residual
         raise NotImplementedError
-    
+
     def interpolate(self, vector, out):
         # self.interp * vector
         raise NotImplementedError
@@ -100,7 +100,7 @@ class ControlVector(ROL.Vector):
 
     def dot(self, v):
         return self.controlspace.inner_product.eval(self, v)
-    
+
     def axpy(self, alpha, x):
         self.vec.axpy(alpha, x.vec)
 
@@ -120,7 +120,7 @@ class ControlVector(ROL.Vector):
         with self.Tfem.dat.vec as v:
             self.controlspace.interpolate(self.vec, v)
         self.Tfem += self.controlspace.id
-        
+
     def V(self):
         if self.V_m is None:
             mesh_m = self.domain()

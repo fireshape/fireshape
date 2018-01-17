@@ -25,7 +25,7 @@ class Objective(ROL.Objective):
         dir_deriv_fem = fd.assemble(self.derivative_form(v))
         dir_deriv_control = self.Q.restrict(dir_deriv_fem)
         return dir_deriv_control
-        
+
     def gradient(self, g, x, tol):
         dir_deriv_control = self.derivative()
         self.Q.inner_product.riesz_map(dir_deriv_control, g)

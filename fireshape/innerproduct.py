@@ -16,7 +16,7 @@ class InnerProduct(object):
 
         a = self.get_weak_form()
 
-        
+
         nsp = None
         if len(fixed_bids) == 0:
             nsp_functions = self.get_nullspace()
