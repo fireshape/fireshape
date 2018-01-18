@@ -2,6 +2,12 @@
 import _ROL as ROL
 import firedrake as fd
 
+#new imports for splines
+from petsc4py import PETSc
+from functools import reduce
+from scipy.interpolate import splev
+import numpy as np
+
 __all__ = ["FeControlSpace", "ControlVector"]
 class ControlSpace(object):
 
@@ -41,7 +47,7 @@ class FeControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
 
-    def __init__(self, mesh, inner_product, bbox, orders, levels, comm):
+    def __init__(self, mesh, inner_product, bbox, orders, levels):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -57,7 +63,6 @@ class BsplineControlSpace(ControlSpace):
         """
         super().__init__(mesh, inner_product)
         # information on B-splines
-        self.comm = comm
         self.dim = len(bbox)
         self.bbox = bbox
         self.orders = orders
@@ -106,7 +111,7 @@ class BsplineControlSpace(ControlSpace):
     def build_interpolation_matrix(self):
         interp_1d = self.construct_1d_interpolation_matrices
         self.interp = self.construct_kronecker_matrix(interp_1d)
-        raise NotImplementedError
+        self.construct_index_sets
 
     def construct_1d_interpolation_matrices(self):
         """
@@ -122,15 +127,15 @@ class BsplineControlSpace(ControlSpace):
 
         x_fct = SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
         x_int = interpolate(x_fct[0], self.V_r.sub(0))
-        M = x_int.vextor().size() #no dofs for (scalar) fct in self.V_r.sub(0)
+        self.M = x_int.vextor().size() #no dofs for (scalar) fct in self.V_r.sub(0)
         for dim in range(self.mesh_r.geometric_dimension()):
             order = self.orders[dim]
             knots = self.knots[dim]
             n = self.n[dim]
 
-            I = PETSc.Mat().create(comm=self.comm)
+            I = PETSc.Mat().create(comm=self.mesh_r.mpi_comm())
             I.setType(PETSc.Mat.Type.AIJ)
-            I.setSizes((M, n))
+            I.setSizes((self.M, n))
             # BIG TODO: figure out the sparsity pattern
             I.setUp()
 
@@ -153,13 +158,87 @@ class BsplineControlSpace(ControlSpace):
 
         return interp_1d
 
+    def construct_kronecker_matrix(self, interp_1d):
+        # this may be done matrix-free
+
+        """ 
+        Construct the definitive interpolation matrix by computing
+        the kron product of the rows of the 1d univariate interpolation
+        matrices
+        """
+
+        IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
+        IFW.setType(PETSc.Mat.Type.AIJ)
+        IFW.setSizes((self.M, self.N))
+        # BIG TODO: figure out the sparsity pattern
+        IFW.setUp()
+
+        for row in range(self.M):
+            rows = [A.getRow(row) for A in interp_1d]
+            denserows = [np.zeros((n,)) for n in self.n]
+            for ii in range(self.dim):
+                denserows[ii][rows[ii][0]] = rows[ii][1]
+
+            values = reduce(np.kron, denserows)
+            columns = np.where(values != 0)[0].astype(np.int32)
+            values = values[columns]
+            IFW.setValues([row], columns, values)
+
+        IFW.assemble()
+        return IFW
+
+    def construct_index_sets(self):
+        """
+        Construct index sets to pull out the (x, y, z)-components of a
+        Function defined on self.W.
+        """
+        self.ises = []
+        for dim in range(self.dim):
+            #index are interleaved
+            dofs_dim = self.dim*np.array(list(range(self.M)), dtype=np.int32) + dim
+            is_ = PETSc.IS().createGeneral(dofs_dim, comm=self.mesh_r.mpi_comm())
+            # Possible FIXME: it's much faster to use IS().createStride()
+            self.ises.append(is_)
+
     def restrict(self, residual):
         # self.interp.T * residual
-        raise NotImplementedError
+        """
+        Takes in a Function in self.V_r. Returns a list of PETSc vectors.
+
+        Used to approximate the evaluation of a linear functional (on-
+        cartesian multivariate B-splines) with linear combinations of
+        values of the same linear functional on basis functions in self.W .
+        """
+
+        B = []
+        #fixme: this will eventually need to become parallel
+        with residual.dat.vec as w:
+            for dim in range(self.dim):
+                Bloc = PETSc.Vec().createSeq(self.N, comm=self.mesh_r.mpi_comm())
+                wpart = w.getSubVector(self.ises[dim])
+                self.IFW.multTranspose(wpart ,Bloc)
+                w.restoreSubVector(self.ises[dim], wpart)
+                B.append(Bloc)
+        return B
+
 
     def interpolate(self, vector, out):
-        # self.interp * vector
-        raise NotImplementedError
+        """
+        Takes in the coefficients of a vector field in spline space.
+        Returns its interpolant in self.V_r
+
+        vector is a list of d PETSc vectors of length self.N, which denotes the
+        dimension of the field discretization and d is the geometric dimension.
+        """
+
+        # Construct the Function in self.W.
+        with out.dat.vec as w:
+            for dim in range(self.dim):
+                newvalues = PETSc.Vec().createSeq(self.M, comm=self.mesh_r.mpi_comm())
+                self.IFW.mult(vector[dim], newvalues)
+                w.isaxpy(self.ises[dim], 1.0, newvalues)
+        return v
+
 
     def get_zero_vec(self):
         # new petsc vec ...
