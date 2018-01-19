@@ -4,6 +4,7 @@ import firedrake as fd
 
 #new imports for splines
 from petsc4py import PETSc
+# from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
@@ -73,6 +74,8 @@ class BsplineControlSpace(ControlSpace):
         #self.initialize_B()
         self.interp = self.build_interpolation_matrix()
 
+        # self.inner_product = InterpolatingInnerProduct(...)
+
     def construct_knots(self):
         """
         construct self.knots, self.n, self.NA
@@ -127,7 +130,7 @@ class BsplineControlSpace(ControlSpace):
 
         x_fct = SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
         x_int = interpolate(x_fct[0], self.V_r.sub(0))
-        self.M = x_int.vextor().size() #no dofs for (scalar) fct in self.V_r.sub(0)
+        self.M = x_int.vector().size() #no dofs for (scalar) fct in self.V_r.sub(0)
         for dim in range(self.mesh_r.geometric_dimension()):
             order = self.orders[dim]
             knots = self.knots[dim]
