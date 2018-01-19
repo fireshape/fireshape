@@ -43,7 +43,9 @@ class InnerProduct(object):
     def get_params(self):
         return {
                 'ksp_solver': 'gmres', 
-                'pc_type': 'lu'
+                'pc_type': 'lu',
+                'pc_factor_mat_solver_package': 'mumps',
+                # 'ksp_monitor': True
                 }
 
     def riesz_map(self, v, out): # dual to primal

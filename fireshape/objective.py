@@ -6,7 +6,9 @@ class Objective(ROL.Objective):
 
     def __init__(self, q, cb=None):
         super().__init__()
-        self.V_m = q.V()
+        # self.V_m = q.V()
+        # Om = q.controlspace.moving_mesh()
+        self.V_m = q.controlspace.V_m_fine
         self.q = q
         self.Q = q.controlspace
         self.cb = cb
@@ -31,7 +33,8 @@ class Objective(ROL.Objective):
         self.Q.inner_product.riesz_map(dir_deriv_control, g)
 
     def update(self, x, flag, iteration):
-        self.q.set(x)
-        self.q.update_domain()
+        self.Q.update_mesh(x)
+        # self.q.set(x)
+        # self.q.update_domain()
         if iteration > 0 and self.cb is not None:
             self.cb()

@@ -2,7 +2,7 @@
 import _ROL as ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "ControlVector"]
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "ControlVector"]
 class ControlSpace(object):
 
     def __init__(self, mesh_r, inner_product):
@@ -37,6 +37,46 @@ class FeControlSpace(ControlSpace):
         fun = fd.Function(self.V_r)
         fun *= 0.
         return fun
+
+class FeMultiGridControlSpace(ControlSpace):
+
+    def __init__(self, mesh_r, inner_product):
+        super().__init__(mesh_r, inner_product)
+        self.mesh_hierarchy = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=3)
+        self.mesh_r_coarse = self.mesh_hierarchy[0]
+        self.mesh_r_fine = self.mesh_hierarchy[1]
+        self.V_r_coarse = self.mesh_r_coarse.coordinates.function_space()
+
+        # self.V_r_fine = self.mesh_r_fine.coordinates.function_space()
+        self.V_r_fine = fd.FunctionSpace(self.mesh_r_fine, self.V_r_coarse.ufl_element())
+
+        self.V_r = self.V_r_fine
+
+    def restrict(self, residual):
+        fun = fd.Function(self.V_r_coarse)
+        fd.restrict(residual, fun)
+        return ControlVector(self, data=fun)
+    
+    def interpolate(self, vector, out):
+        vector.copy(out)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_r_coarse)
+        fun *= 0.
+        return fun
+
+    def moving_mesh(self):
+        self.id_fine = fd.Function(self.V_r_fine).interpolate(fd.SpatialCoordinate(self.mesh_r_fine))
+        self.T_fine = self.id_fine.copy(deepcopy=True)
+        self.mesh_m_fine = fd.Mesh(self.T_fine)
+        element = self.mesh_m_fine.coordinates.function_space().ufl_element()
+        self.V_m_fine = fd.FunctionSpace(self.mesh_m_fine, element)
+        return self.mesh_m_fine
+
+    def update_mesh(self, control_vector):
+        fd.prolong(control_vector.fun, self.T_fine)
+        self.T_fine += self.id_fine
+
 
 
 class BsplineControlSpace(ControlSpace):
