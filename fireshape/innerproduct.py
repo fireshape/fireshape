@@ -42,11 +42,12 @@ class InnerProduct(object):
 
     def get_params(self):
         return {
-                'ksp_solver': 'gmres', 
-                'pc_type': 'lu',
-                'pc_factor_mat_solver_package': 'mumps',
-                # 'ksp_monitor': True
-                }
+            'ksp_solver': 'fcg', 
+            'pc_type': 'hypre',
+            'ksp_atol': 1e-9,
+            'ksp_rtol': 1e-9,
+            'ksp_max_it': 100
+        }
 
     def riesz_map(self, v, out): # dual to primal
         # expects two firedrake vector objects
