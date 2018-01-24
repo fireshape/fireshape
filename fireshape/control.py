@@ -5,11 +5,8 @@ import firedrake as fd
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace", "ControlVector"]
 class ControlSpace(object):
 
-    def __init__(self, mesh_r, inner_product):
-        self.mesh_r = mesh_r
-        self.inner_product = inner_product
-        self.V_r = mesh_r.coordinates.function_space()
-        self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
+    def update_domain(self, q: 'ControlVector'):
+        raise NotImplementedError
 
     def restrict(self, residual):
         raise NotImplementedError
@@ -25,7 +22,20 @@ class ControlSpace(object):
 class FeControlSpace(ControlSpace):
 
     def __init__(self, mesh_r, inner_product):
-        super().__init__(mesh_r, inner_product)
+        self.mesh_r = mesh_r
+        self.inner_product = inner_product
+        self.V_r = mesh_r.coordinates.function_space()
+        self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        element = self.mesh_m.coordinates.function_space().ufl_element()
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+    def update_domain(self, q: 'ControlVector'):
+        with self.T.dat.vec as v:
+            self.interpolate(q.vec, v)
+        self.T+= self.id
 
     def restrict(self, residual):
         return ControlVector(self, data=residual)
@@ -40,17 +50,19 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
 
-    def __init__(self, mesh_r, inner_product):
-        super().__init__(mesh_r, inner_product)
-        self.mesh_hierarchy = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=3)
+    def __init__(self, mesh_r, inner_product, refinements_per_level=1):
+        self.inner_product = inner_product
+        self.mesh_hierarchy = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements_per_level)
         self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.mesh_r_fine = self.mesh_hierarchy[1]
         self.V_r_coarse = self.mesh_r_coarse.coordinates.function_space()
-
-        # self.V_r_fine = self.mesh_r_fine.coordinates.function_space()
-        self.V_r_fine = fd.FunctionSpace(self.mesh_r_fine, self.V_r_coarse.ufl_element())
-
-        self.V_r = self.V_r_fine
+        self.mesh_r = self.mesh_hierarchy[1]
+        self.V_r = fd.FunctionSpace(self.mesh_r, self.V_r_coarse.ufl_element())
+        self.id = fd.Function(self.V_r).interpolate(fd.SpatialCoordinate(self.mesh_r))
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        element = self.mesh_m.coordinates.function_space().ufl_element()
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual):
         fun = fd.Function(self.V_r_coarse)
@@ -58,24 +70,16 @@ class FeMultiGridControlSpace(ControlSpace):
         return ControlVector(self, data=fun)
     
     def interpolate(self, vector, out):
-        vector.copy(out)
+        fd.prolong(vector.fun, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
         fun *= 0.
         return fun
 
-    def moving_mesh(self):
-        self.id_fine = fd.Function(self.V_r_fine).interpolate(fd.SpatialCoordinate(self.mesh_r_fine))
-        self.T_fine = self.id_fine.copy(deepcopy=True)
-        self.mesh_m_fine = fd.Mesh(self.T_fine)
-        element = self.mesh_m_fine.coordinates.function_space().ufl_element()
-        self.V_m_fine = fd.FunctionSpace(self.mesh_m_fine, element)
-        return self.mesh_m_fine
-
-    def update_mesh(self, control_vector):
-        fd.prolong(control_vector.fun, self.T_fine)
-        self.T_fine += self.id_fine
+    def update_domain(self, q: 'ControlVector'):
+        self.interpolate(q, self.T)
+        self.T += self.id
 
 
 
@@ -122,10 +126,6 @@ class ControlVector(ROL.Vector):
         # the petsc vector self.vec. If the vector does not correspond
         # to a firedrake function, then self.fun is None
 
-        self.Tfem = None
-        self.Omega = None
-        self.V_m = None
-
     def plus(self, v):
         self.vec += v.vec
 
@@ -146,27 +146,6 @@ class ControlVector(ROL.Vector):
 
     def set(self, v):
         v.vec.copy(self.vec)
-
-    def domain(self):
-        self.update_domain()
-        if self.Omega is None:
-            self.Omega = fd.Mesh(self.Tfem)
-        return self.Omega
-
-    def update_domain(self):
-        if self.Tfem is None:
-            self.Tfem = fd.Function(self.controlspace.V_r)
-
-        with self.Tfem.dat.vec as v:
-            self.controlspace.interpolate(self.vec, v)
-        self.Tfem += self.controlspace.id
-        
-    def V(self):
-        if self.V_m is None:
-            mesh_m = self.domain()
-            element = mesh_m.coordinates.function_space().ufl_element()
-            self.V_m = fd.FunctionSpace(mesh_m, element)
-        return self.V_m
 
     def __str__(self):
         return self.vec[:].__str__()

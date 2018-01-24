@@ -8,9 +8,9 @@ mesh = fd.UnitSquareMesh(n, n)
 
 inner = fs.LaplaceInnerProduct(mesh)
 Q = fs.FeControlSpace(mesh, inner)
-# # Q = fs.BsplineControlSpace(mesh, inner)
-q = fs.ControlVector(Q)
-(x, y) = fd.SpatialCoordinate(q.domain())
+
+mesh_m = Q.mesh_m
+(x, y) = fd.SpatialCoordinate(mesh_m)
 f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
 
 class LevelsetFunctional(fs.Objective):
@@ -23,7 +23,8 @@ class LevelsetFunctional(fs.Objective):
 
 out = fd.File("domain.pvd")
 
-J = LevelsetFunctional(q, cb=lambda: out.write(q.domain().coordinates))
+q = fs.ControlVector(Q)
+J = LevelsetFunctional(Q, cb=lambda: out.write(mesh_m.coordinates))
 
 params_dict = {
     'General': {
@@ -39,7 +40,6 @@ params_dict = {
 }
 
 params = ROL.ParameterList(params_dict, "Parameters")
-x = q.clone() # we need a seperate iteration vector
-problem = ROL.OptimizationProblem(J, x)
+problem = ROL.OptimizationProblem(J, q)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()

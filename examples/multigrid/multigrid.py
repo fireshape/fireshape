@@ -3,25 +3,20 @@ import fireshape as fs
 import _ROL as ROL
 import math
 
-n = 5
-mesh = fd.UnitSquareMesh(n, n)
-mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", 2)).interpolate(fd.SpatialCoordinate(mesh)))
+n = 30
+# mesh = fd.UnitSquareMesh(n, n)
+mesh = fd.Mesh("UnitSquareCrossed.msh")
+mesh = fd.MeshHierarchy(mesh, 1, refinements_per_level=2)[-1]
+fd.File("mesh_r.pvd").write(mesh.coordinates)
+mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1)).interpolate(fd.SpatialCoordinate(mesh)))
 
 
 inner = fs.LaplaceInnerProduct(mesh)
-Q = fs.FeMultiGridControlSpace(mesh, inner)
-mesh_m = Q.moving_mesh()
+Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
+mesh_m = Q.mesh_m
 V_m = fd.FunctionSpace(mesh_m, "CG", 1)
 f_m = fd.Function(V_m)
 
-out = fd.File("mesh_m.pvd")
-out.write(f_m)
-
-q = fs.ControlVector(Q)
-q.fun.interpolate(fd.Expression(("0", "x[0]*x[0]")))
-Q.update_mesh(q)
-out.write(f_m)
-q = fs.ControlVector(Q)
 (x, y) = fd.SpatialCoordinate(mesh_m)
 f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
 
@@ -33,10 +28,10 @@ class LevelsetFunctional(fs.Objective):
     def derivative_form(self, v):
         return fd.div(f*v) * fd.dx
 
-# out = fd.File("domain.pvd")
+q = fs.ControlVector(Q)
 out = fd.File("T.pvd")
-J = LevelsetFunctional(q, cb=lambda: out.write(Q.T_fine))
-# J = LevelsetFunctional(q, cb=lambda: out.write(q.domain().coordinates))
+out.write(Q.T)
+J = LevelsetFunctional(Q, cb=lambda: out.write(Q.T))
 
 params_dict = {
     'General': {
@@ -52,7 +47,6 @@ params_dict = {
 }
 
 params = ROL.ParameterList(params_dict, "Parameters")
-x = q.clone() # we need a seperate iteration vector
-problem = ROL.OptimizationProblem(J, x)
+problem = ROL.OptimizationProblem(J, q)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()

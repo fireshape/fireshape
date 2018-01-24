@@ -1,16 +1,14 @@
 # import ROL
 import _ROL as ROL
 import firedrake as fd
+from .control import ControlSpace
 
 class Objective(ROL.Objective):
 
-    def __init__(self, q, cb=None):
+    def __init__(self, Q: ControlSpace, cb=None):
         super().__init__()
-        # self.V_m = q.V()
-        # Om = q.controlspace.moving_mesh()
-        self.V_m = q.controlspace.V_m_fine
-        self.q = q
-        self.Q = q.controlspace
+        self.V_m = Q.V_m
+        self.Q = Q
         self.cb = cb
 
     def val(self):
@@ -33,8 +31,6 @@ class Objective(ROL.Objective):
         self.Q.inner_product.riesz_map(dir_deriv_control, g)
 
     def update(self, x, flag, iteration):
-        self.Q.update_mesh(x)
-        # self.q.set(x)
-        # self.q.update_domain()
+        self.Q.update_domain(x)
         if iteration > 0 and self.cb is not None:
             self.cb()
