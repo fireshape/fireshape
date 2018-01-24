@@ -1,0 +1,39 @@
+language: python
+python: "3.5"
+addons:
+  apt:
+    packages:
+        - build-essential
+        - python-dev
+        - git
+        - mercurial
+        - python-pip
+        - python-scipy
+        - libopenmpi-dev
+        - openmpi-bin
+        - libblas-dev
+        - liblapack-dev
+        - gfortran
+        - libspatialindex-dev
+        - gmsh
+os:
+  - linux
+
+env:
+  global:
+    - CC=mpicc
+
+before_install:
+  - pip install -U pip
+  - pip install -U virtualenv
+  - pip install -U flake8
+
+install:
+  - curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
+  - python ./firedrake-install --disable-ssh --minimal-petsc
+  - . ./firedrake/bin/activate
+script:
+  - ls
+  - export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+  - python examples/levelset.py
+  - python examples/multigrid/multigrid.py
