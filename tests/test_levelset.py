@@ -63,13 +63,9 @@ class LevelsetTest(unittest.TestCase):
 
     def run_fe_mg(self, order, write_output=False):
         mesh = fd.UnitSquareMesh(4, 4)
-        X = fd.SpatialCoordinate(mesh)
-        coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", order))
-        coords.interpolate(X)
-        mesh = fd.Mesh()
 
         inner = fs.LaplaceInnerProduct()
-        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
+        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
         self.run_levelset_optimization(Q, write_output=write_output)
 
     def test_fe_mg_first_order(self):

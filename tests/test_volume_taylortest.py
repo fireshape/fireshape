@@ -36,13 +36,9 @@ class VolumeTaylorTest(unittest.TestCase):
 
     def run_fe_mg(self, order):
         mesh = fd.UnitSquareMesh(10, 10)
-        X = fd.SpatialCoordinate(mesh)
-        coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", order))
-        coords.interpolate(X)
-        mesh = fd.Mesh(coords)
 
         inner = fs.LaplaceInnerProduct()
-        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
+        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
         self.run_taylor_test(Q)
 
     def test_fe_mg_first_order(self):
