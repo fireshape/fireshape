@@ -2,6 +2,7 @@
 import _ROL as ROL
 import firedrake as fd
 from .control import ControlSpace, ControlVector
+from .pde_constraint import PdeConstraint
 
 
 class Objective(ROL.Objective):
@@ -46,5 +47,26 @@ class Objective(ROL.Objective):
 
     def update(self, x, flag, iteration):
         self.Q.update_domain(x)
+        if iteration > 0 and self.cb is not None:
+            self.cb()
+
+
+class ReducedObjective(Objective):
+
+    def __init__(self, J: Objective, e: PdeConstraint):
+        super().__init__(J.Q, J.cb)
+        self.J = J
+        self.e = e
+
+    def value(self, x, tol):
+        return self.J.value(x, tol)
+
+    def derivative_form(self, v):
+        return self.J.derivative_form(v) + self.e.derivative_form(v)
+
+    def update(self, x, flag, iteration):
+        self.Q.update_domain(x)
+        self.e.solve()
+        self.e.solve_adjoint(self.J.value_form())
         if iteration > 0 and self.cb is not None:
             self.cb()
