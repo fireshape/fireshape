@@ -6,7 +6,7 @@ import math
 n = 100
 mesh = fd.UnitSquareMesh(n, n)
 
-inner = fs.LaplaceInnerProduct(mesh)
+inner = fs.LaplaceInnerProduct()
 Q = fs.FeControlSpace(mesh, inner)
 
 mesh_m = Q.mesh_m

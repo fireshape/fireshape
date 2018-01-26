@@ -52,7 +52,7 @@ class LevelsetTest(unittest.TestCase):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
 
-        inner = fs.LaplaceInnerProduct(mesh)
+        inner = fs.LaplaceInnerProduct()
         Q = fs.FeControlSpace(mesh, inner)
         self.run_levelset_optimization(Q, write_output=False)
 
@@ -60,7 +60,7 @@ class LevelsetTest(unittest.TestCase):
         mesh = fd.UnitSquareMesh(4, 4)
         mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", order)).interpolate(fd.SpatialCoordinate(mesh)))
 
-        inner = fs.LaplaceInnerProduct(mesh)
+        inner = fs.LaplaceInnerProduct()
         Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
         self.run_levelset_optimization(Q, write_output=write_output)
 

@@ -11,7 +11,7 @@ fd.File("mesh_r.pvd").write(mesh.coordinates)
 mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1)).interpolate(fd.SpatialCoordinate(mesh)))
 
 
-inner = fs.LaplaceInnerProduct(mesh)
+inner = fs.LaplaceInnerProduct()
 Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
 mesh_m = Q.mesh_m
 V_m = fd.FunctionSpace(mesh_m, "CG", 1)

@@ -3,6 +3,8 @@ import _ROL as ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace", "ControlVector"]
+
+
 class ControlSpace(object):
 
     def update_domain(self, q: 'ControlVector'):
@@ -10,7 +12,7 @@ class ControlSpace(object):
 
     def restrict(self, residual):
         raise NotImplementedError
-    
+
     def interpolate(self, vector, out):
         # interpolate vector into fe space and overwrite out with result
         raise NotImplementedError
@@ -23,14 +25,14 @@ class FeControlSpace(ControlSpace):
 
     def __init__(self, mesh_r, inner_product):
         self.mesh_r = mesh_r
-        self.inner_product = inner_product
-        self.V_r = mesh_r.coordinates.function_space()
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
         self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        element = self.mesh_m.coordinates.function_space().ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.inner_product = inner_product.get_inner_product_impl(self.V_r)
 
     def update_domain(self, q: 'ControlVector'):
         with self.T.dat.vec as v:
@@ -48,13 +50,16 @@ class FeControlSpace(ControlSpace):
         fun *= 0.
         return fun
 
+
 class FeMultiGridControlSpace(ControlSpace):
 
     def __init__(self, mesh_r, inner_product, refinements_per_level=1):
-        self.inner_product = inner_product
-        self.mesh_hierarchy = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements_per_level)
+        mh = fd.MeshHierarchy(mesh_r, 1,
+                              refinements_per_level=refinements_per_level)
+        self.mesh_hierarchy = mh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = self.mesh_r_coarse.coordinates.function_space()
+        self.inner_product = inner_product.get_inner_product_impl(self.V_r_coarse)
         self.mesh_r = self.mesh_hierarchy[1]
         self.V_r = fd.FunctionSpace(self.mesh_r, self.V_r_coarse.ufl_element())
         self.id = fd.Function(self.V_r).interpolate(fd.SpatialCoordinate(self.mesh_r))
@@ -82,7 +87,6 @@ class FeMultiGridControlSpace(ControlSpace):
         self.T += self.id
 
 
-
 class BsplineControlSpace(ControlSpace):
 
     def __init__(self, mesh, inner_product):
@@ -105,6 +109,7 @@ class BsplineControlSpace(ControlSpace):
         # new petsc vec ...
         # return vec
         raise NotImplementedError
+
 
 class ControlVector(ROL.Vector):
 
@@ -132,15 +137,16 @@ class ControlVector(ROL.Vector):
     def scale(self, alpha):
         self.vec *= alpha
 
-    def clone(self): # misleading name from ROL, returns a vector
-                     # of same size but containing zeros
+    def clone(self):
+        # misleading name from ROL, returns a vector
+        # of same size but containing zeros
         res = ControlVector(self.controlspace)
         # res.set(self)
         return res
 
     def dot(self, v):
         return self.controlspace.inner_product.eval(self, v)
-    
+
     def axpy(self, alpha, x):
         self.vec.axpy(alpha, x.vec)
 

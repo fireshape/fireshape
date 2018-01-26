@@ -36,7 +36,7 @@ class VolumeTaylorTest(unittest.TestCase):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
 
-        inner = fs.LaplaceInnerProduct(mesh)
+        inner = fs.LaplaceInnerProduct()
         Q = fs.FeControlSpace(mesh, inner)
         self.run_taylor_test(Q)
 
@@ -44,7 +44,7 @@ class VolumeTaylorTest(unittest.TestCase):
         mesh = fd.UnitSquareMesh(10, 10)
         mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", order)).interpolate(fd.SpatialCoordinate(mesh)))
 
-        inner = fs.LaplaceInnerProduct(mesh)
+        inner = fs.LaplaceInnerProduct()
         Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
         self.run_taylor_test(Q)
 
