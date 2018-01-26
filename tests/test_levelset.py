@@ -1,6 +1,7 @@
 import unittest
 import firedrake as fd
 import fireshape as fs
+
 import _ROL as ROL
 import math
 
@@ -13,8 +14,8 @@ class LevelsetTest(unittest.TestCase):
 
         class LevelsetFunctional(fs.Objective):
 
-            def val(self):
-                return fd.assemble(f * fd.dx)
+            def value_form(self):
+                return f * fd.dx
 
             def derivative_form(self, v):
                 return fd.div(f*v) * fd.dx
@@ -22,7 +23,7 @@ class LevelsetTest(unittest.TestCase):
         q = fs.ControlVector(Q)
         if write_output:
             out = fd.File("T.pvd")
-            cb = lambda: out.write(Q.T) 
+            cb = lambda: out.write(Q.T)
             cb()
         else:
             cb = None

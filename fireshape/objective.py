@@ -1,21 +1,22 @@
 # import ROL
 import _ROL as ROL
 import firedrake as fd
-from .control import ControlSpace
+from .control import ControlSpace, ControlVector
+
 
 class Objective(ROL.Objective):
 
-    def __init__(self, Q: ControlSpace, cb=None):
+    def __init__(self, Q: ControlSpace, cb=None, scale=1.0):
         super().__init__()
         self.V_m = Q.V_m
         self.Q = Q
         self.cb = cb
 
-    def val(self):
+    def value_form(self):
         raise NotImplementedError
 
     def value(self, x, tol):
-        return self.val()
+        return self.scale * fd.assemble(self.value_form())
 
     def derivative_form(self, v):
         raise NotImplementedError

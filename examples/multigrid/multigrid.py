@@ -1,7 +1,7 @@
 import firedrake as fd
 import fireshape as fs
+import fireshape.zoo as fsz
 import _ROL as ROL
-import math
 
 n = 30
 # mesh = fd.UnitSquareMesh(n, n)
@@ -19,19 +19,11 @@ f_m = fd.Function(V_m)
 
 (x, y) = fd.SpatialCoordinate(mesh_m)
 f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
-
-class LevelsetFunctional(fs.Objective):
-
-    def val(self):
-        return fd.assemble(f * fd.dx)
-
-    def derivative_form(self, v):
-        return fd.div(f*v) * fd.dx
+J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(Q.T))
 
 q = fs.ControlVector(Q)
 out = fd.File("T.pvd")
 out.write(Q.T)
-J = LevelsetFunctional(Q, cb=lambda: out.write(Q.T))
 
 params_dict = {
     'General': {

@@ -1,25 +1,17 @@
 import unittest
 import firedrake as fd
 import fireshape as fs
+import fireshape.zoo as fsz
 import _ROL as ROL
 import math
 
 class VolumeTaylorTest(unittest.TestCase):
 
     def run_taylor_test(self, Q):
-        mesh_m = Q.mesh_m
         f = fd.Constant(1.0)
 
-        class LevelsetFunctional(fs.Objective):
-
-            def val(self):
-                return fd.assemble(f * fd.dx(domain=mesh_m))
-
-            def derivative_form(self, v):
-                return fd.div(f*v) * fd.dx(domain=mesh_m)
-
         x = fs.ControlVector(Q)
-        J = LevelsetFunctional(Q)
+        J = fsz.LevelsetFunctional(f, Q)
         """ move mesh a bit to check that we are not doing the taylor test in T=id """
         g = x.clone()
         J.gradient(g, x, None)
