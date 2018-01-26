@@ -37,11 +37,12 @@ class FeControlSpace(ControlSpace):
     def update_domain(self, q: 'ControlVector'):
         with self.T.dat.vec as v:
             self.interpolate(q.vec, v)
-        self.T+= self.id
+        self.T += self.id
 
-    def restrict(self, residual):
-        return ControlVector(self, data=residual)
-    
+    def restrict(self, residual, out):
+        with residual.dat.vec as vecres:
+            vecres.copy(out.vec)
+
     def interpolate(self, vector, out):
         vector.copy(out)
 
@@ -69,11 +70,9 @@ class FeMultiGridControlSpace(ControlSpace):
         element = self.mesh_m.coordinates.function_space().ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
-    def restrict(self, residual):
-        fun = fd.Function(self.V_r_coarse)
-        fd.restrict(residual, fun)
-        return ControlVector(self, data=fun)
-    
+    def restrict(self, residual, out):
+        fd.restrict(residual, out.fun)
+
     def interpolate(self, vector, out):
         fd.prolong(vector.fun, out)
 
