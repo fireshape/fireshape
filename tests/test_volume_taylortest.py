@@ -2,8 +2,7 @@ import unittest
 import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
-import _ROL as ROL
-import math
+
 
 class VolumeTaylorTest(unittest.TestCase):
 
@@ -12,7 +11,10 @@ class VolumeTaylorTest(unittest.TestCase):
 
         x = fs.ControlVector(Q)
         J = fsz.LevelsetFunctional(f, Q)
-        """ move mesh a bit to check that we are not doing the taylor test in T=id """
+        """
+        move mesh a bit to check that we are not doing the
+        taylor test in T=id
+        """
         g = x.clone()
         J.gradient(g, x, None)
         x.plus(g)
@@ -34,7 +36,10 @@ class VolumeTaylorTest(unittest.TestCase):
 
     def run_fe_mg(self, order):
         mesh = fd.UnitSquareMesh(10, 10)
-        mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", order)).interpolate(fd.SpatialCoordinate(mesh)))
+        X = fd.SpatialCoordinate(mesh)
+        coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", order))
+        coords.interpolate(X)
+        mesh = fd.Mesh(coords)
 
         inner = fs.LaplaceInnerProduct()
         Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)

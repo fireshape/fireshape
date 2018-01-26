@@ -20,15 +20,15 @@ J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 
 params_dict = {
     'General': {
-        'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
+        'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25}},
     'Step': {
         'Type': 'Line Search',
-        'Line Search': { 'Descent Method': { 'Type': 'Quasi-Newton Step' } }
+        'Line Search': {'Descent Method': {'Type': 'Quasi-Newton Step'}}
     },
     'Status Test': {
         'Gradient Tolerance': 1e-15, 'Relative Gradient Tolerance': 1e-10,
         'Step Tolerance': 1e-16, 'Relative Step Tolerance': 1e-10,
-        'Iteration Limit': 100 }
+        'Iteration Limit': 100}
 }
 
 params = ROL.ParameterList(params_dict, "Parameters")

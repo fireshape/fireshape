@@ -8,7 +8,10 @@ n = 30
 mesh = fd.Mesh("UnitSquareCrossed.msh")
 mesh = fd.MeshHierarchy(mesh, 1, refinements_per_level=2)[-1]
 fd.File("mesh_r.pvd").write(mesh.coordinates)
-mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1)).interpolate(fd.SpatialCoordinate(mesh)))
+X = fd.SpatialCoordinate(mesh)
+coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1))
+coords.interpolate(X)
+mesh = fd.Mesh(coords)
 
 
 inner = fs.LaplaceInnerProduct()
@@ -27,16 +30,14 @@ out.write(Q.T)
 
 params_dict = {
     'General': {
-        'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
+        'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25}},
     'Step': {
         'Type': 'Line Search',
-        'Line Search': { 'Descent Method': { 'Type': 'Quasi-Newton Step' } }
-    },
+        'Line Search': {'Descent Method': {'Type': 'Quasi-Newton Step'}}},
     'Status Test': {
         'Gradient Tolerance': 1e-15, 'Relative Gradient Tolerance': 1e-10,
         'Step Tolerance': 1e-16, 'Relative Step Tolerance': 1e-10,
-        'Iteration Limit': 100 }
-}
+        'Iteration Limit': 100}}
 
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)

@@ -3,7 +3,7 @@ import firedrake as fd
 import fireshape as fs
 
 import _ROL as ROL
-import math
+
 
 class LevelsetTest(unittest.TestCase):
 
@@ -23,7 +23,10 @@ class LevelsetTest(unittest.TestCase):
         q = fs.ControlVector(Q)
         if write_output:
             out = fd.File("T.pvd")
-            cb = lambda: out.write(Q.T)
+
+            def cb(*args):
+                out.write(Q.T)
+
             cb()
         else:
             cb = None
@@ -31,16 +34,17 @@ class LevelsetTest(unittest.TestCase):
 
         params_dict = {
             'General': {
-                'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
+                'Secant': {'Type': 'Limited-Memory BFGS',
+                           'Maximum Storage': 25}},
             'Step': {
                 'Type': 'Line Search',
-                'Line Search': { 'Descent Method': { 'Type': 'Quasi-Newton Step' } }
-            },
+                'Line Search': {'Descent Method': {
+                    'Type': 'Quasi-Newton Step'}}},
             'Status Test': {
-                'Gradient Tolerance': 1e-7, 'Relative Gradient Tolerance': 1e-6,
+                'Gradient Tolerance': 1e-7,
+                'Relative Gradient Tolerance': 1e-6,
                 'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
-                'Iteration Limit': 150 }
-        }
+                'Iteration Limit': 150}}
 
         params = ROL.ParameterList(params_dict, "Parameters")
         problem = ROL.OptimizationProblem(J, q)
@@ -59,7 +63,10 @@ class LevelsetTest(unittest.TestCase):
 
     def run_fe_mg(self, order, write_output=False):
         mesh = fd.UnitSquareMesh(4, 4)
-        mesh = fd.Mesh(fd.Function(fd.VectorFunctionSpace(mesh, "CG", order)).interpolate(fd.SpatialCoordinate(mesh)))
+        X = fd.SpatialCoordinate(mesh)
+        coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", order))
+        coords.interpolate(X)
+        mesh = fd.Mesh()
 
         inner = fs.LaplaceInnerProduct()
         Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
