@@ -26,7 +26,7 @@ class InnerProduct(object):
         self.fixed_bids = fixed_bids
         self.params = self.get_params()
 
-    def get_inner_product_impl(self, V):
+    def get_impl(self, V):
         dim = V.value_size
         if dim == 2:
             zerovector = fd.Constant((0, 0))
@@ -63,7 +63,7 @@ class InnerProduct(object):
 
     def get_params(self):
         return {
-                'ksp_solver': 'gmres', 
+                'ksp_solver': 'gmres',
                 'pc_type': 'lu',
                 'pc_factor_mat_solver_package': 'mumps',
                 # 'ksp_monitor': True
@@ -75,7 +75,10 @@ class HelmholtzInnerProduct(InnerProduct):
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx + fd.inner(u, v) * fd.dx
+        a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
+            + fd.inner(u, v) * fd.dx
+        return a
+
 
 class LaplaceInnerProduct(InnerProduct):
 
@@ -105,7 +108,6 @@ class InterpolatingInnerProduct(InnerProduct):
     def __init__(self, inner_product, interp):
         self.interp = interp
         self.inner_product = inner_product
-
 
     def riesz_map(self, v, out):
         # temp = interp*v

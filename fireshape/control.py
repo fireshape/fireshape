@@ -32,7 +32,7 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
-        self.inner_product = inner_product.get_inner_product_impl(self.V_r)
+        self.inner_product = inner_product.get_impl(self.V_r)
 
     def update_domain(self, q: 'ControlVector'):
         with self.T.dat.vec as v:
@@ -60,10 +60,11 @@ class FeMultiGridControlSpace(ControlSpace):
         self.mesh_hierarchy = mh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = self.mesh_r_coarse.coordinates.function_space()
-        self.inner_product = inner_product.get_inner_product_impl(self.V_r_coarse)
+        self.inner_product = inner_product.get_impl(self.V_r_coarse)
         self.mesh_r = self.mesh_hierarchy[1]
         self.V_r = fd.FunctionSpace(self.mesh_r, self.V_r_coarse.ufl_element())
-        self.id = fd.Function(self.V_r).interpolate(fd.SpatialCoordinate(self.mesh_r))
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
@@ -99,7 +100,7 @@ class BsplineControlSpace(ControlSpace):
     def restrict(self, residual):
         # self.interp.T * residual
         raise NotImplementedError
-    
+
     def interpolate(self, vector, out):
         # self.interp * vector
         raise NotImplementedError
@@ -154,4 +155,3 @@ class ControlVector(ROL.Vector):
 
     def __str__(self):
         return self.vec[:].__str__()
-
