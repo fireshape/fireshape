@@ -8,14 +8,9 @@ n = 30
 mesh = fd.Mesh("UnitSquareCrossed.msh")
 mesh = fd.MeshHierarchy(mesh, 1, refinements_per_level=2)[-1]
 fd.File("mesh_r.pvd").write(mesh.coordinates)
-X = fd.SpatialCoordinate(mesh)
-coords = fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1))
-coords.interpolate(X)
-mesh = fd.Mesh(coords)
-
 
 inner = fs.LaplaceInnerProduct()
-Q = fs.FeMultiGridControlSpace(mesh, inner, refinements_per_level=4)
+Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=2)
 mesh_m = Q.mesh_m
 V_m = fd.FunctionSpace(mesh_m, "CG", 1)
 f_m = fd.Function(V_m)

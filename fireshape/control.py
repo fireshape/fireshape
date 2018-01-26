@@ -54,21 +54,22 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
 
-    def __init__(self, mesh_r, inner_product, refinements_per_level=1):
+    def __init__(self, mesh_r, inner_product, refinements=1, order=1):
         mh = fd.MeshHierarchy(mesh_r, 1,
-                              refinements_per_level=refinements_per_level)
+                              refinements_per_level=refinements)
         self.mesh_hierarchy = mh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = self.mesh_r_coarse.coordinates.function_space()
+        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
+                                                 order)
+        element = self.V_r_coarse.ufl_element()
         self.inner_product = inner_product.get_impl(self.V_r_coarse)
         self.mesh_r = self.mesh_hierarchy[1]
-        self.V_r = fd.FunctionSpace(self.mesh_r, self.V_r_coarse.ufl_element())
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        element = self.mesh_m.coordinates.function_space().ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
