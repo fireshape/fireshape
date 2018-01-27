@@ -62,11 +62,11 @@ class ReducedObjective(Objective):
         return self.J.value(x, tol)
 
     def derivative_form(self, v):
-        return self.J.derivative_form(v) + self.e.derivative_form(v)
+        return self.J.scale * self.J.derivative_form(v) + self.e.derivative_form(v)
 
     def update(self, x, flag, iteration):
         self.Q.update_domain(x)
         self.e.solve()
-        self.e.solve_adjoint(self.J.value_form())
+        self.e.solve_adjoint(self.J.scale * self.J.value_form())
         if iteration > 0 and self.cb is not None:
             self.cb()
