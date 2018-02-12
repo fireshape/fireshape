@@ -89,13 +89,12 @@ class LaplaceInnerProduct(InnerProduct):
 
 class InterpolatingInnerProduct(InnerProduct):
 
-    def __init__(self, inner_product, interp):
-        self.interp = interp
+    def __init__(self, inner_product, interpolate, restrict):
+        self.interpolate = interpolate
+        self.restrict = restrict
         self.inner_product = inner_product
 
-
     def riesz_map(self, v, out):
-        # temp = interp*v
-        # self.inner_product.riesz_map(temp2, ..)
-        # return interpT*...
-        pass
+        v_fd = self.interpolate(v,out)
+        self.inner_product.riesz_map(v_fd, out_fd)
+        return self.restrict(out_fd)

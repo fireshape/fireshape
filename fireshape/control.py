@@ -72,9 +72,8 @@ class BsplineControlSpace(ControlSpace):
         #methods
         self.construct_knots()
         #self.initialize_B()
-        self.interp = self.build_interpolation_matrix()
 
-        # self.inner_product = InterpolatingInnerProduct(...)
+        self.inner_product = InterpolatingInnerProduct(inner_product, interpolate, restrict)
 
     def construct_knots(self):
         """
