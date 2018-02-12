@@ -9,7 +9,7 @@ from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
 
-__all__ = ["FeControlSpace", "ControlVector"]
+__all__ = ["BsplineControlSpace", "FeControlSpace", "ControlVector"]
 class ControlSpace(object):
 
     def __init__(self, mesh_r, inner_product):
@@ -70,7 +70,7 @@ class BsplineControlSpace(ControlSpace):
         self.levels = levels
 
         #methods
-        self.construct knots()
+        self.construct_knots()
         #self.initialize_B()
         self.interp = self.build_interpolation_matrix()
 
@@ -112,7 +112,7 @@ class BsplineControlSpace(ControlSpace):
         self.N = N
 
     def build_interpolation_matrix(self):
-        interp_1d = self.construct_1d_interpolation_matrices
+        interp_1d = self.construct_1d_interpolation_matrices()
         self.interp = self.construct_kronecker_matrix(interp_1d)
         self.construct_index_sets
 
@@ -128,9 +128,11 @@ class BsplineControlSpace(ControlSpace):
         """
         interp_1d = []
 
-        x_fct = SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
-        x_int = interpolate(x_fct[0], self.V_r.sub(0))
+        x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
+        x_int = fd.interpolate(x_fct[0], self.V_r.sub(0))
         self.M = x_int.vector().size() #no dofs for (scalar) fct in self.V_r.sub(0)
+        #import pdb
+        #pdb.set_trace()
         for dim in range(self.mesh_r.geometric_dimension()):
             order = self.orders[dim]
             knots = self.knots[dim]
@@ -143,7 +145,7 @@ class BsplineControlSpace(ControlSpace):
             I.setUp()
 
             #todo: read fecoords out of  self.id, so far
-            x_int = interpolate(x_fct[dim], self.V_r.sub(0))
+            x_int = fd.interpolate(x_fct[dim], self.V_r.sub(0))
             with x_int.dat.vec_ro as x:
                 for idx in range(n):
                     coeffs = np.zeros(knots.shape, dtype=float)
@@ -204,25 +206,23 @@ class BsplineControlSpace(ControlSpace):
             self.ises.append(is_)
 
     def restrict(self, residual):
-        # self.interp.T * residual
         """
-        Takes in a Function in self.V_r. Returns a list of PETSc vectors.
+        Takes in a Function in self.V_r. Returns a PETSc vector of length self.N*self.dim.
 
         Used to approximate the evaluation of a linear functional (on-
         cartesian multivariate B-splines) with linear combinations of
         values of the same linear functional on basis functions in self.W .
         """
 
-        B = []
-        #fixme: this will eventually need to become parallel
+        out =  PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm()) #shall we use createMPI?
         with residual.dat.vec as w:
             for dim in range(self.dim):
-                Bloc = PETSc.Vec().createSeq(self.N, comm=self.mesh_r.mpi_comm())
+                newvalues = PETSc.Vec().createSeq(self.N, comm=self.mesh_r.mpi_comm())
                 wpart = w.getSubVector(self.ises[dim])
-                self.IFW.multTranspose(wpart ,Bloc)
+                self.IFW.multTranspose(wpart ,newvalues)
                 w.restoreSubVector(self.ises[dim], wpart)
-                B.append(Bloc)
-        return B
+                B.isaxpy(self.ises[dim], 1.0, newvalues)
+        return out
 
 
     def interpolate(self, vector, out):
@@ -230,23 +230,22 @@ class BsplineControlSpace(ControlSpace):
         Takes in the coefficients of a vector field in spline space.
         Returns its interpolant in self.V_r
 
-        vector is a list of d PETSc vectors of length self.N, which denotes the
-        dimension of the field discretization and d is the geometric dimension.
+        vector is a PETSc vector of length self.N*self.dim
         """
 
         # Construct the Function in self.W.
         with out.dat.vec as w:
             for dim in range(self.dim):
                 newvalues = PETSc.Vec().createSeq(self.M, comm=self.mesh_r.mpi_comm())
-                self.IFW.mult(vector[dim], newvalues)
+                vectorpart = vector.getSubVector(self.ises[dim])
+                self.IFW.mult(vectorpart, newvalues)
+                vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
                 w.isaxpy(self.ises[dim], 1.0, newvalues)
-        return v
+        return out
 
 
     def get_zero_vec(self):
-        # new petsc vec ...
-        # return vec
-        raise NotImplementedError
+        return PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
 
 class ControlVector(ROL.Vector):
 
