@@ -5,7 +5,7 @@ services:
   - docker
 
 before_install:
-  - docker pull ubuntu:17.10
+  - docker pull florianwechsung/firedrake:latest
 
 script:
-  - travis_wait 60 docker build .
+  - docker build .
