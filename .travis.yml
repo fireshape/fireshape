@@ -1,5 +1,4 @@
-language: python
-python: "3.6"
+language: generic
 sudo: required
 addons:
   apt:
@@ -28,14 +27,16 @@ env:
     - CC=mpicc
 
 before_install:
-  - pip install -U pip
-  - pip install -U virtualenv
-  - pip install -U flake8
+  - brew install python3
+  - pip3 install -U pip3
+  - pip3 install -U virtualenv
+  - pip3 install -U flake8
 
 install:
   - curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
   - travis_wait 30 python ./firedrake-install --disable-ssh --minimal-petsc
   - . ./firedrake/bin/activate
+
 script:
   - ls
   - export PYTHONPATH=$(pwd)/src:$PYTHONPATH
