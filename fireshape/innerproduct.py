@@ -87,7 +87,7 @@ class LaplaceInnerProduct(InnerProduct):
         return res
 
 
-class InterpolatingInnerProduct(InnerProduct):
+class InterpolatedInnerProduct(InnerProduct):
 
     def __init__(self, inner_product, interpolate, restrict):
         self.interpolate = interpolate

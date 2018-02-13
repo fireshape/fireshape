@@ -8,6 +8,8 @@ from petsc4py import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
+from .innerproduct import InterpolatedInnerProduct
+import ipdb
 
 __all__ = ["BsplineControlSpace", "FeControlSpace", "ControlVector"]
 class ControlSpace(object):
@@ -73,7 +75,8 @@ class BsplineControlSpace(ControlSpace):
         self.construct_knots()
         #self.initialize_B()
 
-        self.inner_product = InterpolatingInnerProduct(inner_product, interpolate, restrict)
+        self.build_interpolation_matrix()
+        self.inner_product = InterpolatedInnerProduct(inner_product, self.interpolate, self.restrict)
 
     def construct_knots(self):
         """
@@ -112,8 +115,8 @@ class BsplineControlSpace(ControlSpace):
 
     def build_interpolation_matrix(self):
         interp_1d = self.construct_1d_interpolation_matrices()
-        self.interp = self.construct_kronecker_matrix(interp_1d)
-        self.construct_index_sets
+        self.IFW = self.construct_kronecker_matrix(interp_1d)
+        self.construct_index_sets()
 
     def construct_1d_interpolation_matrices(self):
         """
@@ -196,13 +199,19 @@ class BsplineControlSpace(ControlSpace):
         Construct index sets to pull out the (x, y, z)-components of a
         Function defined on self.W.
         """
-        self.ises = []
+        self.ises = [] #index sets for PETSc control vector
+        for dim in range(self.dim):
+            dofs_dim = np.array(list(range(self.N)), dtype=np.int32) + dim*self.N
+            is_ = PETSc.IS().createGeneral(dofs_dim, comm=self.mesh_r.mpi_comm())
+            self.ises.append(is_)
+
+        self.isesFD = [] #index sets for firedrake function
         for dim in range(self.dim):
             #index are interleaved
             dofs_dim = self.dim*np.array(list(range(self.M)), dtype=np.int32) + dim
             is_ = PETSc.IS().createGeneral(dofs_dim, comm=self.mesh_r.mpi_comm())
             # Possible FIXME: it's much faster to use IS().createStride()
-            self.ises.append(is_)
+            self.isesFD.append(is_)
 
     def restrict(self, residual):
         """
@@ -212,15 +221,17 @@ class BsplineControlSpace(ControlSpace):
         cartesian multivariate B-splines) with linear combinations of
         values of the same linear functional on basis functions in self.W .
         """
-
-        out =  PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm()) #shall we use createMPI?
+        #shall we use createMPI?
+        out =  PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
         with residual.dat.vec as w:
             for dim in range(self.dim):
                 newvalues = PETSc.Vec().createSeq(self.N, comm=self.mesh_r.mpi_comm())
-                wpart = w.getSubVector(self.ises[dim])
+                wpart = w.getSubVector(self.isesFD[dim])
+                if not self.IFW.size[0] == wpart.size:
+                    ipdb.set_trace()
                 self.IFW.multTranspose(wpart ,newvalues)
-                w.restoreSubVector(self.ises[dim], wpart)
-                B.isaxpy(self.ises[dim], 1.0, newvalues)
+                w.restoreSubVector(self.isesFD[dim], wpart)
+                out.isaxpy(self.ises[dim], 1.0, newvalues)
         return out
 
 
@@ -233,15 +244,18 @@ class BsplineControlSpace(ControlSpace):
         """
 
         # Construct the Function in self.W.
-        with out.dat.vec as w:
-            for dim in range(self.dim):
-                newvalues = PETSc.Vec().createSeq(self.M, comm=self.mesh_r.mpi_comm())
-                vectorpart = vector.getSubVector(self.ises[dim])
-                self.IFW.mult(vectorpart, newvalues)
-                vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
-                w.isaxpy(self.ises[dim], 1.0, newvalues)
-        return out
-
+        #with out.dat.vec as w:
+        for dim in range(self.dim):
+            newvalues = PETSc.Vec().createSeq(self.M, comm=self.mesh_r.mpi_comm())
+            vectorpart = vector.getSubVector(self.ises[dim])
+            self.IFW.mult(vectorpart, newvalues)
+            vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
+            if isinstance(out, ControlVector):
+                #ipdb.set_trace()
+                with out.vec as outvec:
+                    outvec.isaxpy(self.isesFD[dim], 1.0, newvalues)
+            else:
+                out.isaxpy(self.isesFD[dim], 1.0, newvalues)
 
     def get_zero_vec(self):
         return PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
