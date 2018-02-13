@@ -21,7 +21,7 @@ addons:
         - python3-venv
         - python3-tk
 os:
-  - linux
+  - osx
 
 env:
   global:
