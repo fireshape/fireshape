@@ -2,7 +2,7 @@ import unittest
 import firedrake as fd
 import fireshape as fs
 
-import _ROL as ROL
+import ROL
 
 
 class LevelsetTest(unittest.TestCase):

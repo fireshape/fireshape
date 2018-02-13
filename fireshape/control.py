@@ -1,5 +1,4 @@
-# import ROL
-import _ROL as ROL
+import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace", "ControlVector"]

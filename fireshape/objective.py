@@ -1,5 +1,4 @@
-# import ROL
-import _ROL as ROL
+import ROL
 import firedrake as fd
 from .control import ControlSpace, ControlVector
 
