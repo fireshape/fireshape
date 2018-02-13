@@ -4,3 +4,4 @@ FROM florianwechsung/firedrake:latest
 run . firedrake/bin/activate
 run pip3 install roltrilinos
 run pip3 install ROL
+run pytest
