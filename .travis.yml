@@ -1,41 +1,11 @@
-language: generic
 sudo: required
-addons:
-  apt:
-    packages:
-        - build-essential
-        - python3-dev
-        - git
-        - mercurial
-        - python3-pip
-        - python3-scipy
-        - libopenmpi-dev
-        - openmpi-bin
-        - libblas-dev
-        - liblapack-dev
-        - gfortran
-        - libspatialindex-dev
-        - gmsh
-        - cmake
-        - python3-venv
-        - python3-tk
-os:
-  - osx
 
-env:
-  global:
-    - CC=mpicc
+language: cpp
+services:
+  - docker
 
 before_install:
-  - brew install python3
-
-install:
-  - curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-  - travis_wait 30 python3 ./firedrake-install --disable-ssh --minimal-petsc
-  - . ./firedrake/bin/activate
+  - docker pull ubuntu:17.04
 
 script:
-  - ls
-  - export PYTHONPATH=$(pwd)/src:$PYTHONPATH
-  - python examples/levelset.py
-  - python examples/multigrid/multigrid.py
+  - docker build .
