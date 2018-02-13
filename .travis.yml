@@ -5,11 +5,11 @@ addons:
   apt:
     packages:
         - build-essential
-        - python-dev
+        - python3-dev
         - git
         - mercurial
-        - python-pip
-        - python-scipy
+        - python3-pip
+        - python3-scipy
         - libopenmpi-dev
         - openmpi-bin
         - libblas-dev
@@ -17,6 +17,9 @@ addons:
         - gfortran
         - libspatialindex-dev
         - gmsh
+        - cmake
+        - python3-venv
+        - python3-tk
 os:
   - linux
 
