@@ -95,7 +95,8 @@ class InterpolatedInnerProduct(InnerProduct):
         self.inner_product = inner_product
 
     def riesz_map(self, v, out):
-        v_fd, out_fd = emptyfiredrakefunctions 
+        v_fd = fd.Function(self.inner_product.V)
+        out_fd = fd.Function(self.inner_product.V)
         self.interpolate(v, v_fd)
         self.inner_product.riesz_map(v_fd, out_fd)
         out = self.restrict(out_fd)
