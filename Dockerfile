@@ -7,3 +7,6 @@ RUN apt-get install -y python3-dev python3-pip python3-scipy cmake python3-venv 
 
 RUN curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
 RUN python3 ./firedrake-install --disable-ssh --minimal-petsc 
+run . firedrake/bin/activate
+run pip3 install roltrilinos
+run pip3 install ROL

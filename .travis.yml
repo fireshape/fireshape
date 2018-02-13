@@ -8,4 +8,4 @@ before_install:
   - docker pull ubuntu:17.10
 
 script:
-  - docker build .
+  - travis_wait 60 docker build .
