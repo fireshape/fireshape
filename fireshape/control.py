@@ -252,8 +252,8 @@ class BsplineControlSpace(ControlSpace):
             vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
             if isinstance(out, ControlVector):
                 #ipdb.set_trace()
-                with out.vec as outvec:
-                    outvec.isaxpy(self.isesFD[dim], 1.0, newvalues)
+                #with out.vec as outvec:
+                out.vec.isaxpy(self.isesFD[dim], 1.0, newvalues)
             else:
                 out.isaxpy(self.isesFD[dim], 1.0, newvalues)
 
