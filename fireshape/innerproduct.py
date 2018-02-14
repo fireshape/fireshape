@@ -1,38 +1,44 @@
 import firedrake as fd
 
 class InnerProduct(object):
+    "Choose the metric for Riesz representatives of Frechet derivatives.
+    To compute Riesz representatives, exploit Firedrake capabilities
 
+    The input fixed_bids is a list of bdry parts that are not free to move
+    "
     def __init__(self, mesh, fixed_bids=[]):
+
         element = mesh.coordinates.function_space().ufl_element()
-        self.V = fd.FunctionSpace(mesh, element)
+        self.V = fd.FunctionSpace(mesh, element) #shall we call this self.V_r?
+        self.dim = mesh.topological_dimension() #dimension of physical space
 
-        self.dim = mesh.topological_dimension()
-        if self.dim == 2:
-            zerovector = fd.Constant((0, 0))
-        elif self.dim == 3:
-            zerovector = fd.Constant((0, 0, 0))
-        else:
-            raise NotImplementedError
-
+        #assemble Riesz matrix A
         a = self.get_weak_form()
+        A = fd.assemble(a, mat_type='aij')
 
+        #incorporate homogenous Dirichlet bcs in Riesz matrix A
+        if len(fixed_bids) > 0:
+            if self.dim <= 3:
+                zeros = tuple(0 for x in range(self.dim))
+                zerovector = fd.Constant(zeros)
+            else:
+                raise NotImplementedError
+            for bid in fixed_bids:
+                fd.DirichletBC(self.V, zerovector, bid).apply(A)
 
-        nsp = None
+        #find the nullspace of the Riesz equation
+        nsp = None #should this be replaced by get_nullspace?
         if len(fixed_bids) == 0:
             nsp_functions = self.get_nullspace()
             if nsp_functions is not None:
                 nsp = fd.VectorSpaceBasis(nsp_functions)
                 nsp.orthonormalize()
 
+        #read solver parameters
         params = self.get_params()
-
-        A = fd.assemble(a, mat_type='aij')
-        for bid in fixed_bids:
-            fd.DirichletBC(self.V, zerovector, bid).apply(A)
-
         self.ls = fd.LinearSolver(A, solver_parameters=params, nullspace=nsp,
                 transpose_nullspace=nsp)
-        self.A = fd.as_backend_type(A).mat()
+        self.A = fd.as_backend_type(A).mat() #what is this?
 
     def get_weak_form(self):
         raise NotImplementedError
@@ -47,13 +53,13 @@ class InnerProduct(object):
                 }
 
     def riesz_map(self, v, out): # dual to primal
-        # expects two firedrake vector objects
+        # expects two FEControlObjects
         if v.fun is None or out.fun is None:
             self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditions
         self.ls.solve(out.fun, v.fun)
 
     def eval(self, u, v): # inner product in primal space
-        # expects two firedrake vector objects
+        # expects two FEControlObjects
         A_u = self.A.createVecLeft()
         self.A.mult(u.vec, A_u)
         return v.vec.dot(A_u)
@@ -99,5 +105,6 @@ class InterpolatedInnerProduct(InnerProduct):
         out_fd = fd.Function(self.inner_product.V)
         with v_fd.dat.vec as x:
             self.interpolate(v, x)
-        self.inner_product.riesz_map(v_fd, out_fd)
+        self.ls.solve(out_fd, v_fd)
+        #self.inner_product.riesz_map(v_fd, out_fd)
         out = self.restrict(out_fd)

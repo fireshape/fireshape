@@ -84,7 +84,6 @@ class BsplineControlSpace(ControlSpace):
 
         self.knots is a list of np.arrays (one per geometric dimension)
         each array corresponds to the knots used to define the spline space
-
         """
         self.knots = []
         self.n = []
@@ -247,9 +246,9 @@ class BsplineControlSpace(ControlSpace):
         #with out.dat.vec as w:
         for dim in range(self.dim):
             newvalues = PETSc.Vec().createSeq(self.M, comm=self.mesh_r.mpi_comm())
-            vectorpart = vector.getSubVector(self.ises[dim])
+            vectorpart = vector.vec.getSubVector(self.ises[dim])
             self.IFW.mult(vectorpart, newvalues)
-            vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
+            vectorpart = vector.vec.restoreSubVector(self.ises[dim], vectorpart)
             print(type(out))
             #if isinstance(out,  fd.CoordinatelessFunction):
             #    ipdb.set_trace()
@@ -259,7 +258,8 @@ class BsplineControlSpace(ControlSpace):
             out.isaxpy(self.isesFD[dim], 1.0, newvalues)
 
     def get_zero_vec(self):
-        return PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
+        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
+        return ControlVector(BsplineControlSpace, data=vec)
 
 class ControlVector(ROL.Vector):
 
@@ -270,12 +270,12 @@ class ControlVector(ROL.Vector):
         if data is None:
             data = controlspace.get_zero_vec()
 
-        if isinstance(data, fd.Function):
+        if isinstance(data, fd.Function): #is it a good ide to store the additional info in self.fun?
             self.fun = data
             with data.dat.vec as v:
                 self.vec = v
         else:
-            self.vec = data
+            self.vec = data #self.vec is always a PETSc vector
             self.fun = None
         # self.fun is the firedrake function object wrapping around
         # the petsc vector self.vec. If the vector does not correspond
