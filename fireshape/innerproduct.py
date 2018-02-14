@@ -26,15 +26,19 @@ class InnerProduct(object):
             for bid in fixed_bids:
                 fd.DirichletBC(self.V, zerovector, bid).apply(A)
 
-        #find the nullspace of the Riesz equation
-        nsp = None #should this be replaced by get_nullspace?
-        if len(fixed_bids) == 0:
-            nsp_functions = self.get_nullspace()
-            if nsp_functions is not None:
-                nsp = fd.VectorSpaceBasis(nsp_functions)
-                nsp.orthonormalize()
+        #find the nullspace of the Riesz equation, may be None
+        #nsp = None
+        #if len(fixed_bids) == 0: #may not be a guarantee for weird inner products, suggest to drop this line
+        nsp_functions = self.get_nullspace()
+        if nsp_functions is not None:
+            nsp = fd.VectorSpaceBasis(nsp_functions)
+            nsp.orthonormalize()
+        else:
+            nsp = None
 
-        #read solver parameters
+        #the following lines indicate that we want to use firedrake to solve linear systems
+        #alternatively, we could use firedrake to define linear systems, but go directly to PETSc for solving
+        #the first option requires recasting non-FEControlVector to firedrake control vectors
         params = self.get_params()
         self.ls = fd.LinearSolver(A, solver_parameters=params, nullspace=nsp,
                 transpose_nullspace=nsp)
@@ -55,8 +59,8 @@ class InnerProduct(object):
     def riesz_map(self, v, out): # dual to primal
         # expects two FEControlObjects
         if v.fun is None or out.fun is None:
-            self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditions
-        self.ls.solve(out.fun, v.fun)
+            self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditionsd
+        self.ls.solve(out.fun, v.fun) #suggestion: force this
 
     def eval(self, u, v): # inner product in primal space
         # expects two FEControlObjects
@@ -94,7 +98,11 @@ class LaplaceInnerProduct(InnerProduct):
 
 
 class InterpolatedInnerProduct(InnerProduct):
-
+    """
+    this cannot be correct if the support of the nonFEM basis vector fields is
+    larger than the physical domain, or if the computational domains has holes
+    that intersect the support of nonFEM basis vector field
+    """
     def __init__(self, inner_product, interpolate, restrict):
         self.interpolate = interpolate
         self.restrict = restrict
