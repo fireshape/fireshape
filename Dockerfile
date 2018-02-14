@@ -5,7 +5,7 @@ FROM florianwechsung/firedrake:latest
 SHELL ["/bin/bash", "-c"]
 RUN ls
 RUN ls /
-RUN . firedrake/bin/activate
+RUN source firedrake/bin/activate; which python
 RUN cd ~
 RUN which python
 RUN pip3 install roltrilinos
