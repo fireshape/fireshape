@@ -1,6 +1,7 @@
 FROM florianwechsung/firedrake:latest
 
 # Install
+RUN . firedrake/bin/activate
 RUN cd ~
 RUN pip3 install roltrilinos
 RUN pip3 install ROL
