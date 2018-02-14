@@ -250,12 +250,13 @@ class BsplineControlSpace(ControlSpace):
             vectorpart = vector.getSubVector(self.ises[dim])
             self.IFW.mult(vectorpart, newvalues)
             vectorpart = vector.restoreSubVector(self.ises[dim], vectorpart)
-            if isinstance(out,  fd.CoordinatelessFunction):
-                ipdb.set_trace()
+            print(type(out))
+            #if isinstance(out,  fd.CoordinatelessFunction):
+            #    ipdb.set_trace()
             #with out.vec as outvec:
             #    outvec.isaxpy(self.isesFD[dim], 1.0, newvalues)
-            else:
-                out.isaxpy(self.isesFD[dim], 1.0, newvalues)
+            #else:
+            out.isaxpy(self.isesFD[dim], 1.0, newvalues)
 
     def get_zero_vec(self):
         return PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
