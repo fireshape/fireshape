@@ -107,12 +107,18 @@ class InterpolatedInnerProduct(InnerProduct):
         self.interpolate = interpolate
         self.restrict = restrict
         self.inner_product = inner_product
+        self.A = IT * self.inner_product.A * I
+        # set diagonals to one if entire row/column is zero
+        self.Aksp = ...
 
     def riesz_map(self, v, out):
-        v_fd = fd.Function(self.inner_product.V)
-        out_fd = fd.Function(self.inner_product.V)
-        with v_fd.dat.vec as x:
-            self.interpolate(v, x)
-        self.ls.solve(out_fd, v_fd)
-        #self.inner_product.riesz_map(v_fd, out_fd)
-        out = self.restrict(out_fd)
+        # v_fd = fd.Function(self.inner_product.V)
+        # out_fd = fd.Function(self.inner_product.V)
+        # with v_fd.dat.vec as x:
+        #     self.interpolate(v, x)
+        # self.ls.solve(out_fd, v_fd)
+        # #self.inner_product.riesz_map(v_fd, out_fd)
+        # out = self.restrict(out_fd)
+        self.Aksp.solve(v.vec, out.vec)
+
+        
