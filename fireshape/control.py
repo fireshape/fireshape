@@ -29,18 +29,6 @@ class ControlSpace(object):
         self.inner_product is the inner product of the ControlSpace
 
     """
-    def update_domain(self, q: 'ControlVector'):
-        """
-        Update the interpolant self.T
-
-        shall we implement this here?
-        with self.T.dat.vec as v:
-            self.interpolate(q.vec, v)
-        self.T += self.id
-        why is FeMultiGridControlSpace.update_domain different?
-        """
-        raise NotImplementedError
-
     def restrict(self, residual, out):
         """
         Restrict from self.V_r into ControlSpace
@@ -56,6 +44,18 @@ class ControlSpace(object):
         Interpolate from ControlSpace into self.V_r
         Input: vector is a variable in ControlSpace
                out is a variable in self.V_r, is overwritten with the result
+        """
+        raise NotImplementedError
+
+    def update_domain(self, q: 'ControlVector'):
+        """
+        Update the interpolant self.T
+
+        shall we implement this here?
+        with self.T.dat.vec as v:
+            self.interpolate(q.vec, v)
+        self.T += self.id
+        why is FeMultiGridControlSpace.update_domain different?
         """
         raise NotImplementedError
 
@@ -81,17 +81,17 @@ class FeControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.inner_product = inner_product.get_impl(self.V_r)
 
-    def update_domain(self, q: 'ControlVector'):
-        with self.T.dat.vec as v:
-            self.interpolate(q.vec, v)
-        self.T += self.id
-
     def restrict(self, residual, out):
         with residual.dat.vec as vecres:
             vecres.copy(out.vec)
 
     def interpolate(self, vector, out):
         vector.copy(out)
+
+    def update_domain(self, q: 'ControlVector'):
+        with self.T.dat.vec as v:
+            self.interpolate(q.vec, v)
+        self.T += self.id
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r)
@@ -125,14 +125,14 @@ class FeMultiGridControlSpace(ControlSpace):
     def interpolate(self, vector, out):
         fd.prolong(vector.fun, out)
 
+    def update_domain(self, q: 'ControlVector'):
+        self.interpolate(q, self.T)#why is it different form the other ones
+        self.T += self.id
+
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
         fun *= 0.
         return fun
-
-    def update_domain(self, q: 'ControlVector'):
-        self.interpolate(q, self.T)#why is it different form the other ones
-        self.T += self.id
 
 
 class BsplineControlSpace(ControlSpace):
@@ -305,7 +305,6 @@ class BsplineControlSpace(ControlSpace):
         FullIFW.assemble()
         return FullIFW
 
-
     def restrict(self, residual, out):
         """
         Takes in a Function in self.V_r. Returns a PETSc vector of length self.N*self.dim.
@@ -328,14 +327,14 @@ class BsplineControlSpace(ControlSpace):
         # Construct the Function in self.W.
         self.FullIFW.mult(vector, out)
 
-    def get_zero_vec(self):
-        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
-        return vec
-
     def update_domain(self, q: 'ControlVector'):
         with self.T.dat.vec as w:
             self.interpolate(q.vec, w)
         self.T += self.id
+
+    def get_zero_vec(self):
+        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
+        return vec
 
 class ControlVector(ROL.Vector):
 
