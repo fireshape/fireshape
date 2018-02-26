@@ -21,6 +21,12 @@ class InnerProductImpl(object):
 
 
 class InnerProduct(object):
+    """
+    Choose the metric for Riesz representatives of Frechet derivatives.
+    To compute Riesz representatives, exploit Firedrake capabilities
+
+    The input fixed_bids is a list of bdry parts that are not free to move
+    """
 
     def __init__(self, fixed_bids=[]):
         self.fixed_bids = fixed_bids
@@ -73,6 +79,17 @@ class InnerProduct(object):
                 # 'ksp_monitor': True
                 }
 
+    def riesz_map(self, v, out): # dual to primal
+        # expects two FEControlObjects
+        if v.fun is None or out.fun is None:
+            self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditionsd
+        self.ls.solve(out.fun, v.fun) #suggestion: force this
+
+    def eval(self, u, v): # inner product in primal space
+        # expects two FEControlObjects
+        A_u = self.A.createVecLeft()
+        self.A.mult(u.vec, A_u)
+        return v.vec.dot(A_u)
 
 class HelmholtzInnerProduct(InnerProduct):
 
@@ -149,14 +166,44 @@ class ElasticityInnerProduct(InnerProduct):
         return res
 
 
-class InterpolatingInnerProduct(InnerProduct):
+class InterpolatedInnerProduct(InnerProduct):
 
-    def __init__(self, inner_product, interp):
-        self.interp = interp
-        self.inner_product = inner_product
+    """
+    this cannot be correct if the support of the nonFEM basis vector fields is
+    larger than the physical domain, or if the computational domains has holes
+    that intersect the support of nonFEM basis vector field
+    """
+
+    def __init__(self, A, I):
+        ITAI = A.PtAP(I)
+        
+        from firedrake.petsc import PETSc
+        import numpy as np
+        zero_rows = []
+        for row in range(ITAI.size[0]):
+            (cols, vals) = ITAI.getRow(row)
+            valnorm = np.linalg.norm(vals)
+            if valnorm < 1e-13:
+                zero_rows.append(row)
+        for row in zero_rows:
+            ITAI.setValue(row, row, 1.0)
+        ITAI.assemble()
+        self.A = ITAI
+        #create solver
+        # Aksp = PETSc.KSP().create(comm=self.comm)
+        Aksp = PETSc.KSP().create()
+        Aksp.setOperators(ITAI)
+        Aksp.setType("preonly")
+        Aksp.pc.setType("cholesky")
+        Aksp.pc.setFactorSolverPackage("mumps")
+        Aksp.setFromOptions()
+        Aksp.setUp()
+        self.Aksp = Aksp
 
     def riesz_map(self, v, out):
-        # temp = interp*v
-        # self.inner_product.riesz_map(temp2, ..)
-        # return interpT*...
-        pass
+        self.Aksp.solve(v.vec, out.vec)
+
+    def eval(self, u, v):
+        A_u = self.A.createVecLeft()
+        self.A.mult(u.vec, A_u)
+        return v.vec.dot(A_u)

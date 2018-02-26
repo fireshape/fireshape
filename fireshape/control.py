@@ -1,8 +1,16 @@
 import ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "ControlVector"]
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "BsplineControlSpace", "ControlVector"]
 
+
+#new imports for splines
+from firedrake.petsc import PETSc
+from functools import reduce
+from scipy.interpolate import splev
+import numpy as np
+from .innerproduct import InterpolatedInnerProduct
+import ipdb
 
 class ControlSpace(object):
 
@@ -89,27 +97,208 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
 
-    def __init__(self, mesh, inner_product):
-        super().__init__(mesh, inner_product)
-        self.interp = self.build_interpolation_matrix()
+    def __init__(self, mesh, inner_product, bbox, orders, levels):
+        """
+        bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
+              of a Cartesian grid that extends around the shape to be
+              optimised
+        orders: describe the orders (one integer per geometric dimension)
+                of the tensor-product B-spline basis. A univariate B-spline
+                has order "o" if it is a piecewise polynomial of degree
+                "o-1". For instance, a hat function is a B-spline of
+                order 2 and thus degree 1.
+        levels: describe the subdivision levels (one integers per
+                geometric dimension) used to construct the knots of
+                univariate B-splines
+        """
+        # information on B-splines
+        self.mesh_r = mesh
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.Function(self.V_r).interpolate(X)
+
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+        self.dim = len(bbox)
+        self.bbox = bbox
+        self.orders = orders
+        self.levels = levels
+
+        #methods
+        self.construct_knots()
+        #self.initialize_B()
+
+        self.build_interpolation_matrix()
+        
+        A = inner_product.get_impl(self.V_r).A
+        self.inner_product = InterpolatedInnerProduct(A, self.FullIFW)
+
+    def construct_knots(self):
+        """
+        construct self.knots, self.n, self.NA
+
+        self.knots is a list of np.arrays (one per geometric dimension)
+        each array corresponds to the knots used to define the spline space
+        """
+        self.knots = []
+        self.n = []
+        for dim in range(self.dim):
+            order = self.orders[dim]
+            level = self.levels[dim]
+
+            assert order >= 1
+            degree = order-1 #splev uses degree, not order
+            assert level >= 1 #with level=1 only bdry Bsplines
+
+            knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
+                                       np.linspace(0., 1., 2**level+1),
+                                       np.ones((order-1,), dtype=float)))
+
+            (xmin, xmax) = self.bbox[dim]
+            knots = (xmax - xmin)*knots_01 + xmin
+            self.knots.append(knots)
+            #list of dimension of univariate spline spaces
+            #the "-2" is because we want homogeneous Dir bc
+            n = len(knots) - order - 2
+            assert n > 0
+            self.n.append(n)
+
+        #dimension of multivariate spline space
+        N = reduce(lambda x, y: x*y, self.n)
+        self.N = N
 
     def build_interpolation_matrix(self):
-        # TODO
-        raise NotImplementedError
+        interp_1d = self.construct_1d_interpolation_matrices()
+        IFW = self.construct_kronecker_matrix(interp_1d)
+        self.FullIFW = self.construct_full_interpolation_matrix(IFW)
 
-    def restrict(self, residual):
-        # self.interp.T * residual
-        raise NotImplementedError
+    def construct_1d_interpolation_matrices(self):
+        """
+        Create a list of sparse matrices (one per geometric dimension).
+        Each matrix has size (M, n[dim]), where M is the dimension of the
+        FE interpolation space, and n[dim] is the dimension of the univariate
+        spline space associated to the dimth-geometric coordinate.
+        The ith column of such a matrix is computed by evaluating the ith
+        univariate B-spline on the dimth-geometric coordinate of the dofs of
+        the FE interpolation space
+        """
+        interp_1d = []
+
+        x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
+        x_int = fd.interpolate(x_fct[0], self.V_r.sub(0))
+        self.M = x_int.vector().size() #no dofs for (scalar) fct in self.V_r.sub(0)
+        #import pdb
+        #pdb.set_trace()
+        for dim in range(self.mesh_r.geometric_dimension()):
+            order = self.orders[dim]
+            knots = self.knots[dim]
+            n = self.n[dim]
+
+            I = PETSc.Mat().create(comm=self.mesh_r.mpi_comm())
+            I.setType(PETSc.Mat.Type.AIJ)
+            I.setSizes((self.M, n))
+            # BIG TODO: figure out the sparsity pattern
+            I.setUp()
+
+            #todo: read fecoords out of  self.id, so far
+            x_int = fd.interpolate(x_fct[dim], self.V_r.sub(0))
+            with x_int.dat.vec_ro as x:
+                for idx in range(n):
+                    coeffs = np.zeros(knots.shape, dtype=float)
+                    coeffs[idx+1] = 1 #idx+1 because we consider hom Dir bc for splines
+                    degree = order - 1
+                    tck = (knots, coeffs, degree)
+
+                    values = splev(x.array, tck, der=0, ext=1)
+                    rows = np.where(values != 0)[0].astype(np.int32)
+                    values = values[rows]
+                    I.setValues(rows, [idx], values)
+
+            I.assemble()# lazy strategy for kron
+            interp_1d.append(I)
+
+        return interp_1d
+
+    def construct_kronecker_matrix(self, interp_1d):
+        # this may be done matrix-free
+
+        """ 
+        Construct the definitive interpolation matrix by computing
+        the kron product of the rows of the 1d univariate interpolation
+        matrices
+        """
+
+        IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
+        IFW.setType(PETSc.Mat.Type.AIJ)
+        IFW.setSizes((self.M, self.N))
+        # BIG TODO: figure out the sparsity pattern
+        IFW.setUp()
+
+        for row in range(self.M):
+            rows = [A.getRow(row) for A in interp_1d]
+            denserows = [np.zeros((n,)) for n in self.n]
+            for ii in range(self.dim):
+                denserows[ii][rows[ii][0]] = rows[ii][1]
+
+            values = reduce(np.kron, denserows)
+            columns = np.where(values != 0)[0].astype(np.int32)
+            values = values[columns]
+            IFW.setValues([row], columns, values)
+
+        IFW.assemble()
+        return IFW
+
+    def construct_full_interpolation_matrix(self, IFW):
+        FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
+        FullIFW.setType(PETSc.Mat.Type.AIJ)
+        FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
+        # BIG TODO: figure out the sparsity pattern
+        FullIFW.setUp()
+
+        for row in range(self.M):
+            (cols, vals) = IFW.getRow(row)
+            for dim in range(self.dim):
+                FullIFW.setValues([self.dim * row + dim],
+                                  [self.dim * col + dim for col in cols],
+                                  vals)
+        FullIFW.assemble()
+        return FullIFW
+
+
+    def restrict(self, residual, out):
+        """
+        Takes in a Function in self.V_r. Returns a PETSc vector of length self.N*self.dim.
+
+        Used to approximate the evaluation of a linear functional (on-
+        cartesian multivariate B-splines) with linear combinations of
+        values of the same linear functional on basis functions in self.W .
+        """
+        with residual.dat.vec as w:
+            self.FullIFW.multTranspose(w, out.vec)
 
     def interpolate(self, vector, out):
-        # self.interp * vector
-        raise NotImplementedError
+        """
+        Takes in the coefficients of a vector field in spline space.
+        Returns its interpolant in self.V_r
+
+        vector is a PETSc vector of length self.N*self.dim
+        """
+
+        # Construct the Function in self.W.
+        self.FullIFW.mult(vector, out)
 
     def get_zero_vec(self):
-        # new petsc vec ...
-        # return vec
-        raise NotImplementedError
+        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
+        return vec
 
+    def update_domain(self, q: 'ControlVector'):
+        with self.T.dat.vec as w:
+            self.interpolate(q.vec, w)
+        self.T += self.id
 
 class ControlVector(ROL.Vector):
 
@@ -120,12 +309,12 @@ class ControlVector(ROL.Vector):
         if data is None:
             data = controlspace.get_zero_vec()
 
-        if isinstance(data, fd.Function):
+        if isinstance(data, fd.Function): #is it a good ide to store the additional info in self.fun?
             self.fun = data
             with data.dat.vec as v:
                 self.vec = v
         else:
-            self.vec = data
+            self.vec = data #self.vec is always a PETSc vector
             self.fun = None
         # self.fun is the firedrake function object wrapping around
         # the petsc vector self.vec. If the vector does not correspond
