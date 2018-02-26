@@ -13,18 +13,54 @@ from .innerproduct import InterpolatedInnerProduct
 import ipdb
 
 class ControlSpace(object):
+    """
+    ControlSpace is the space of geometric transformations.
 
+    A transformation is identified with a domain using Firedrake. In particular,
+    a transformation is converted into a domain by interpolating it on a
+    Firedrake Lagrangian finite element space.
+
+    Notational convention:
+        self.mesh_r is the initial physical mesh (reference domain)
+        self.V_r is the Firedrake vectorial Lagrangian finite element space on mesh_r
+        self.id is the element of V_r that satisfies id(x) = x for every x
+        self.T is the correspondent of self.id in the ControlSpace
+        self.mesh_m is the mesh that corresponds to self.T (moved domain)
+        self.V_m is the Firedrake vectorial Lagrangian finite element space on mesh_m
+        self.inner_product is the inner product of the ControlSpace
+
+    """
     def update_domain(self, q: 'ControlVector'):
+        """shall we implement this here?
+        with self.T.dat.vec as v:
+            self.interpolate(q.vec, v)
+        self.T += self.id
+        why is FeMultiGridControlSpace.update_domain different?
+        """
         raise NotImplementedError
 
-    def restrict(self, residual):
+    def restrict(self, residual, out):
+        """
+        Restrict from self.V_r into ControlSpace
+        Input: residual is a variable in self.V_r
+               out is a variable in ControlSpace, is overwritten with the result
+            (if we modify FeMultiGridControlSpace.restrict, then we can write that
+            out.vec is overwritten with the result)
+        """
         raise NotImplementedError
 
     def interpolate(self, vector, out):
-        # interpolate vector into fe space and overwrite out with result
+        """
+        Interpolate from ControlSpace into self.V_r
+        Input: vector is a variable in ControlSpace
+               out is a variable in self.V_r, is overwritten with the result
+        """
         raise NotImplementedError
 
     def get_zero_vec(self):
+        """
+        Create a variable in ControlSpace the corresponds to zero
+        """
         raise NotImplementedError
 
 
@@ -80,7 +116,7 @@ class FeMultiGridControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.fun)
+        fd.restrict(residual, out.fun) #better if we overwrite out.vec
 
     def interpolate(self, vector, out):
         fd.prolong(vector.fun, out)
@@ -91,7 +127,7 @@ class FeMultiGridControlSpace(ControlSpace):
         return fun
 
     def update_domain(self, q: 'ControlVector'):
-        self.interpolate(q, self.T)
+        self.interpolate(q, self.T)#why is it different form the other ones
         self.T += self.id
 
 
