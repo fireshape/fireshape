@@ -10,7 +10,6 @@ from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
 from .innerproduct import InterpolatedInnerProduct
-import ipdb
 
 class ControlSpace(object):
     """
