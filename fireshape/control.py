@@ -1,8 +1,8 @@
 import ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "BsplineControlSpace", "ControlVector"]
-
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace",
+           "BsplineControlSpace", "ControlVector"]
 
 #new imports for splines
 from firedrake.petsc import PETSc
@@ -15,27 +15,28 @@ class ControlSpace(object):
     """
     ControlSpace is the space of geometric transformations.
 
-    A transformation is identified with a domain using Firedrake. In particular,
-    a transformation is converted into a domain by interpolating it on a
-    Firedrake Lagrangian finite element space.
+    A transformation is identified with a domain using Firedrake.
+    In particular, a transformation is converted into a domain by
+    interpolating it on a Firedrake Lagrangian finite element space.
 
     Notational convention:
         self.mesh_r is the initial physical mesh (reference domain)
-        self.V_r is the Firedrake vectorial Lagrangian finite element space on mesh_r
+        self.V_r is the Firedrake vectorial Lagrangian finite element
+            space on mesh_r
         self.id is the element of V_r that satisfies id(x) = x for every x
         self.T is the interpolant of this ControlSpace variable in self.V_r
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
-        self.V_m is the Firedrake vectorial Lagrangian finite element space on mesh_m
+        self.V_m is the Firedrake vectorial Lagrangian finite element
+            space on mesh_m
         self.inner_product is the inner product of the ControlSpace
-
     """
     def restrict(self, residual, out):
         """
         Restrict from self.V_r into ControlSpace
         Input: residual is a variable in self.V_r
-               out is a variable in ControlSpace, is overwritten with the result
-            (if we modify FeMultiGridControlSpace.restrict, then we can write that
-            out.vec is overwritten with the result)
+               out is a variable in ControlSpace, (overwritten with result)
+               (if we modify FeMultiGridControlSpace.restrict,
+               then we can write that out.vec is overwritten with result)
         """
         raise NotImplementedError
 
@@ -152,7 +153,7 @@ class BsplineControlSpace(ControlSpace):
                 univariate B-splines
         """
         # information on B-splines
-        self.dim = len(bbox)
+        self.dim = len(bbox) #geometric dimension
         self.bbox = bbox
         self.orders = orders
         self.levels = levels
@@ -169,6 +170,8 @@ class BsplineControlSpace(ControlSpace):
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
+        assert self.dim == self.mesh_r.geometric_dimension()
+
         # interpolated inner product
         self.build_interpolation_matrix()
         A = inner_product.get_impl(self.V_r).A
@@ -176,10 +179,15 @@ class BsplineControlSpace(ControlSpace):
 
     def construct_knots(self):
         """
-        construct self.knots, self.n, self.NA
+        construct self.knots, self.n, self.N
 
         self.knots is a list of np.arrays (one per geometric dimension)
         each array corresponds to the knots used to define the spline space
+
+        self.n is a list of univariate spline space dimensions
+            (one per geometric dim)
+
+        self.N is the dimension of the scalar tensorized spline space
         """
         self.knots = []
         self.n = []
@@ -188,7 +196,7 @@ class BsplineControlSpace(ControlSpace):
             level = self.levels[dim]
 
             assert order >= 1
-            degree = order-1 #splev uses degree, not order
+            degree = order-1 #np.splev uses degree, not order
             assert level >= 1 #with level=1 only bdry Bsplines
 
             knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
@@ -198,7 +206,7 @@ class BsplineControlSpace(ControlSpace):
             (xmin, xmax) = self.bbox[dim]
             knots = (xmax - xmin)*knots_01 + xmin
             self.knots.append(knots)
-            #list of dimension of univariate spline spaces
+            #dimension of univariate spline spaces
             #the "-2" is because we want homogeneous Dir bc
             n = len(knots) - order - 2
             assert n > 0
@@ -209,28 +217,36 @@ class BsplineControlSpace(ControlSpace):
         self.N = N
 
     def build_interpolation_matrix(self):
+        """
+        Construct the matrix self.FullIFW, whose columns are the interpolant
+        of (vectorial tensorized) Bsplines into self.V_r
+        """
+        #construct list of scalar univariate interpolation matrices
         interp_1d = self.construct_1d_interpolation_matrices()
+        #construct scalar tensorial interpolation matrix
         IFW = self.construct_kronecker_matrix(interp_1d)
+        #stack self.dim-many IFW matrices on top of each other
         self.FullIFW = self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self):
         """
         Create a list of sparse matrices (one per geometric dimension).
         Each matrix has size (M, n[dim]), where M is the dimension of the
-        FE interpolation space, and n[dim] is the dimension of the univariate
+        self.V_r.sub(0), and n[dim] is the dimension of the univariate
         spline space associated to the dimth-geometric coordinate.
         The ith column of such a matrix is computed by evaluating the ith
-        univariate B-spline on the dimth-geometric coordinate of the dofs of
-        the FE interpolation space
+        univariate B-spline on the dimth-geometric coordinate of the dofs
+        of self.V_r(0)
         """
         interp_1d = []
 
+        #Florian make this more beautiful, I think we can use self.id
         x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
         x_int = fd.interpolate(x_fct[0], self.V_r.sub(0))
-        self.M = x_int.vector().size() #no dofs for (scalar) fct in self.V_r.sub(0)
-        #import pdb
-        #pdb.set_trace()
-        for dim in range(self.mesh_r.geometric_dimension()):
+        self.M = x_int.vector().size() #number of dofs for (scalar) fct in self.V_r.sub(0)
+
+        for dim in range(self.dim):
+        #for dim in range(self.mesh_r.geometric_dimension()):
             order = self.orders[dim]
             knots = self.knots[dim]
             n = self.n[dim]
@@ -307,7 +323,8 @@ class BsplineControlSpace(ControlSpace):
 
     def restrict(self, residual, out):
         """
-        Takes in a Function in self.V_r. Returns a PETSc vector of length self.N*self.dim.
+        Takes in a Function in self.V_r. Returns a PETSc vector
+        of length self.N*self.dim.
 
         Used to approximate the evaluation of a linear functional (on-
         cartesian multivariate B-splines) with linear combinations of
