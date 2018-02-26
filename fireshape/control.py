@@ -45,6 +45,9 @@ class ControlSpace(object):
         Interpolate from ControlSpace into self.V_r
         Input: vector is a variable in ControlSpace
                out is a variable in self.V_r, is overwritten with the result
+
+        TODO: check that this is done properly.
+              Is vector always a ControlVector?
         """
         raise NotImplementedError
 
@@ -196,7 +199,7 @@ class BsplineControlSpace(ControlSpace):
             level = self.levels[dim]
 
             assert order >= 1
-            degree = order-1 #np.splev uses degree, not order
+            #degree = order-1 #splev uses degree, not order
             assert level >= 1 #with level=1 only bdry Bsplines
 
             knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
@@ -225,7 +228,7 @@ class BsplineControlSpace(ControlSpace):
         interp_1d = self.construct_1d_interpolation_matrices()
         #construct scalar tensorial interpolation matrix
         IFW = self.construct_kronecker_matrix(interp_1d)
-        #stack self.dim-many IFW matrices on top of each other
+        #intertwine self.dim-many IFW matrices among each other
         self.FullIFW = self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self):
@@ -262,8 +265,8 @@ class BsplineControlSpace(ControlSpace):
             with x_int.dat.vec_ro as x:
                 for idx in range(n):
                     coeffs = np.zeros(knots.shape, dtype=float)
-                    coeffs[idx+1] = 1 #idx+1 because we consider hom Dir bc for splines
-                    degree = order - 1
+                    coeffs[idx+1] = 1 #idx+1 because we impose hom Dir bc
+                    degree = order - 1 #splev uses degree, not order
                     tck = (knots, coeffs, degree)
 
                     values = splev(x.array, tck, der=0, ext=1)
@@ -277,12 +280,12 @@ class BsplineControlSpace(ControlSpace):
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
-        # this may be done matrix-free
-
-        """ 
-        Construct the definitive interpolation matrix by computing
+        """
+        Construct the tensorized interpolation matrix by computing
         the kron product of the rows of the 1d univariate interpolation
         matrices
+
+        In the future, this may be done matrix-free.
         """
 
         IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
@@ -306,6 +309,11 @@ class BsplineControlSpace(ControlSpace):
         return IFW
 
     def construct_full_interpolation_matrix(self, IFW):
+        """
+        Construct interpolation matrix for vectorial (tensorized) spline space
+
+        TODO: add explanation here
+        """
         FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         FullIFW.setType(PETSc.Mat.Type.AIJ)
         FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
@@ -317,31 +325,16 @@ class BsplineControlSpace(ControlSpace):
             for dim in range(self.dim):
                 FullIFW.setValues([self.dim * row + dim],
                                   [self.dim * col + dim for col in cols],
-                                  vals)
+                                  vals) #why are the values of vals automatically replicated? I suggest to do this explicitely so that it is more clear
         FullIFW.assemble()
         return FullIFW
 
     def restrict(self, residual, out):
-        """
-        Takes in a Function in self.V_r. Returns a PETSc vector
-        of length self.N*self.dim.
-
-        Used to approximate the evaluation of a linear functional (on-
-        cartesian multivariate B-splines) with linear combinations of
-        values of the same linear functional on basis functions in self.W .
-        """
         with residual.dat.vec as w:
             self.FullIFW.multTranspose(w, out.vec)
 
     def interpolate(self, vector, out):
-        """
-        Takes in the coefficients of a vector field in spline space.
-        Returns its interpolant in self.V_r
-
-        vector is a PETSc vector of length self.N*self.dim
-        """
-
-        # Construct the Function in self.W.
+        #not sure if vector is of the proper type; here is a PETSc vector, but maybe is should be a ControlSpace or ControlVector
         self.FullIFW.mult(vector, out)
 
     def update_domain(self, q: 'ControlVector'):
