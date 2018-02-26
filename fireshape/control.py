@@ -72,6 +72,8 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        #FeMultiGridControlSpace and BsplineControlSpace use a differen
+        #construction of self.id
         self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
@@ -100,15 +102,13 @@ class FeControlSpace(ControlSpace):
 class FeMultiGridControlSpace(ControlSpace):
 
     def __init__(self, mesh_r, inner_product, refinements=1, order=1):
-        mh = fd.MeshHierarchy(mesh_r, 1,
-                              refinements_per_level=refinements)
+        mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
         self.mesh_hierarchy = mh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
-                                                 order)
-        element = self.V_r_coarse.ufl_element()
-        self.inner_product = inner_product.get_impl(self.V_r_coarse)
+        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG", order)
+
         self.mesh_r = self.mesh_hierarchy[1]
+        element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
@@ -116,6 +116,8 @@ class FeMultiGridControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+        self.inner_product = inner_product.get_impl(self.V_r_coarse)
 
     def restrict(self, residual, out):
         fd.restrict(residual, out.fun) #better if we overwrite out.vec
@@ -150,28 +152,25 @@ class BsplineControlSpace(ControlSpace):
                 univariate B-splines
         """
         # information on B-splines
+        self.dim = len(bbox)
+        self.bbox = bbox
+        self.orders = orders
+        self.levels = levels
+        self.construct_knots()
+
+        # standard construction of ControlSpace
         self.mesh_r = mesh
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
-
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
-        self.dim = len(bbox)
-        self.bbox = bbox
-        self.orders = orders
-        self.levels = levels
-
-        #methods
-        self.construct_knots()
-        #self.initialize_B()
-
+        # interpolated inner product
         self.build_interpolation_matrix()
-        
         A = inner_product.get_impl(self.V_r).A
         self.inner_product = InterpolatedInnerProduct(A, self.FullIFW)
 
