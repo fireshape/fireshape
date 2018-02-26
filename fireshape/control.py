@@ -23,14 +23,17 @@ class ControlSpace(object):
         self.mesh_r is the initial physical mesh (reference domain)
         self.V_r is the Firedrake vectorial Lagrangian finite element space on mesh_r
         self.id is the element of V_r that satisfies id(x) = x for every x
-        self.T is the correspondent of self.id in the ControlSpace
+        self.T is the interpolant of this ControlSpace variable in self.V_r
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
         self.V_m is the Firedrake vectorial Lagrangian finite element space on mesh_m
         self.inner_product is the inner product of the ControlSpace
 
     """
     def update_domain(self, q: 'ControlVector'):
-        """shall we implement this here?
+        """
+        Update the interpolant self.T
+
+        shall we implement this here?
         with self.T.dat.vec as v:
             self.interpolate(q.vec, v)
         self.T += self.id
