@@ -1,4 +1,4 @@
-import _ROL as ROL
+import ROL
 
 
 __all__ = ["EqualityConstraint"]

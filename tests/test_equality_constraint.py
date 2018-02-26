@@ -3,7 +3,7 @@ import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
 
-import _ROL as ROL
+import ROL
 
 
 class EqualityConstraintTest(unittest.TestCase):
@@ -51,7 +51,7 @@ class EqualityConstraintTest(unittest.TestCase):
                 'Iteration Limit': 150}}
 
         params = ROL.ParameterList(params_dict, "Parameters")
-        problem = ROL.OptimizationProblem(J, q, econ=[e], emul=[emul])
+        problem = ROL.OptimizationProblem(J, q, econ=e, emul=emul)
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
 
