@@ -1,11 +1,13 @@
 import firedrake as fd
 
 class InnerProduct(object):
-    "Choose the metric for Riesz representatives of Frechet derivatives.
+    """
+    Choose the metric for Riesz representatives of Frechet derivatives.
     To compute Riesz representatives, exploit Firedrake capabilities
 
     The input fixed_bids is a list of bdry parts that are not free to move
-    "
+    """
+
     def __init__(self, mesh, fixed_bids=[]):
 
         element = mesh.coordinates.function_space().ufl_element()
@@ -98,27 +100,39 @@ class LaplaceInnerProduct(InnerProduct):
 
 
 class InterpolatedInnerProduct(InnerProduct):
+
     """
     this cannot be correct if the support of the nonFEM basis vector fields is
     larger than the physical domain, or if the computational domains has holes
     that intersect the support of nonFEM basis vector field
     """
-    def __init__(self, inner_product, interpolate, restrict):
-        self.interpolate = interpolate
-        self.restrict = restrict
+
+    def __init__(self, inner_product, I):
         self.inner_product = inner_product
-        self.A = IT * self.inner_product.A * I
-        # set diagonals to one if entire row/column is zero
-        self.Aksp = ...
+        ITAI = inner_product.A.PtAP(I)
+        
+        from firedrake.petsc import PETSc
+        import numpy as np
+        zero_rows = []
+        for row in range(ITAI.size[0]):
+            (cols, vals) = ITAI.getRow(row)
+            valnorm = np.linalg.norm(vals)
+            if valnorm < 1e-13:
+                zero_rows.append(row)
+        for row in zero_rows:
+            ITAI.setValue(row, row, 1.0)
+        ITAI.assemble()
+        self.A = ITAI
+        #create solver
+        # Aksp = PETSc.KSP().create(comm=self.comm)
+        Aksp = PETSc.KSP().create()
+        Aksp.setOperators(ITAI)
+        Aksp.setType("preonly")
+        Aksp.pc.setType("cholesky")
+        Aksp.pc.setFactorSolverPackage("mumps")
+        Aksp.setFromOptions()
+        Aksp.setUp()
+        self.Aksp = Aksp
 
     def riesz_map(self, v, out):
-        # v_fd = fd.Function(self.inner_product.V)
-        # out_fd = fd.Function(self.inner_product.V)
-        # with v_fd.dat.vec as x:
-        #     self.interpolate(v, x)
-        # self.ls.solve(out_fd, v_fd)
-        # #self.inner_product.riesz_map(v_fd, out_fd)
-        # out = self.restrict(out_fd)
         self.Aksp.solve(v.vec, out.vec)
-
-        

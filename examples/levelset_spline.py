@@ -27,7 +27,11 @@ class LevelsetFunctional(fs.Objective):
 
 out = fd.File("domain.pvd")
 
-J = LevelsetFunctional(q, cb=lambda: out.write(q.domain().coordinates))
+def cb():
+    out.write(q.domain().coordinates)
+
+cb()
+J = LevelsetFunctional(q, cb=cb)
 
 params_dict = {
     'General': {
