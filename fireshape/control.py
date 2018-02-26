@@ -347,7 +347,17 @@ class BsplineControlSpace(ControlSpace):
         return vec
 
 class ControlVector(ROL.Vector):
+    """
+    A ControlVector is a variable in the ControlSpace
 
+    The data of a control vector is a PETSc.vec stored in self.vec
+    If it corresponds to a firedrake function, self.fun is a firedrake
+    function wrapper around self.vec
+
+    .... to be continued
+
+    data is either a fd.Function or a PETSc.vec
+    """
     def __init__(self, controlspace: ControlSpace, data=None):
         super().__init__()
         self.controlspace = controlspace
@@ -355,7 +365,7 @@ class ControlVector(ROL.Vector):
         if data is None:
             data = controlspace.get_zero_vec()
 
-        if isinstance(data, fd.Function): #is it a good ide to store the additional info in self.fun?
+        if isinstance(data, fd.Function):
             self.fun = data
             with data.dat.vec as v:
                 self.vec = v
@@ -363,7 +373,7 @@ class ControlVector(ROL.Vector):
             self.vec = data #self.vec is always a PETSc vector
             self.fun = None
         # self.fun is the firedrake function object wrapping around
-        # the petsc vector self.vec. If the vector does not correspond
+        # the PETSc vector self.vec. If the vector does not correspond
         # to a firedrake function, then self.fun is None
 
     def plus(self, v):
@@ -388,5 +398,5 @@ class ControlVector(ROL.Vector):
     def set(self, v):
         v.vec.copy(self.vec)
 
-    def __str__(self):
+    def __str__(self): #what is this?
         return self.vec[:].__str__()
