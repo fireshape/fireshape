@@ -35,6 +35,10 @@ class InnerProduct(object):
         else:
             raise NotImplementedError
 
+        self.free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        for bid in self.fixed_bids:
+            self.free_bids.remove(bid)
+
         a = self.get_weak_form(V)
 
         nsp = None
@@ -98,6 +102,48 @@ class LaplaceInnerProduct(InnerProduct):
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0, 0.0)))
             n3 = fd.Function(V).interpolate(fd.Constant((0.0, 0.0, 1.0)))
             res = [n1, n2, n3]
+        else:
+            raise NotImplementedError
+        return res
+
+
+class ElasticityInnerProduct(InnerProduct):
+
+    def get_mu(self, V):
+
+        W = fd.FunctionSpace(V.mesh(), "CG", 1)
+        bc_fix = fd.DirichletBC(W, 1, self.fixed_bids)
+        bc_free = fd.DirichletBC(W, 10, self.free_bids)
+        u = fd.TrialFunction(W)
+        v = fd.TestFunction(W)
+        a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
+        b = fd.inner(fd.Constant(0.), v) * fd.dx
+        mu = fd.Function(W)
+        fd.solve(a == b, mu, bcs = [bc_fix, bc_free])
+        return mu
+
+    def get_weak_form(self, V):
+        mu = self.get_mu(V)
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+        return mu * fd.inner(fd.sym(fd.grad(u)), fd.sym(fd.grad(v))) * fd.dx
+
+    def get_nullspace(self, V):
+        X = fd.SpatialCoordinate(V.mesh())
+        dim = V.value_size
+        if dim == 2:
+            n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0)))
+            n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0)))
+            n3 = fd.Function(V).interpolate(fd.as_vector([X[1], -X[0]]))
+            res = [n1, n2, n3]
+        elif dim == 3:
+            n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0, 0.0)))
+            n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0, 0.0)))
+            n3 = fd.Function(V).interpolate(fd.Constant((0.0, 0.0, 1.0)))
+            n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
+            n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
+            n6 = fd.Function(V).interpolate(fd.as_vector([0, X[2], X[1]]))
+            res = [n1, n2, n3, n4, n5, n6]
         else:
             raise NotImplementedError
         return res
