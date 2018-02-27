@@ -76,9 +76,9 @@ class InnerProduct(object):
 
         a = self.get_weak_form(V)
         A = fd.assemble(a, mat_type='aij', bcs=bc)
-        A = fd.as_backend_type(A).mat()
         ls = fd.LinearSolver(A, solver_parameters=self.params, nullspace=nsp,
                              transpose_nullspace=nsp)
+        A = fd.as_backend_type(A).mat()
         # it would be nice if we can decide here whether to call
         # InnerProductImpl or InterpolatedInnerProduct
         # for instance, InnerProductImpl.eval could be put here

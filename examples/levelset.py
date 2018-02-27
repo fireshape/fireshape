@@ -1,7 +1,7 @@
 import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
-import _ROL as ROL
+import ROL
 
 n = 100
 mesh = fd.UnitSquareMesh(n, n)

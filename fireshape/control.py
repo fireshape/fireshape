@@ -24,7 +24,7 @@ class ControlSpace(object):
         self.V_r is the Firedrake vectorial Lagrangian finite element
             space on mesh_r
         self.id is the element of V_r that satisfies id(x) = x for every x
-        self.T is the interpolant of this ControlSpace variable in self.V_r
+        self.T is the interpolant of a ControlSpace variable in self.V_r
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
         self.V_m is the Firedrake vectorial Lagrangian finite element
             space on mesh_m
@@ -33,42 +33,41 @@ class ControlSpace(object):
     def restrict(self, residual, out):
         """
         Restrict from self.V_r into ControlSpace
-        Input: residual is a variable in self.V_r
-               out is a variable in ControlSpace, (overwritten with result)
-               (if we modify FeMultiGridControlSpace.restrict,
-               then we can write that out.vec is overwritten with result)
+
+        Input: 
+        residual: fd.Function, is a variable in the dual of self.V_r
+        out: ControlVector, is a variable in the dual of ControlSpace
+        (overwritten with result)
         """
+
         raise NotImplementedError
 
     def interpolate(self, vector, out):
         """
         Interpolate from ControlSpace into self.V_r
-        Input: vector is a variable in ControlSpace
-               out is a variable in self.V_r, is overwritten with the result
 
-        TODO: check that this is done properly.
-              Is vector always a ControlVector?
+        Input: 
+        vector: ControlVector, is a variable in ControlSpace
+        out: fd.Function, is a variable in self.V_r, is overwritten with the result
         """
+
         raise NotImplementedError
 
     def update_domain(self, q: 'ControlVector'):
         """
-        Update the interpolant self.T
-
-        shall we implement this here?
-        with self.T.dat.vec as v:
-            self.interpolate(q.vec, v)
-        self.T += self.id
-        why is FeMultiGridControlSpace.update_domain different?
+        Update the interpolant self.T with q
         """
-        raise NotImplementedError
+
+        self.interpolate(q, self.T)
+        self.T += self.id
 
     def get_zero_vec(self):
         """
-        Create a variable in ControlSpace the corresponds to zero
-
-        Shouldn't this return a ControlVector???
+        Create the object that stores the data for a ControlVector.
+        Should be a fd.Function or a PETSc.Vec.
+        Is only used in the construction of a new ControlVector object.
         """
+
         raise NotImplementedError
 
     def assign_inner_product(self, inner_product):
@@ -84,9 +83,8 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
-        # FeMultiGridControlSpace and BsplineControlSpace use a different
-        # construction of self.id
-        self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
@@ -98,12 +96,7 @@ class FeControlSpace(ControlSpace):
             vecres.copy(out.vec)
 
     def interpolate(self, vector, out):
-        vector.copy(out)
-
-    def update_domain(self, q: 'ControlVector'):
-        with self.T.dat.vec as v:
-            self.interpolate(q.vec, v)
-        self.T += self.id
+        out.assign(vector.fun)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r)
@@ -132,14 +125,10 @@ class FeMultiGridControlSpace(ControlSpace):
         self.inner_product = inner_product.get_impl(self.V_r_coarse)
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.fun) #better if we overwrite out.vec
+        fd.restrict(residual, out.fun)
 
     def interpolate(self, vector, out):
         fd.prolong(vector.fun, out)
-
-    def update_domain(self, q: 'ControlVector'):
-        self.interpolate(q, self.T)#why is it different form the other ones
-        self.T += self.id
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
@@ -238,7 +227,7 @@ class BsplineControlSpace(ControlSpace):
         interp_1d = self.construct_1d_interpolation_matrices()
         # construct scalar tensorial interpolation matrix
         IFW = self.construct_kronecker_matrix(interp_1d)
-        # intertwine self.dim-many IFW matrices among each other
+        # interleave self.dim-many IFW matrices among each other
         self.FullIFW = self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self):
@@ -322,7 +311,6 @@ class BsplineControlSpace(ControlSpace):
         """
         Construct interpolation matrix for vectorial (tensorized) spline space.
 
-        TODO: add explanation here
         """
         FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         FullIFW.setType(PETSc.Mat.Type.AIJ)
@@ -330,12 +318,16 @@ class BsplineControlSpace(ControlSpace):
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
+        # this blows up the matrix to do the right thing
+        # on vector fields. It's not just a block matrix,
+        # but the values are interleaved as this is how
+        # firedrake handles vector fields
         for row in range(self.M):
             (cols, vals) = IFW.getRow(row)
             for dim in range(self.dim):
                 FullIFW.setValues([self.dim * row + dim],
                                   [self.dim * col + dim for col in cols],
-                                  vals) #why are the values of vals automatically replicated? I suggest to do this explicitely so that it is more clear
+                                  vals)
         FullIFW.assemble()
         return FullIFW
 
@@ -344,13 +336,8 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.multTranspose(w, out.vec)
 
     def interpolate(self, vector, out):
-        #not sure if vector is of the proper type; here is a PETSc vector, but maybe is should be a ControlSpace or ControlVector
-        self.FullIFW.mult(vector, out)
-
-    def update_domain(self, q: 'ControlVector'):
-        with self.T.dat.vec as w:
-            self.interpolate(q.vec, w)
-        self.T += self.id
+        with out.dat.vec as w:
+            self.FullIFW.mult(vector.vec, w)
 
     def get_zero_vec(self):
         vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
@@ -365,7 +352,7 @@ class ControlVector(ROL.Vector):
     around self.vec is stored in self.fun (otherwise, self.fun = None).
 
     A ControlVector is a ROL.Vector, and therefore needs the following methods:
-    plus, scale, clone, dot, axpy, set, and __str__ .
+    plus, scale, clone, dot, axpy, set.
     """
     def __init__(self, controlspace: ControlSpace, data=None):
         super().__init__()
@@ -408,5 +395,5 @@ class ControlVector(ROL.Vector):
         v.vec.copy(self.vec)
 
     def __str__(self):
-        """What is this?"""
+        # String representative, so we can use print(vec)
         return self.vec[:].__str__()
