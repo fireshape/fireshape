@@ -393,7 +393,7 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace).
+        res = ControlVector(self.controlspace)
         # res.set(self)
         return res
 
