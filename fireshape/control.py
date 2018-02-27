@@ -66,6 +66,8 @@ class ControlSpace(object):
     def get_zero_vec(self):
         """
         Create a variable in ControlSpace the corresponds to zero
+
+        Shouldn't this return a ControlVector???
         """
         raise NotImplementedError
 
@@ -76,8 +78,8 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
-        #FeMultiGridControlSpace and BsplineControlSpace use a differen
-        #construction of self.id
+        # FeMultiGridControlSpace and BsplineControlSpace use a different
+        # construction of self.id
         self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
@@ -156,7 +158,7 @@ class BsplineControlSpace(ControlSpace):
                 univariate B-splines
         """
         # information on B-splines
-        self.dim = len(bbox) #geometric dimension
+        self.dim = len(bbox) # geometric dimension
         self.bbox = bbox
         self.orders = orders
         self.levels = levels
@@ -199,8 +201,8 @@ class BsplineControlSpace(ControlSpace):
             level = self.levels[dim]
 
             assert order >= 1
-            #degree = order-1 #splev uses degree, not order
-            assert level >= 1 #with level=1 only bdry Bsplines
+            #degree = order-1 # splev uses degree, not order
+            assert level >= 1 # with level=1 only bdry Bsplines
 
             knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
                                        np.linspace(0., 1., 2**level+1),
@@ -209,31 +211,34 @@ class BsplineControlSpace(ControlSpace):
             (xmin, xmax) = self.bbox[dim]
             knots = (xmax - xmin)*knots_01 + xmin
             self.knots.append(knots)
-            #dimension of univariate spline spaces
-            #the "-2" is because we want homogeneous Dir bc
+            # dimension of univariate spline spaces
+            # the "-2" is because we want homogeneous Dir bc
             n = len(knots) - order - 2
             assert n > 0
             self.n.append(n)
 
-        #dimension of multivariate spline space
+        # dimension of multivariate spline space
         N = reduce(lambda x, y: x*y, self.n)
         self.N = N
 
     def build_interpolation_matrix(self):
         """
-        Construct the matrix self.FullIFW, whose columns are the interpolant
+        Construct the matrix self.FullIFW.
+
+        The columns of self.FullIFW are the interpolant
         of (vectorial tensorized) Bsplines into self.V_r
         """
-        #construct list of scalar univariate interpolation matrices
+        # construct list of scalar univariate interpolation matrices
         interp_1d = self.construct_1d_interpolation_matrices()
-        #construct scalar tensorial interpolation matrix
+        # construct scalar tensorial interpolation matrix
         IFW = self.construct_kronecker_matrix(interp_1d)
-        #intertwine self.dim-many IFW matrices among each other
+        # intertwine self.dim-many IFW matrices among each other
         self.FullIFW = self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self):
         """
         Create a list of sparse matrices (one per geometric dimension).
+
         Each matrix has size (M, n[dim]), where M is the dimension of the
         self.V_r.sub(0), and n[dim] is the dimension of the univariate
         spline space associated to the dimth-geometric coordinate.
@@ -260,13 +265,13 @@ class BsplineControlSpace(ControlSpace):
             # BIG TODO: figure out the sparsity pattern
             I.setUp()
 
-            #todo: read fecoords out of  self.id, so far
+            # todo: read fecoords out of  self.id, so far
             x_int = fd.interpolate(x_fct[dim], self.V_r.sub(0))
             with x_int.dat.vec_ro as x:
                 for idx in range(n):
                     coeffs = np.zeros(knots.shape, dtype=float)
-                    coeffs[idx+1] = 1 #idx+1 because we impose hom Dir bc
-                    degree = order - 1 #splev uses degree, not order
+                    coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
+                    degree = order - 1 # splev uses degree, not order
                     tck = (knots, coeffs, degree)
 
                     values = splev(x.array, tck, der=0, ext=1)
@@ -274,20 +279,19 @@ class BsplineControlSpace(ControlSpace):
                     values = values[rows]
                     I.setValues(rows, [idx], values)
 
-            I.assemble()# lazy strategy for kron
+            I.assemble() # lazy strategy for kron
             interp_1d.append(I)
 
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
         """
-        Construct the tensorized interpolation matrix by computing
-        the kron product of the rows of the 1d univariate interpolation
-        matrices
+        Construct the tensorized interpolation matrix.
 
+        Do this by computing the kron product of the rows of
+        the 1d univariate interpolation matrices.
         In the future, this may be done matrix-free.
         """
-
         IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         IFW.setType(PETSc.Mat.Type.AIJ)
         IFW.setSizes((self.M, self.N))
@@ -310,7 +314,7 @@ class BsplineControlSpace(ControlSpace):
 
     def construct_full_interpolation_matrix(self, IFW):
         """
-        Construct interpolation matrix for vectorial (tensorized) spline space
+        Construct interpolation matrix for vectorial (tensorized) spline space.
 
         TODO: add explanation here
         """
@@ -348,15 +352,14 @@ class BsplineControlSpace(ControlSpace):
 
 class ControlVector(ROL.Vector):
     """
-    A ControlVector is a variable in the ControlSpace
+    A ControlVector is a variable in the ControlSpace.
 
-    The data of a control vector is a PETSc.vec stored in self.vec
-    If it corresponds to a firedrake function, self.fun is a firedrake
-    function wrapper around self.vec
+    The data of a control vector is a PETSc.vec stored in self.vec.
+    If this data corresponds also to a firedrake function, the firedrake wrapper
+    around self.vec is stored in self.fun (otherwise, self.fun = None).
 
-    .... to be continued
-
-    data is either a fd.Function or a PETSc.vec
+    A ControlVector is a ROL.Vector, and therefore needs the following methods:
+    plus, scale, clone, dot, axpy, set, and __str__ .
     """
     def __init__(self, controlspace: ControlSpace, data=None):
         super().__init__()
@@ -370,11 +373,8 @@ class ControlVector(ROL.Vector):
             with data.dat.vec as v:
                 self.vec = v
         else:
-            self.vec = data #self.vec is always a PETSc vector
+            self.vec = data
             self.fun = None
-        # self.fun is the firedrake function object wrapping around
-        # the PETSc vector self.vec. If the vector does not correspond
-        # to a firedrake function, then self.fun is None
 
     def plus(self, v):
         self.vec += v.vec
@@ -383,13 +383,16 @@ class ControlVector(ROL.Vector):
         self.vec *= alpha
 
     def clone(self):
-        # misleading name from ROL, returns a vector
-        # of same size but containing zeros
-        res = ControlVector(self.controlspace)
+        """Returns a zero vector of the same size of self.
+
+        The name of this method is misleading, but it is dictated by ROL.
+        """
+        res = ControlVector(self.controlspace).
         # res.set(self)
         return res
 
     def dot(self, v):
+        """Inner product between self and v."""
         return self.controlspace.inner_product.eval(self, v)
 
     def axpy(self, alpha, x):
@@ -398,5 +401,6 @@ class ControlVector(ROL.Vector):
     def set(self, v):
         v.vec.copy(self.vec)
 
-    def __str__(self): #what is this?
+    def __str__(self):
+        """What is this?"""
         return self.vec[:].__str__()
