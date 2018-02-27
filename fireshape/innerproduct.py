@@ -1,8 +1,7 @@
 import firedrake as fd
 
 class InnerProductImpl(object):
-    """???
-    """
+    """I suggest to move this to InnerProduct.get_impl."""
     def __init__(self, ls, A):
         self.ls = ls
         self.A = A
@@ -13,8 +12,8 @@ class InnerProductImpl(object):
             self.ls.ksp.solve(v.vec, out.vec)  # Won't do boundary conditions
         self.ls.solve(out.fun, v.fun)
 
-    def eval(self, u, v):  # inner product in primal space
-        # expects two firedrake vector objects
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
         A_u = self.A.createVecLeft()
         self.A.mult(u.vec, A_u)
         return v.vec.dot(A_u)
@@ -82,6 +81,7 @@ class InnerProduct(object):
                              transpose_nullspace=nsp)
         # it would be nice if we can decide here whether to call
         # InnerProductImpl or InterpolatedInnerProduct
+        # for instance, InnerProductImpl.eval could be put here
         return InnerProductImpl(ls, A)
 
 
@@ -189,7 +189,6 @@ class InterpolatedInnerProduct(InnerProduct):
     """
     def __init__(self, A, I):
         ITAI = A.PtAP(I)
-        
         from firedrake.petsc import PETSc
         import numpy as np
         zero_rows = []
@@ -216,6 +215,7 @@ class InterpolatedInnerProduct(InnerProduct):
     def riesz_map(self, v, out):
         self.Aksp.solve(v.vec, out.vec)
 
+    #this is exactly the same code of InnerProductImpl.eval
     def eval(self, u, v):
         A_u = self.A.createVecLeft()
         self.A.mult(u.vec, A_u)
