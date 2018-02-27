@@ -1,8 +1,8 @@
 import firedrake as fd
 
-
 class InnerProductImpl(object):
-
+    """???
+    """
     def __init__(self, ls, A):
         self.ls = ls
         self.A = A
@@ -22,6 +22,8 @@ class InnerProductImpl(object):
 
 class InnerProduct(object):
     """
+    Generic implementation of inner products for ControlSpace.
+    
     Choose the metric for Riesz representatives of Frechet derivatives.
     To compute Riesz representatives, exploit Firedrake capabilities
 
@@ -33,13 +35,6 @@ class InnerProduct(object):
         self.params = self.get_params()
 
     def get_impl(self, V):
-        dim = V.value_size
-        if dim == 2:
-            zerovector = fd.Constant((0, 0))
-        elif dim == 3:
-            zerovector = fd.Constant((0, 0, 0))
-        else:
-            raise NotImplementedError
 
         self.free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
         for bid in self.fixed_bids:
@@ -55,11 +50,18 @@ class InnerProduct(object):
                 nsp.orthonormalize()
 
         if len(self.fixed_bids) > 0:
+            dim = V.value_size
+            if dim == 2:
+                zerovector = fd.Constant((0, 0))
+            elif dim == 3:
+                zerovector = fd.Constant((0, 0, 0))
+            else:
+                raise NotImplementedError
             bc = fd.DirichletBC(V, zerovector, self.fixed_bids)
         else:
             bc = None
-        A = fd.assemble(a, mat_type='aij', bcs=bc)
 
+        A = fd.assemble(a, mat_type='aij', bcs=bc)
         ls = fd.LinearSolver(A, solver_parameters=self.params, nullspace=nsp,
                              transpose_nullspace=nsp)
         A = fd.as_backend_type(A).mat()
@@ -79,20 +81,22 @@ class InnerProduct(object):
                 # 'ksp_monitor': True
                 }
 
+    #this is now in InnerProductImpl, shall we remove it?
     def riesz_map(self, v, out): # dual to primal
         # expects two FEControlObjects
         if v.fun is None or out.fun is None:
             self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditionsd
         self.ls.solve(out.fun, v.fun) #suggestion: force this
 
+    #this is now in InnerProductImpl, shall we remove it?
     def eval(self, u, v): # inner product in primal space
         # expects two FEControlObjects
         A_u = self.A.createVecLeft()
         self.A.mult(u.vec, A_u)
         return v.vec.dot(A_u)
 
-class HelmholtzInnerProduct(InnerProduct):
-
+class H1InnerProduct(InnerProduct):
+    """Inner product on H1. It involves stiffness and mass matrices."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -102,7 +106,7 @@ class HelmholtzInnerProduct(InnerProduct):
 
 
 class LaplaceInnerProduct(InnerProduct):
-
+    """Inner product on H10. It comprises only the stiffness matrix."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -125,9 +129,8 @@ class LaplaceInnerProduct(InnerProduct):
 
 
 class ElasticityInnerProduct(InnerProduct):
-
+    """Inner product stemming from the linear elasticity equation."""
     def get_mu(self, V):
-
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
         bc_fix = fd.DirichletBC(W, 1, self.fixed_bids)
         bc_free = fd.DirichletBC(W, 10, self.free_bids)
@@ -167,13 +170,19 @@ class ElasticityInnerProduct(InnerProduct):
 
 
 class InterpolatedInnerProduct(InnerProduct):
-
     """
-    this cannot be correct if the support of the nonFEM basis vector fields is
+    Shouldn't this inherit from InnerProductImpl?
+
+    Inner products for ControlVector with self.fun = None.
+
+    Assemble the matrix representation of the inner product by multiplying
+    the matrix representation of the original inner product with the interpolation
+    matrix I.
+
+    ISSUE: this cannot be correct if the support of the nonFEM basis vector fields is
     larger than the physical domain, or if the computational domains has holes
     that intersect the support of nonFEM basis vector field
     """
-
     def __init__(self, A, I):
         ITAI = A.PtAP(I)
         

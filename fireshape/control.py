@@ -9,7 +9,7 @@ from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
-from .innerproduct import InterpolatedInnerProduct
+from .innerproduct import InterpolatedInnerProduct #I thinks it is weird to include this here
 
 class ControlSpace(object):
     """
@@ -68,6 +68,12 @@ class ControlSpace(object):
         Create a variable in ControlSpace the corresponds to zero
 
         Shouldn't this return a ControlVector???
+        """
+        raise NotImplementedError
+
+    def assign_inner_product(self, inner_product):
+        """
+        create self.inner_product
         """
         raise NotImplementedError
 
@@ -142,7 +148,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
 
 class BsplineControlSpace(ControlSpace):
-
+    """ConstrolSpace based on cartesian tensorized Bsplines."""
     def __init__(self, mesh, inner_product, bbox, orders, levels):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
