@@ -22,26 +22,39 @@ class InnerProductImpl(object):
 
 class InnerProduct(object):
     """
-    Generic implementation of inner products for ControlSpace.
-    
-    Choose the metric for Riesz representatives of Frechet derivatives.
-    To compute Riesz representatives, exploit Firedrake capabilities
+    Generic implementation of metric for ControlSpace.
 
-    The input fixed_bids is a list of bdry parts that are not free to move
+    The input fixed_bids is a list of bdry parts that are not free to move.
+    The method get_impl links the chosen inner product to ControlSpace.V_r.
     """
-
     def __init__(self, fixed_bids=[]):
         self.fixed_bids = fixed_bids
-        self.params = self.get_params()
+        self.params = self.get_params() # solver parameters
+
+    def get_params(self):
+        """PETSc parameters to solve linear system."""
+        return {
+                'ksp_solver': 'gmres',
+                'pc_type': 'lu',
+                'pc_factor_mat_solver_package': 'mumps',
+                # 'ksp_monitor': True
+                }
+
+    def get_weak_form(self, V):
+        """ Weak formulation of inner product in UFL (Firedrake)."""
+        raise NotImplementedError
+
+    def get_nullspace(self, V):
+        """Nullspace of weak formulation of inner product (in UFL, Firedake)."""
+        raise NotImplementedError
 
     def get_impl(self, V):
-
+        """Link metric to ControlSpace.V_r."""
         self.free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
 
-        a = self.get_weak_form(V)
-
+        # what is this?
         nsp = None
         if len(self.fixed_bids) == 0:
             nsp_functions = self.get_nullspace(V)
@@ -49,6 +62,7 @@ class InnerProduct(object):
                 nsp = fd.VectorSpaceBasis(nsp_functions)
                 nsp.orthonormalize()
 
+        # impose homogeneous Dirichlet bcs on bdry parts that are not free to move
         if len(self.fixed_bids) > 0:
             dim = V.value_size
             if dim == 2:
@@ -61,25 +75,15 @@ class InnerProduct(object):
         else:
             bc = None
 
+        a = self.get_weak_form(V)
         A = fd.assemble(a, mat_type='aij', bcs=bc)
+        A = fd.as_backend_type(A).mat()
         ls = fd.LinearSolver(A, solver_parameters=self.params, nullspace=nsp,
                              transpose_nullspace=nsp)
-        A = fd.as_backend_type(A).mat()
+        # it would be nice if we can decide here whether to call
+        # InnerProductImpl or InterpolatedInnerProduct
         return InnerProductImpl(ls, A)
 
-    def get_weak_form(self, V):
-        raise NotImplementedError
-
-    def get_nullspace(self, V):
-        raise NotImplementedError
-
-    def get_params(self):
-        return {
-                'ksp_solver': 'gmres',
-                'pc_type': 'lu',
-                'pc_factor_mat_solver_package': 'mumps',
-                # 'ksp_monitor': True
-                }
 
     #this is now in InnerProductImpl, shall we remove it?
     def riesz_map(self, v, out): # dual to primal
