@@ -1,30 +1,12 @@
 import firedrake as fd
 
-class InnerProductImpl(object):
-    """I suggest to move this to InnerProduct.get_impl."""
-    def __init__(self, ls, A):
-        self.ls = ls
-        self.A = A
-
-    def riesz_map(self, v, out):  # dual to primal
-        # expects two firedrake vector objects
-        if v.fun is None or out.fun is None:
-            self.ls.ksp.solve(v.vec, out.vec)  # Won't do boundary conditions
-        self.ls.solve(out.fun, v.fun)
-
-    def eval(self, u, v):
-        """Evaluate inner product in primal space."""
-        A_u = self.A.createVecLeft()
-        self.A.mult(u.vec, A_u)
-        return v.vec.dot(A_u)
-
 
 class InnerProduct(object):
     """
-    Generic implementation of metric for ControlSpace.
+    Generic implementation of an inner product.
+    Only when calling get_impl, one gets something that is 
+    associated with a FunctionSpace.
 
-    The input fixed_bids is a list of bdry parts that are not free to move.
-    The method get_impl links the chosen inner product to ControlSpace.V_r.
     """
     def __init__(self, fixed_bids=[]):
         self.fixed_bids = fixed_bids
@@ -48,12 +30,15 @@ class InnerProduct(object):
         raise NotImplementedError
 
     def get_impl(self, V):
-        """Link metric to ControlSpace.V_r."""
+        """Assemble the inner product for a specific fd.FunctionSpace V"""
         self.free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
 
-        # what is this?
+        # Some weak forms have a nullspace.
+        # Here we check whether there are DirichletBCs on the deformation
+        # (which implies that the nullspace can be ignores)
+        # and if there aren't any, then we get the nullspace.
         nsp = None
         if len(self.fixed_bids) == 0:
             nsp_functions = self.get_nullspace(V)
@@ -78,26 +63,9 @@ class InnerProduct(object):
         A = fd.assemble(a, mat_type='aij', bcs=bc)
         ls = fd.LinearSolver(A, solver_parameters=self.params, nullspace=nsp,
                              transpose_nullspace=nsp)
-        A = fd.as_backend_type(A).mat()
-        # it would be nice if we can decide here whether to call
-        # InnerProductImpl or InterpolatedInnerProduct
-        # for instance, InnerProductImpl.eval could be put here
-        return InnerProductImpl(ls, A)
+        A = A.petscmat
+        return UflInnerProductImpl(ls, A)
 
-
-    #this is now in InnerProductImpl, shall we remove it?
-    def riesz_map(self, v, out): # dual to primal
-        # expects two FEControlObjects
-        if v.fun is None or out.fun is None:
-            self.ls.ksp.solve(v.vec, out.vec) # Won't do boundary conditionsd
-        self.ls.solve(out.fun, v.fun) #suggestion: force this
-
-    #this is now in InnerProductImpl, shall we remove it?
-    def eval(self, u, v): # inner product in primal space
-        # expects two FEControlObjects
-        A_u = self.A.createVecLeft()
-        self.A.mult(u.vec, A_u)
-        return v.vec.dot(A_u)
 
 class H1InnerProduct(InnerProduct):
     """Inner product on H1. It involves stiffness and mass matrices."""
@@ -173,9 +141,34 @@ class ElasticityInnerProduct(InnerProduct):
         return res
 
 
-class InterpolatedInnerProduct(InnerProduct):
+class InnerProductImpl(object):
+
+    def __init__(self, A):
+        self.A = A
+
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
+        A_u = self.A.createVecLeft()
+        self.A.mult(u.vec, A_u)
+        return v.vec.dot(A_u)
+
+class UflInnerProductImpl(InnerProductImpl):
+    """I suggest to move this to InnerProduct.get_impl."""
+    def __init__(self, ls, *args):
+        super().__init__(*args)
+        self.ls = ls
+
+    def riesz_map(self, v, out):  # dual to primal
+        """
+        Input: 
+        v: ControlVector, in the dual space
+        out: ControlVector, in the primal space
+        """
+
+        self.ls.solve(out.fun, v.fun)
+
+class InterpolatedInnerProductImpl(InnerProductImpl):
     """
-    Shouldn't this inherit from InnerProductImpl?
 
     Inner products for ControlVector with self.fun = None.
 
@@ -183,11 +176,10 @@ class InterpolatedInnerProduct(InnerProduct):
     the matrix representation of the original inner product with the interpolation
     matrix I.
 
-    ISSUE: this cannot be correct if the support of the nonFEM basis vector fields is
-    larger than the physical domain, or if the computational domains has holes
-    that intersect the support of nonFEM basis vector field
     """
-    def __init__(self, A, I):
+
+    def __init__(self, inner_product, V_r, I):
+        A = inner_product.get_impl(V_r).A
         ITAI = A.PtAP(I)
         from firedrake.petsc import PETSc
         import numpy as np
@@ -201,9 +193,7 @@ class InterpolatedInnerProduct(InnerProduct):
             ITAI.setValue(row, row, 1.0)
         ITAI.assemble()
         self.A = ITAI
-        #create solver
-        # Aksp = PETSc.KSP().create(comm=self.comm)
-        Aksp = PETSc.KSP().create()
+        Aksp = PETSc.KSP().create(comm=V_r.comm)
         Aksp.setOperators(ITAI)
         Aksp.setType("preonly")
         Aksp.pc.setType("cholesky")
@@ -214,9 +204,3 @@ class InterpolatedInnerProduct(InnerProduct):
 
     def riesz_map(self, v, out):
         self.Aksp.solve(v.vec, out.vec)
-
-    #this is exactly the same code of InnerProductImpl.eval
-    def eval(self, u, v):
-        A_u = self.A.createVecLeft()
-        self.A.mult(u.vec, A_u)
-        return v.vec.dot(A_u)

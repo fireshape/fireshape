@@ -9,7 +9,7 @@ from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
-from .innerproduct import InterpolatedInnerProduct #I thinks it is weird to include this here
+from .innerproduct import InterpolatedInnerProductImpl
 
 class ControlSpace(object):
     """
@@ -174,8 +174,10 @@ class BsplineControlSpace(ControlSpace):
 
         # interpolated inner product
         self.build_interpolation_matrix()
-        A = inner_product.get_impl(self.V_r).A
-        self.inner_product = InterpolatedInnerProduct(A, self.FullIFW)
+        
+        # replace V_r with a box mesh
+        self.inner_product = InterpolatedInnerProductImpl(inner_product,
+                                                          V_r, self.FullIFW)
 
     def construct_knots(self):
         """
