@@ -9,7 +9,6 @@ from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
-from .innerproduct import InterpolatedInnerProduct
 
 class ControlSpace(object):
     """
