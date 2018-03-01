@@ -34,10 +34,10 @@ class ControlSpace(object):
         """
         Restrict from self.V_r into ControlSpace
 
-        Input: 
+        Input:
         residual: fd.Function, is a variable in the dual of self.V_r
         out: ControlVector, is a variable in the dual of ControlSpace
-        (overwritten with result)
+             (overwritten with result)
         """
 
         raise NotImplementedError
@@ -46,9 +46,10 @@ class ControlSpace(object):
         """
         Interpolate from ControlSpace into self.V_r
 
-        Input: 
+        Input:
         vector: ControlVector, is a variable in ControlSpace
-        out: fd.Function, is a variable in self.V_r, is overwritten with the result
+        out: fd.Function, is a variable in self.V_r, is overwritten with
+             the result
         """
 
         raise NotImplementedError
@@ -64,8 +65,9 @@ class ControlSpace(object):
     def get_zero_vec(self):
         """
         Create the object that stores the data for a ControlVector.
-        Should be a fd.Function or a PETSc.Vec.
-        Is only used in the construction of a new ControlVector object.
+
+        It returns a fd.Function or a PETSc.Vec.
+        It is only used in ControlVector.__init__.
         """
 
         raise NotImplementedError
@@ -110,7 +112,8 @@ class FeMultiGridControlSpace(ControlSpace):
         mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
         self.mesh_hierarchy = mh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG", order)
+        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
+                                                 order)
 
         self.mesh_r = self.mesh_hierarchy[1]
         element = self.V_r_coarse.ufl_element()
@@ -174,7 +177,7 @@ class BsplineControlSpace(ControlSpace):
 
         # interpolated inner product
         self.build_interpolation_matrix()
-        
+
         # replace V_r with a box mesh
         self.inner_product = InterpolatedInnerProductImpl(inner_product,
                                                           V_r, self.FullIFW)
@@ -245,13 +248,14 @@ class BsplineControlSpace(ControlSpace):
         """
         interp_1d = []
 
-        #Florian make this more beautiful, I think we can use self.id
-        x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int, replace with self.id
+        # this code is correct but can be made more beautiful
+        # by replacing x_fct with self.id
+        x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int
+        # compute self.M, x_int will be overwritten below
         x_int = fd.interpolate(x_fct[0], self.V_r.sub(0))
-        self.M = x_int.vector().size() #number of dofs for (scalar) fct in self.V_r.sub(0)
+        self.M = x_int.vector().size()
 
         for dim in range(self.dim):
-        #for dim in range(self.mesh_r.geometric_dimension()):
             order = self.orders[dim]
             knots = self.knots[dim]
             n = self.n[dim]
@@ -262,7 +266,6 @@ class BsplineControlSpace(ControlSpace):
             # BIG TODO: figure out the sparsity pattern
             I.setUp()
 
-            # todo: read fecoords out of  self.id, so far
             x_int = fd.interpolate(x_fct[dim], self.V_r.sub(0))
             with x_int.dat.vec_ro as x:
                 for idx in range(n):
@@ -311,8 +314,7 @@ class BsplineControlSpace(ControlSpace):
 
     def construct_full_interpolation_matrix(self, IFW):
         """
-        Construct interpolation matrix for vectorial (tensorized) spline space.
-
+        Assemble interpolation matrix for vectorial tensorized spline space.
         """
         FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         FullIFW.setType(PETSc.Mat.Type.AIJ)
@@ -342,7 +344,8 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.mult(vector.vec, w)
 
     def get_zero_vec(self):
-        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.mesh_r.mpi_comm())
+        vec = PETSc.Vec().createSeq(self.N*self.dim,
+                                    comm=self.mesh_r.mpi_comm())
         return vec
 
 class ControlVector(ROL.Vector):
@@ -350,10 +353,10 @@ class ControlVector(ROL.Vector):
     A ControlVector is a variable in the ControlSpace.
 
     The data of a control vector is a PETSc.vec stored in self.vec.
-    If this data corresponds also to a firedrake function, the firedrake wrapper
+    If this data corresponds also to a fd.Function, the firedrake wrapper
     around self.vec is stored in self.fun (otherwise, self.fun = None).
 
-    A ControlVector is a ROL.Vector, and therefore needs the following methods:
+    A ControlVector is a ROL.Vector and thus needs the following methods:
     plus, scale, clone, dot, axpy, set.
     """
     def __init__(self, controlspace: ControlSpace, data=None):
@@ -378,7 +381,8 @@ class ControlVector(ROL.Vector):
         self.vec *= alpha
 
     def clone(self):
-        """Returns a zero vector of the same size of self.
+        """
+        Returns a zero vector of the same size of self.
 
         The name of this method is misleading, but it is dictated by ROL.
         """
@@ -397,5 +401,5 @@ class ControlVector(ROL.Vector):
         v.vec.copy(self.vec)
 
     def __str__(self):
-        # String representative, so we can use print(vec)
+        """String representative, so we can call print(vec)."""
         return self.vec[:].__str__()
