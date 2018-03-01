@@ -84,6 +84,7 @@ class LaplaceInnerProduct(InnerProduct):
         return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
 
     def get_nullspace(self, V):
+        """This nullspace contains constant functions."""
         dim = V.value_size
         if dim == 2:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0)))
@@ -141,7 +142,9 @@ class ElasticityInnerProduct(InnerProduct):
 
 
 class InnerProductImpl(object):
-
+    """
+    Generic code to implementation to
+    """
     def __init__(self, A):
         self.A = A
 
@@ -159,7 +162,7 @@ class UflInnerProductImpl(InnerProductImpl):
 
     def riesz_map(self, v, out):  # dual to primal
         """
-        Input: 
+        Input:
         v: ControlVector, in the dual space
         out: ControlVector, in the primal space
         """
@@ -195,7 +198,7 @@ class InterpolatedInnerProductImpl(InnerProductImpl):
         for row in zero_rows:
             ITAI.setValue(row, row, 1.0)
         ITAI.assemble()
-        self.A = ITAI
+        self.A = ITAI #overwrite the self.A created by get_impl
         Aksp = PETSc.KSP().create(comm=V_r.comm)
         Aksp.setOperators(ITAI)
         Aksp.setType("preonly")

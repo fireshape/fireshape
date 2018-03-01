@@ -180,7 +180,8 @@ class BsplineControlSpace(ControlSpace):
 
         # replace V_r with a box mesh
         self.inner_product = InterpolatedInnerProductImpl(inner_product,
-                                                          V_r, self.FullIFW)
+                                                          self.V_r,
+                                                          self.FullIFW)
 
     def construct_knots(self):
         """
