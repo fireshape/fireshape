@@ -9,7 +9,7 @@ from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
-from .innerproduct import InterpolatedInnerProductImpl
+from .innerproduct import InterpolatedInnerProduct
 
 class ControlSpace(object):
     """
@@ -91,7 +91,8 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
-        self.inner_product = inner_product.get_impl(self.V_r)
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r)
 
     def restrict(self, residual, out):
         with residual.dat.vec as vecres:
@@ -125,7 +126,8 @@ class FeMultiGridControlSpace(ControlSpace):
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
-        self.inner_product = inner_product.get_impl(self.V_r_coarse)
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r_coarse)
 
     def restrict(self, residual, out):
         fd.restrict(residual, out.fun)
@@ -178,10 +180,9 @@ class BsplineControlSpace(ControlSpace):
         # interpolated inner product
         self.build_interpolation_matrix()
 
-        # replace V_r with a box mesh
-        self.inner_product = InterpolatedInnerProductImpl(inner_product,
-                                                          self.V_r,
-                                                          self.FullIFW)
+        # TODO: replace V_r with a box mesh
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r, self.FullIFW)
 
     def construct_knots(self):
         """

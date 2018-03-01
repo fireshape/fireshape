@@ -28,7 +28,7 @@ class InnerProduct(object):
         """Nullspace of weak formulation of inner product (in UFL)."""
         raise NotImplementedError
 
-    def get_impl(self, V):
+    def get_impl(self, V, I = None):
         """Assemble the inner product for a specific fd.FunctionSpace V"""
         self.free_bids = list(
                            V.mesh().topology.exterior_facets.unique_markers)
@@ -62,8 +62,51 @@ class InnerProduct(object):
         A = fd.assemble(a, mat_type='aij', bcs=bc)
         ls = fd.LinearSolver(A, solver_parameters=self.params,
                              nullspace=nsp, transpose_nullspace=nsp)
-        A = A.petscmat
-        return UflInnerProductImpl(ls, A)
+        self.ls = ls
+        self.A = A.petscmat
+        self.interpolated = False
+
+        # If I is passed, do interpolated innner product
+        if I is not None:
+            self.interpolated = True
+            ITAI = self.A.PtAP(I)
+            from firedrake.petsc import PETSc
+            import numpy as np
+            zero_rows = []
+            for row in range(ITAI.size[0]):
+                (cols, vals) = ITAI.getRow(row)
+                valnorm = np.linalg.norm(vals)
+                if valnorm < 1e-13:
+                    zero_rows.append(row)
+            for row in zero_rows:
+                ITAI.setValue(row, row, 1.0)
+            ITAI.assemble()
+            self.A = ITAI #overwrite the self.A created by get_impl
+            Aksp = PETSc.KSP().create(comm=V.comm)
+            Aksp.setOperators(ITAI)
+            Aksp.setType("preonly")
+            Aksp.pc.setType("cholesky")
+            Aksp.pc.setFactorSolverPackage("mumps")
+            Aksp.setFromOptions()
+            Aksp.setUp()
+            self.Aksp = Aksp
+
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
+        A_u = self.A.createVecLeft()
+        self.A.mult(u.vec, A_u)
+        return v.vec.dot(A_u)
+
+    def riesz_map(self, v, out):  # dual to primal
+        """
+        Input:
+        v: ControlVector, in the dual space
+        out: ControlVector, in the primal space
+        """
+        if self.interpolated:
+            self.Aksp.solve(v.vec, out.vec)
+        else:
+            self.ls.solve(out.fun, v.fun)
 
 
 class H1InnerProduct(InnerProduct):
@@ -141,35 +184,7 @@ class ElasticityInnerProduct(InnerProduct):
         return res
 
 
-class InnerProductImpl(object):
-    """
-    Generic code to implementation to
-    """
-    def __init__(self, A):
-        self.A = A
-
-    def eval(self, u, v):
-        """Evaluate inner product in primal space."""
-        A_u = self.A.createVecLeft()
-        self.A.mult(u.vec, A_u)
-        return v.vec.dot(A_u)
-
-class UflInnerProductImpl(InnerProductImpl):
-    """I suggest to move this to InnerProduct.get_impl."""
-    def __init__(self, ls, *args):
-        super().__init__(*args)
-        self.ls = ls
-
-    def riesz_map(self, v, out):  # dual to primal
-        """
-        Input:
-        v: ControlVector, in the dual space
-        out: ControlVector, in the primal space
-        """
-
-        self.ls.solve(out.fun, v.fun)
-
-class InterpolatedInnerProductImpl(InnerProductImpl):
+class InterpolatedInnerProduct(InnerProduct):
     """
     Assemble inner product combining firedrake and interpolation.
 
@@ -183,10 +198,9 @@ class InterpolatedInnerProductImpl(InnerProductImpl):
     zero-rows with rows that have 1 on the diagonal entry. Finally, create a
     ksp.solver.
     """
-
-    def __init__(self, inner_product, V_r, I):
-        A = inner_product.get_impl(V_r).A
-        ITAI = A.PtAP(I)
+    def get_impl(self, V, I):
+        super().get_impl(V)
+        ITAI = self.A.PtAP(I)
         from firedrake.petsc import PETSc
         import numpy as np
         zero_rows = []
