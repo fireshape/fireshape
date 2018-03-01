@@ -169,9 +169,10 @@ class UflInnerProductImpl(InnerProductImpl):
 
 class InterpolatedInnerProductImpl(InnerProductImpl):
     """
+    Assemble inner product combining firedrake and interpolation.
 
-    Inner products for ControlVector with self.fun = None.
-
+    Input:
+        inner_product: type InnerProduct
     Assemble the matrix representation of the inner product by multiplying
     the matrix representation of the original inner product with the interpolation
     matrix I.
