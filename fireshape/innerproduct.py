@@ -1,15 +1,14 @@
 import firedrake as fd
 
-
 class InnerProduct(object):
     """
     Generic implementation of an inner product.
-    Only when calling get_impl, one gets something that is 
-    associated with a FunctionSpace.
 
+    The inner product is associated to a fd.FunctionSpace
+    only after calling the method self.get_impl.
     """
     def __init__(self, fixed_bids=[]):
-        self.fixed_bids = fixed_bids
+        self.fixed_bids = fixed_bids # fixed parts of bdry
         self.params = self.get_params() # solver parameters
 
     def get_params(self):
@@ -22,23 +21,23 @@ class InnerProduct(object):
                 }
 
     def get_weak_form(self, V):
-        """ Weak formulation of inner product in UFL (Firedrake)."""
+        """ Weak formulation of inner product (in UFL)."""
         raise NotImplementedError
 
     def get_nullspace(self, V):
-        """Nullspace of weak formulation of inner product (in UFL, Firedake)."""
+        """Nullspace of weak formulation of inner product (in UFL)."""
         raise NotImplementedError
 
     def get_impl(self, V):
         """Assemble the inner product for a specific fd.FunctionSpace V"""
-        self.free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        self.free_bids = list(
+                           V.mesh().topology.exterior_facets.unique_markers)
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
 
-        # Some weak forms have a nullspace.
-        # Here we check whether there are DirichletBCs on the deformation
-        # (which implies that the nullspace can be ignores)
-        # and if there aren't any, then we get the nullspace.
+        # Some weak forms have a nullspace. We import the nullspace if no
+        # parts of the bdry are fixed (we assume that a DirichletBC is
+        # sufficient to empty the nullspace).
         nsp = None
         if len(self.fixed_bids) == 0:
             nsp_functions = self.get_nullspace(V)
@@ -46,7 +45,7 @@ class InnerProduct(object):
                 nsp = fd.VectorSpaceBasis(nsp_functions)
                 nsp.orthonormalize()
 
-        # impose homogeneous Dirichlet bcs on bdry parts that are not free to move
+        # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
         if len(self.fixed_bids) > 0:
             dim = V.value_size
             if dim == 2:
@@ -61,8 +60,8 @@ class InnerProduct(object):
 
         a = self.get_weak_form(V)
         A = fd.assemble(a, mat_type='aij', bcs=bc)
-        ls = fd.LinearSolver(A, solver_parameters=self.params, nullspace=nsp,
-                             transpose_nullspace=nsp)
+        ls = fd.LinearSolver(A, solver_parameters=self.params,
+                             nullspace=nsp, transpose_nullspace=nsp)
         A = A.petscmat
         return UflInnerProductImpl(ls, A)
 
@@ -173,10 +172,13 @@ class InterpolatedInnerProductImpl(InnerProductImpl):
 
     Input:
         inner_product: type InnerProduct
-    Assemble the matrix representation of the inner product by multiplying
-    the matrix representation of the original inner product with the interpolation
-    matrix I.
+        V: type fd.functionspaceimpl.WithGeometry
+        I: type PETSc.Matrix, interpolation matrix from ControlSpace to V
 
+    First, associate inner_product to V. Then, multiply the resulting matrix
+    A with I (that is, compute transpose(I)*A*I). If necessary, replace
+    zero-rows with rows that have 1 on the diagonal entry. Finally, create a
+    ksp.solver.
     """
 
     def __init__(self, inner_product, V_r, I):
