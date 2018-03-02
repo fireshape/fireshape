@@ -1,26 +1,15 @@
 import unittest
 import firedrake as fd
 import fireshape as fs
-
+import fireshape.zoo as fsz
 import ROL
-
 
 class LevelsetTest(unittest.TestCase):
 
     def run_levelset_optimization(self, Q, write_output=False):
-        mesh_m = Q.mesh_m
-        (x, y) = fd.SpatialCoordinate(mesh_m)
-        f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+        """ Test template for fsz.LevelsetFunctional."""
 
-        class LevelsetFunctional(fs.Objective):
-
-            def value_form(self):
-                return f * fd.dx
-
-            def derivative_form(self, v):
-                return fd.div(f*v) * fd.dx
-
-        q = fs.ControlVector(Q)
+        #tool for developing new tests, allows storing shape iterates
         if write_output:
             out = fd.File("T.pvd")
 
@@ -30,8 +19,15 @@ class LevelsetTest(unittest.TestCase):
             cb()
         else:
             cb = None
-        J = LevelsetFunctional(Q, cb=cb)
 
+        # levelset test case
+        (x, y) = fd.SpatialCoordinate(Q.mesh_m)
+        f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+        J = fsz.LevelsetFunctional(f, Q)
+
+        q = fs.ControlVector(Q)
+
+        # ROL parameters
         params_dict = {
             'General': {
                 'Secant': {'Type': 'Limited-Memory BFGS',
@@ -46,32 +42,39 @@ class LevelsetTest(unittest.TestCase):
                 'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
                 'Iteration Limit': 150}}
 
+        # assemble and solve ROL optimization problem
         params = ROL.ParameterList(params_dict, "Parameters")
         problem = ROL.OptimizationProblem(J, q)
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
+
+        # verify that ???
         state = solver.getAlgorithmState()
         self.assertTrue(state.gnorm < 1e-6)
 
     def test_fe(self):
+        """Test for FeControlSpace."""
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
-
         inner = fs.LaplaceInnerProduct()
         Q = fs.FeControlSpace(mesh, inner)
         self.run_levelset_optimization(Q, write_output=False)
 
     def run_fe_mg(self, order, write_output=False):
+        """Test template for FeMultiGridControlSpace."""
         mesh = fd.UnitSquareMesh(4, 4)
-
         inner = fs.LaplaceInnerProduct()
-        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
+        # State space mesh arises from 4 refinements of control space mesh
+        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4,
+                                       order=order)
         self.run_levelset_optimization(Q, write_output=write_output)
 
     def test_fe_mg_first_order(self):
+        """Test FeMultiGridControlSpace with CG1 control."""
         self.run_fe_mg(1, write_output=False)
 
     def test_fe_mg_second_order(self):
+        """Test FeMultiGridControlSpace with CG2 control."""
         self.run_fe_mg(2, write_output=False)
 
 
