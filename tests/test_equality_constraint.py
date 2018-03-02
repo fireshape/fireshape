@@ -18,15 +18,15 @@ class EqualityConstraintTest(unittest.TestCase):
         (x, y) = fd.SpatialCoordinate(mesh_m)
 
         q = fs.ControlVector(Q)
-        out = fd.File("T.pvd")
+        #out = fd.File("T.pvd") # commented to stop storing vtu files
 
-        def cb(*args):
-            out.write(Q.T)
+        #def cb(*args):
+        #    out.write(Q.T)
 
-        cb()
+        #cb()
         f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 1.2
 
-        J = fsz.LevelsetFunctional(f, Q, cb=cb)
+        J = fsz.LevelsetFunctional(f, Q)#, cb=cb)
         vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q)
         e = fs.EqualityConstraint([vol])
         emul = ROL.StdVector(1)
