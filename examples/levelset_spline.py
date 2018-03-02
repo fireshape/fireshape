@@ -9,10 +9,10 @@ import math
 n = 100
 mesh = fd.UnitSquareMesh(n, n)
 
-inner = fs.LaplaceInnerProduct()
-bbox = [(-1, 2), (-1,2)]
-orders = [2, 2]
-levels = [4, 4]
+inner = fs.H1InnerProduct()#LaplaceInnerProduct()
+bbox = [(-3, 4), (-3,4)]
+orders = [3, 3]
+levels = [5, 5]
 Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
 q = fs.ControlVector(Q)
 
@@ -29,18 +29,32 @@ def cb():
 cb()
 J = fsz.LevelsetFunctional(f, Q, cb=cb)
 
+#params_dict = {
+#    'General': {
+#        'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
+#    'Step': {
+#        'Type': 'Line Search',
+#        'Line Search': { 'Descent Method': { 'Type': 'Quasi-Newton Step' } }
+#    },
+#    'Status Test': {
+#        'Gradient Tolerance': 1e-15, 'Relative Gradient Tolerance': 1e-10,
+#        'Step Tolerance': 1e-16, 'Relative Step Tolerance': 1e-10,
+#        'Iteration Limit': 150 }
+#}
+
 params_dict = {
     'General': {
-        'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
+        'Secant': {'Type': 'Limited-Memory BFGS',
+                   'Maximum Storage': 25}},
     'Step': {
         'Type': 'Line Search',
-        'Line Search': { 'Descent Method': { 'Type': 'Quasi-Newton Step' } }
-    },
+        'Line Search': {'Descent Method': {
+            'Type': 'Quasi-Newton Step'}}},
     'Status Test': {
-        'Gradient Tolerance': 1e-15, 'Relative Gradient Tolerance': 1e-10,
-        'Step Tolerance': 1e-16, 'Relative Step Tolerance': 1e-10,
-        'Iteration Limit': 100 }
-}
+        'Gradient Tolerance': 1e-7,
+        'Relative Gradient Tolerance': 1e-6,
+        'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
+        'Iteration Limit': 150}}
 
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)

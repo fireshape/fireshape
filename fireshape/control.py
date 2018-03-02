@@ -163,6 +163,30 @@ class BsplineControlSpace(ControlSpace):
         self.levels = levels
         self.construct_knots()
 
+        # create temporary self.mesh_r and self.V_r to assemble inner product
+        if self.dim == 2:
+            nx = len(self.knots[0]) - 1
+            ny = len(self.knots[1]) - 1
+            Lx = self.bbox[0][1] - self.bbox[0][0]
+            Ly = self.bbox[1][1] - self.bbox[1][0]
+            meshloc = fd.RectangleMesh(nx, ny, Lx, Ly, quadrilateral=True,
+                                    comm = mesh.mpi_comm()) #quadrilaterals or triangle?
+            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0] # shift in x-dir
+            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0] # shift in y-dir
+            inner_product.fixed_bids = [1,2,3,4]
+
+        elif self.dim == 3:
+            # maybe use extruded meshes, quadrilateral not available
+            #meshloc = BoxMesh(nx, ny, nz, Lx, Ly, Lz, comm = self.mesh_r.mpi_comm())
+            raise NotImplementedError
+
+        self.mesh_r = meshloc
+        maxdegree = max(self.orders)-1
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree ) #is this the proper space?
+        self.build_interpolation_matrix()
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r, self.FullIFW)
+
         # standard construction of ControlSpace
         self.mesh_r = mesh
         element = self.mesh_r.coordinates.function_space().ufl_element()
@@ -176,12 +200,9 @@ class BsplineControlSpace(ControlSpace):
 
         assert self.dim == self.mesh_r.geometric_dimension()
 
-        # interpolated inner product
+        # assemble correct interpolation matrix
         self.build_interpolation_matrix()
 
-        # TODO: replace V_r with a box mesh
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r, self.FullIFW)
 
     def construct_knots(self):
         """

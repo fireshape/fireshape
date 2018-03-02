@@ -23,7 +23,7 @@ class LevelsetTest(unittest.TestCase):
         # levelset test case
         (x, y) = fd.SpatialCoordinate(Q.mesh_m)
         f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
-        J = fsz.LevelsetFunctional(f, Q)
+        J = fsz.LevelsetFunctional(f, Q, cb=cb)
 
         q = fs.ControlVector(Q)
 
@@ -76,6 +76,17 @@ class LevelsetTest(unittest.TestCase):
     def test_fe_mg_second_order(self):
         """Test FeMultiGridControlSpace with CG2 control."""
         self.run_fe_mg(2, write_output=False)
+
+    def test_bsplines(self):
+        """Test for BsplineControlSpace."""
+        n = 100
+        mesh = fd.UnitSquareMesh(n, n)
+        inner = fs.H1InnerProduct()
+        bbox = [(-3, 4), (-3,4)]
+        orders = [3, 3]
+        levels = [5, 5]
+        Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
+        self.run_levelset_optimization(Q, write_output=False)
 
 
 if __name__ == '__main__':
