@@ -5,21 +5,20 @@ from .pde_constraint import PdeConstraint
 
 
 class Objective(ROL.Objective):
-
+    "Abstract class of shape functionals."
     def __init__(self, Q: ControlSpace, cb=None, scale=1.0):
         super().__init__()
-        self.V_m = Q.V_m
-        self.V_r = Q.V_r
-        self.Q = Q
-        self.cb = cb
-        self.scale = scale
+        self.Q = Q # ControlSpace
+        self.V_r = Q.V_r # fd.VectorFunctionSpace on reference mesh
+        self.V_m = Q.V_m # clone of V_r of physical mesh
+        self.cb = cb # method to store current iterate
+        self.scale = scale # scaling factor (multiplies shape functional)
 
         """
-        Create vectors for derivative in FE space and
+        Preallocate vectors for derivative in FE space and
         control space so that they are not created every time
         the derivative is evaluated.
         """
-
         self.deriv_m = fd.Function(self.V_m)
         self.deriv_r = fd.Function(self.V_r, val=self.deriv_m)
         self.deriv_control = ControlVector(Q)
