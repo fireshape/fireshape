@@ -79,8 +79,7 @@ class ReducedObjective(Objective):
         return self.J.value(x, tol)
 
     def derivative_form(self, v):
-        return self.J.scale * self.J.derivative_form(v)
-               + self.e.derivative_form(v)
+        return self.J.scale * self.J.derivative_form(v) + self.e.derivative_form(v)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
