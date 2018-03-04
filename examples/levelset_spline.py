@@ -6,20 +6,23 @@ import fireshape as fs
 import ROL
 import math
 
-n = 100
-mesh = fd.UnitSquareMesh(n, n)
+#n = 100
+#mesh = fd.UnitSquareMesh(n, n)
+n = 20
+mesh = fd.UnitCubeMesh(n, n, n)
 
 inner = fs.H1InnerProduct()#LaplaceInnerProduct()
-bbox = [(-3, 4), (-3,4)]
-orders = [3, 3]
-levels = [5, 5]
+bbox = [(-3, 4), (-3, 4), (-3,4)]
+orders = [2, 2, 2]
+levels = [3, 3, 3]
 Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
 q = fs.ControlVector(Q)
 
 mesh_m = Q.mesh_m
-(x, y) = fd.SpatialCoordinate(mesh_m)
-
-f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+#(x, y) = fd.SpatialCoordinate(mesh_m)
+#f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+(x, y, z) = fd.SpatialCoordinate(mesh_m)
+f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
 
 out = fd.File("domain.pvd")
 

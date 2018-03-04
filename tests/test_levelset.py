@@ -57,10 +57,12 @@ class LevelsetTest(unittest.TestCase):
 
         #tool for developing new tests, allows storing shape iterates
         if write_output:
-            out = fd.File("T.pvd")
+            #out = fd.File("T.pvd")
+            out = fd.File("domain.pvd")
 
             def cb(*args):
-                out.write(Q.T)
+                #out.write(Q.T)
+                out.write(Q.mesh_m.coordinates)
 
             cb()
         else:
@@ -161,6 +163,17 @@ class LevelsetTest(unittest.TestCase):
         levels = [5, 5]
         Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
         self.run_levelset_optimization(Q, write_output=False)
+
+    def test_bsplines_3D(self):
+        """3D Test for BsplineControlSpace."""
+        n = 20
+        mesh = fd.UnitCubeMesh(n, n, n)
+        inner = fs.H1InnerProduct()
+        bbox = [(-3, 4), (-3, 4), (-3,4)]
+        orders = [2, 2, 2]
+        levels =  [3, 3, 3]
+        Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
+        self.run_levelset_optimization_3D(Q, write_output=True)
 
 
 if __name__ == '__main__':

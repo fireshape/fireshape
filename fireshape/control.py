@@ -182,7 +182,6 @@ class BsplineControlSpace(ControlSpace):
         self.orders = orders
         self.levels = levels
         self.construct_knots()
-
         # create temporary self.mesh_r and self.V_r to assemble inner product
         if self.dim == 2:
             nx = len(self.knots[0]) - 1
@@ -203,9 +202,9 @@ class BsplineControlSpace(ControlSpace):
             nz = len(self.knots[2]) - 1
             Lx = self.bbox[0][1] - self.bbox[0][0]
             Ly = self.bbox[1][1] - self.bbox[1][0]
-            Ly = self.bbox[2][1] - self.bbox[2][0]
-            meshloc = BoxMesh(nx, ny, nz, Lx, Ly, Lz,
-                              comm = mesh_r.mpi_comm())
+            Lz = self.bbox[2][1] - self.bbox[2][0]
+            meshloc = fd.BoxMesh(nx, ny, nz, Lx, Ly, Lz,
+                              comm = mesh.mpi_comm())
             # shift in x-, y-, and z-direction
             meshloc.coordinates.dat.data[:,0] += self.bbox[0][0]
             meshloc.coordinates.dat.data[:,1] += self.bbox[1][0]
@@ -346,6 +345,7 @@ class BsplineControlSpace(ControlSpace):
         the 1d univariate interpolation matrices.
         In the future, this may be done matrix-free.
         """
+        # this is awfully slow in 3D!!!!!!!!!!!
         IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         IFW.setType(PETSc.Mat.Type.AIJ)
         IFW.setSizes((self.M, self.N))
@@ -370,6 +370,7 @@ class BsplineControlSpace(ControlSpace):
         """
         Assemble interpolation matrix for vectorial tensorized spline space.
         """
+        # this is THE MOST awfully slow in 3D!!!!!!!!!!!
         FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
         FullIFW.setType(PETSc.Mat.Type.AIJ)
         FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
