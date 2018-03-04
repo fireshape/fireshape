@@ -171,14 +171,26 @@ class BsplineControlSpace(ControlSpace):
             Ly = self.bbox[1][1] - self.bbox[1][0]
             meshloc = fd.RectangleMesh(nx, ny, Lx, Ly, quadrilateral=True,
                                     comm = mesh.mpi_comm()) #quadrilaterals or triangle?
-            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0] # shift in x-dir
-            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0] # shift in y-dir
+            # shift in x- and y-direction
+            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0]
+            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0]
             inner_product.fixed_bids = [1,2,3,4]
 
         elif self.dim == 3:
             # maybe use extruded meshes, quadrilateral not available
-            #meshloc = BoxMesh(nx, ny, nz, Lx, Ly, Lz, comm = self.mesh_r.mpi_comm())
-            raise NotImplementedError
+            nx = len(self.knots[0]) - 1
+            ny = len(self.knots[1]) - 1
+            nz = len(self.knots[2]) - 1
+            Lx = self.bbox[0][1] - self.bbox[0][0]
+            Ly = self.bbox[1][1] - self.bbox[1][0]
+            Ly = self.bbox[2][1] - self.bbox[2][0]
+            meshloc = BoxMesh(nx, ny, nz, Lx, Ly, Lz,
+                              comm = mesh_r.mpi_comm())
+            # shift in x-, y-, and z-direction
+            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0]
+            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0]
+            meshloc.coordinates.dat.data[:,2] += self.bbox[2][0]
+            inner_product.fixed_bids = [1,2,3,4,5,6]
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders)-1

@@ -52,6 +52,51 @@ class LevelsetTest(unittest.TestCase):
         state = solver.getAlgorithmState()
         self.assertTrue(state.gnorm < 1e-6)
 
+    def run_levelset_optimization_3D(self, Q, write_output=False):
+        """ Test template for fsz.LevelsetFunctional."""
+
+        #tool for developing new tests, allows storing shape iterates
+        if write_output:
+            out = fd.File("T.pvd")
+
+            def cb(*args):
+                out.write(Q.T)
+
+            cb()
+        else:
+            cb = None
+
+        # levelset test case
+        (x, y, z) = fd.SpatialCoordinate(Q.mesh_m)
+        f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
+        J = fsz.LevelsetFunctional(f, Q, cb=cb)
+        q = fs.ControlVector(Q)
+
+        # ROL parameters
+        params_dict = {
+            'General': {
+                'Secant': {'Type': 'Limited-Memory BFGS',
+                           'Maximum Storage': 25}},
+            'Step': {
+                'Type': 'Line Search',
+                'Line Search': {'Descent Method': {
+                    'Type': 'Quasi-Newton Step'}}},
+            'Status Test': {
+                'Gradient Tolerance': 1e-4,
+                'Relative Gradient Tolerance': 1e-3,
+                'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
+                'Iteration Limit': 50}}
+
+        # assemble and solve ROL optimization problem
+        params = ROL.ParameterList(params_dict, "Parameters")
+        problem = ROL.OptimizationProblem(J, q)
+        solver = ROL.OptimizationSolver(problem, params)
+        solver.solve()
+
+        # verify that the norm of the gradient at optimum is small enough
+        state = solver.getAlgorithmState()
+        self.assertTrue(state.gnorm < 1e-4)
+
     def test_fe(self):
         """Test for FeControlSpace."""
         n = 100
@@ -59,6 +104,14 @@ class LevelsetTest(unittest.TestCase):
         inner = fs.LaplaceInnerProduct()
         Q = fs.FeControlSpace(mesh, inner)
         self.run_levelset_optimization(Q, write_output=False)
+
+    def test_fe_3D(self):
+        """3D Test for FeControlSpace."""
+        n = 30
+        mesh = fd.UnitCubeMesh(n, n, n)
+        inner = fs.LaplaceInnerProduct()
+        Q = fs.FeControlSpace(mesh, inner)
+        self.run_levelset_optimization_3D(Q, write_output=False)
 
     def run_fe_mg(self, order, write_output=False):
         """Test template for FeMultiGridControlSpace."""
