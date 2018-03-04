@@ -122,13 +122,34 @@ class LevelsetTest(unittest.TestCase):
                                        order=order)
         self.run_levelset_optimization(Q, write_output=write_output)
 
+    #currently not supported by firedrake
+    #def run_fe_mg_3D(self, order, write_output=False):
+    #    """3D Test template for FeMultiGridControlSpace."""
+    #    mesh = fd.UnitCubeMesh(4, 4, 4)
+    #    inner = fs.LaplaceInnerProduct()
+    #    # State space mesh arises from 4 refinements of control space mesh
+    #    Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4,
+    #                                   order=order)
+    #    self.run_levelset_optimization_3D(Q, write_output=write_output)
+
     def test_fe_mg_first_order(self):
         """Test FeMultiGridControlSpace with CG1 control."""
         self.run_fe_mg(1, write_output=False)
+        #self.run_fe_mg_3D(1, write_output=False)
 
     def test_fe_mg_second_order(self):
         """Test FeMultiGridControlSpace with CG2 control."""
         self.run_fe_mg(2, write_output=False)
+        #self.run_fe_mg_3D(2, write_output=False)
+
+    def run_fe_mg_3D(self, order, write_output=False):
+        """Test template for FeMultiGridControlSpace."""
+        mesh = fd.UnitCubeMesh(4, 4, 4)
+        inner = fs.LaplaceInnerProduct()
+        # State space mesh arises from 4 refinements of control space mesh
+        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4,
+                                       order=order)
+        self.run_levelset_optimization_3D(Q, write_output=write_output)
 
     def test_bsplines(self):
         """Test for BsplineControlSpace."""

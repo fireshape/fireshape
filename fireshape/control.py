@@ -84,14 +84,15 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r)
+
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r)
 
     def restrict(self, residual, out):
         with residual.dat.vec as vecres:
@@ -107,14 +108,35 @@ class FeControlSpace(ControlSpace):
 
 
 class FeMultiGridControlSpace(ControlSpace):
+    """
+    FEControlSpace on given mesh and StateSpace on uniformly refined mesh.
 
+    Use the provided mesh to construct a Lagrangian finite element control
+    space. Then, refine the mesh `refinements`-times to construct
+    representatives of ControlVectors that are compatible with the state
+    space.
+
+    Inputs:
+        refinements: type int, number of uniform refinements to perform
+                     to obtain the StateSpace mesh.
+        order: type int, order of Lagrange basis functions of ControlSpace.
+
+    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
+    """
     def __init__(self, mesh_r, inner_product, refinements=1, order=1):
         mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
         self.mesh_hierarchy = mh
+
+        # Control space on coarsest mesh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
                                                  order)
+        # Assemble inner_product on control space
+        self.inner_product = inner_product
+        self.inner_product.get_impl(self.V_r_coarse)
 
+        # State Space on ???finest??? mesh
+        # ??????shouldn't this be mesh_hierarchy[-1]???
         self.mesh_r = self.mesh_hierarchy[1]
         element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
@@ -125,8 +147,6 @@ class FeMultiGridControlSpace(ControlSpace):
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r_coarse)
 
     def restrict(self, residual, out):
         fd.restrict(residual, out.fun)
