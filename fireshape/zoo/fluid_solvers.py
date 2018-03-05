@@ -4,13 +4,25 @@ from ..pde_constraint import PdeConstraint
 __all__ = ["StokesSolver"]
 
 class FluidSolver(PdeConstraint):
-
-    def __init__(self, m_mesh, mini=False, direct=True,
+    """Abstract class for fluid problems as PdeContraint."""
+    def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
                  noslip_bids=[], nu=1.0):
+        """
+        Instantiate a FluidSolver.
 
+        Inputs:
+            mesh_m: type fd.Mesh
+            mini: type bool, set to true to use MINI elments
+            direct: type bool, set to True to use direct solver
+            inflow_bids: type list (of ints), list of inflow bdries
+            inflow_expr: type ???UFL??, UFL formula for inflow bdry conditions
+            noslip_bids: typ list (of ints), list of bdries with homogeneous
+                         Dirichlet bdry condition for velocity
+            nu: type bool, ????
+        """
         super().__init__()
-        self.m_mesh = m_mesh
+        self.mesh_m = mesh_m
         self.mini = mini
         self.direct = direct
         self.inflow_bids = inflow_bids
@@ -18,15 +30,17 @@ class FluidSolver(PdeConstraint):
         self.noslip_bids = noslip_bids
         self.nu = fd.Constant(nu)
 
-        """ Setup problem """
+        # Setup problem
         self.V = self.get_functionspace()
 
+        # Manage boundary conditions
         # this only works after a functionspace on the mesh has been declared..
-        all_bids = list(self.m_mesh.topology.exterior_facets.unique_markers)
+        all_bids = list(self.mesh_m.topology.exterior_facets.unique_markers)
         for bid in inflow_bids + noslip_bids:
             all_bids.remove(bid)
         self.outflow_bids = all_bids
 
+        # Preallocate solution variables for state and adjoint equations
         self.solution = fd.Function(self.V, name="State")
         self.solution_adj = fd.Function(self.V, name="Adjoint")
 
@@ -36,17 +50,21 @@ class FluidSolver(PdeConstraint):
         self.params = self.get_parameters()
 
     def get_functionspace(self):
+        """Construct trial/test space for state and adjoint equations."""
         if self.mini:
+            # MINI elements
             mini = fd.FiniteElement("CG", fd.triangle, 1) \
                 + fd.FiniteElement("B", fd.triangle, 3)
-            Vvel = fd.VectorFunctionSpace(self.m_mesh, mini)
+            Vvel = fd.VectorFunctionSpace(self.mesh_m, mini)
         else:
-            Vvel = fd.VectorFunctionSpace(self.m_mesh, "Lagrange", 2)
-        Vpres = fd.FunctionSpace(self.m_mesh, "CG", 1)
+            #P2/P1 Taylor-Hood elements
+            Vvel = fd.VectorFunctionSpace(self.mesh_m, "Lagrange", 2)
+        Vpres = fd.FunctionSpace(self.mesh_m, "CG", 1)
         return Vvel * Vpres
 
     def get_boundary_conditions(self):
-        dim = self.m_mesh.cell_dimension()
+        """Impose Dirichlet boundary conditions."""
+        dim = self.mesh_m.cell_dimension()
         if dim == 2:
             zerovector = fd.Constant((0.0, 0.0))
         elif dim == 3:
@@ -62,8 +80,10 @@ class FluidSolver(PdeConstraint):
         return bcs
 
     def get_nullspace(self):
-        # check if there is any condition fixing the pressure
+        """Specify nullspace of state/adjoint equation."""
+
         if len(self.outflow_bids) > 0:
+            #If the pressure is fixed (anywhere) by a Dirichlet bc, nsp = None
             nsp = None
         else:
             nsp = fd.MixedVectorSpaceBasis(
@@ -72,7 +92,7 @@ class FluidSolver(PdeConstraint):
 
 
 class StokesSolver(FluidSolver):
-
+    """Implementation of Stokes' problem as PdeConstraint."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -111,6 +131,7 @@ class StokesSolver(FluidSolver):
         return ksp_params
 
     def derivative_form(self, deformation):
+        """Directional derivative of self.F wrt to shape perturbation w."""
         w = deformation
         u = self.solution.split()[0]
         p = self.solution.split()[1]

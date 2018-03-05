@@ -5,7 +5,7 @@ __all__ = ["EnergyObjective"]
 
 
 class EnergyObjective(Objective):
-
+    """Energy functional for fluid problems."""
     def __init__(self, pde_solver: FluidSolver, *args,  **kwargs):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
@@ -26,11 +26,13 @@ class EnergyObjective(Objective):
         #     super().solve_adjoint()
 
     def value_form(self):
+        """Evaluate misfit functional."""
         u = fd.split(self.pde_solver.solution)[0]
         nu = self.pde_solver.nu
         return 0.5 * nu * fd.inner(fd.grad(u), fd.grad(u)) * fd.dx
 
     def derivative_form(self, deformation):
+        """Directional derivative of misfit functional."""
         u = self.pde_solver.solution.split()[0]
         w = deformation
         nu = self.pde_solver.nu
