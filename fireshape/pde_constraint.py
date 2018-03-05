@@ -1,29 +1,31 @@
 import firedrake as fd
 
 class PdeConstraint(object):
-
     """
-    Base class for pde constraint. Needs to implement the
-    folllowing properties:
+    Base class for PdeConstrain.
 
-        F
-        V
-        bcs
-        nsp
-        params
-        solution
-        solution_adj
-
+    An instance of this class need to declare the following variables:
+        F: UFL form the represent state equation as zero search.
+        V: trial and test space of state equation.
+        bcs: boundary conditions of state/adjoint equation.
+        nsp: null-space of the state operator.
+        params: parameters used by fd.solve to solve F(x) = 0.
+        solution: container for solution to state equation.
+        solution_adj: containter for solution to adjoint equation.
     """
 
     def __init__(self):
+        """Set counters of state/adjoint solves to 0."""
         self.num_solves = 0
         self.num_adjoint_solves = 0
 
     def solve(self):
+        """Abstract method that solves state equation."""
         self.num_solves += 1
 
     def solve_adjoint(self, J):
+        """Abstract method that solves adjoint (and state) equation."""
+        self.num_solves += 1
         self.num_adjoint_solves += 1
         # Check if F is linear i.e. using TrialFunction
         if len(self.F.arguments()) != 2:

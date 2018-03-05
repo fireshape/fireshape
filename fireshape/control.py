@@ -20,7 +20,7 @@ class ControlSpace(object):
 
     Notational convention:
         self.mesh_r is the initial physical mesh (reference domain)
-        self.V_r is the Firedrake vectorial Lagrangian finite element
+        self.V_r is a Firedrake vectorial Lagrangian finite element
             space on mesh_r
         self.id is the element of V_r that satisfies id(x) = x for every x
         self.T is the interpolant of a ControlSpace variable in self.V_r
@@ -28,6 +28,9 @@ class ControlSpace(object):
         self.V_m is the Firedrake vectorial Lagrangian finite element
             space on mesh_m
         self.inner_product is the inner product of the ControlSpace
+
+    Key idea: solve state and adjoint equations in V_m. Then, compute update
+    of mesh_m in V_m, transplant it to V_r, and restrict it to ControlSpace.
     """
     def restrict(self, residual, out):
         """
@@ -79,14 +82,16 @@ class ControlSpace(object):
 
 
 class FeControlSpace(ControlSpace):
-
+    """Use self.V_r as actual ControlSpace."""
     def __init__(self, mesh_r, inner_product):
+        # Create mesh_r, V_r, and assemble inner product.
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         self.inner_product = inner_product
         self.inner_product.get_impl(self.V_r)
 
+        #Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
@@ -127,15 +132,14 @@ class FeMultiGridControlSpace(ControlSpace):
         mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
         self.mesh_hierarchy = mh
 
-        # Control space on coarsest mesh
+        # Control space on coarsest mesh and assemble inner product
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
                                                  order)
-        # Assemble inner_product on control space
         self.inner_product = inner_product
         self.inner_product.get_impl(self.V_r_coarse)
 
-        # State Space on ???finest??? mesh
+        # Create self.id and self.T on refined mesh.
         # ??????shouldn't this be mesh_hierarchy[-1]???
         self.mesh_r = self.mesh_hierarchy[1]
         element = self.V_r_coarse.ufl_element()
@@ -182,7 +186,7 @@ class BsplineControlSpace(ControlSpace):
         self.orders = orders
         self.levels = levels
         self.construct_knots()
-        # create temporary self.mesh_r and self.V_r to assemble inner product
+        # create temporary self.mesh_r and self.V_r to assemble innerproduct
         if self.dim == 2:
             nx = len(self.knots[0]) - 1
             ny = len(self.knots[1]) - 1
