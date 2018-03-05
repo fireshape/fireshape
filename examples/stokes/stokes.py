@@ -2,7 +2,7 @@ import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
 
-import _ROL as ROL
+import ROL
 
 mesh = fd.Mesh("Sphere2D.msh")
 

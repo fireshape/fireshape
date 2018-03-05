@@ -6,7 +6,11 @@ __all__ = ["LevelsetFunctional"]
 
 
 class LevelsetFunctional(Objective):
+    """
+    Implementation of level-set shape functional.
 
+    Optima are zero-levels of ufl function f.
+    """
     def __init__(self, f, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.f = f

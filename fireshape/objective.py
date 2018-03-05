@@ -33,17 +33,22 @@ class Objective(ROL.Objective):
         self.deriv_control = ControlVector(Q)
 
     def value_form(self):
+        """UFL formula of misfit functional."""
         raise NotImplementedError
 
     def value(self, x, tol):
+        """Evaluate misfit functional."""
         return self.scale * fd.assemble(self.value_form())
 
     def derivative_form(self, v):
+        """
+        UFL formula of partial shape directional derivative of misfit functional
+        """
         raise NotImplementedError
 
     def derivative(self):
         """
-        Assemble directional derivative wrt ControlSpace perturbations.
+        Assemble partial directional derivative wrt ControlSpace perturbations.
 
         First, assemble directional derivative (wrt FEspace V_m) and
         store it in self.deriv_m. This automatically updates self.deriv_r,
@@ -57,7 +62,7 @@ class Objective(ROL.Objective):
         return self.deriv_control
 
     def gradient(self, g, x, tol):
-        """Compute Riesz representative of directional derivative."""
+        """Compute Riesz representative of shape directional derivative."""
         dir_deriv_control = self.derivative()
         self.Q.inner_product.riesz_map(dir_deriv_control, g)
 
@@ -69,7 +74,7 @@ class Objective(ROL.Objective):
 
 
 class ReducedObjective(Objective):
-    """Abstract class of reduces shape functionals."""
+    """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
         super().__init__(J.Q, J.cb)
         self.J = J
@@ -79,7 +84,11 @@ class ReducedObjective(Objective):
         return self.J.value(x, tol)
 
     def derivative_form(self, v):
-        return self.J.scale * self.J.derivative_form(v) + self.e.derivative_form(v)
+        """
+        Add shape partial derivatives of misfit functional and state constraint.
+        """
+        return (self.J.scale * self.J.derivative_form(v)
+                + self.e.derivative_form(v))
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""

@@ -131,7 +131,7 @@ class StokesSolver(FluidSolver):
         return ksp_params
 
     def derivative_form(self, deformation):
-        """Directional derivative of self.F wrt to shape perturbation w."""
+        """Shape directional derivative of self.F wrt to w."""
         w = deformation
         u = self.solution.split()[0]
         p = self.solution.split()[1]
