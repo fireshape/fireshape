@@ -174,12 +174,25 @@ class ElasticityInnerProduct(InnerProduct):
         return mu
 
     def get_weak_form(self, V):
-        mu = self.get_mu(V)
+        """
+        mu is a spatially varying coefficient in the weak form
+        of the elasticity equations. The idea is to make the mesh stiff near
+        the boundary that is being deformed.
+        """
+        if self.fixed_bids is not None and len(self.fixed_bids)>0:
+            mu = self.get_mu(V)
+        else:
+            mu = fd.Constant(1.0)
+
+
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         return mu * fd.inner(fd.sym(fd.grad(u)), fd.sym(fd.grad(v))) * fd.dx
 
     def get_nullspace(self, V):
+        """
+        This nullspace contains constant functions as well as rotations.
+        """
         X = fd.SpatialCoordinate(V.mesh())
         dim = V.value_size
         if dim == 2:

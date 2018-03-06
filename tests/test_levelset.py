@@ -99,11 +99,20 @@ class LevelsetTest(unittest.TestCase):
         state = solver.getAlgorithmState()
         self.assertTrue(state.gnorm < 1e-4)
 
+
     def test_fe(self):
-        """Test for FeControlSpace."""
+        """Test for FeControlSpace with all inner products."""
+
+        for inner in [fs.ElasticityInnerProduct,
+                      fs.LaplaceInnerProduct,
+                      fs.H1InnerProduct]:
+            
+            self.run_fe_test(inner)
+
+    def run_fe_test(self, inner):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
-        inner = fs.LaplaceInnerProduct()
+        inner = inner()
         Q = fs.FeControlSpace(mesh, inner)
         self.run_levelset_optimization(Q, write_output=False)
 
