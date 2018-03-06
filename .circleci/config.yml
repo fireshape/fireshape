@@ -1,0 +1,19 @@
+# Python CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+#
+version: 2
+jobs:
+  build:
+    docker:
+      # specify the version you desire here
+      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
+      - image: circleci/python:3.6.1
+      
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - run: sudo curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
+      - run: python3 ./firedrake-install --disable-ssh --minimal-petsc 
+            
