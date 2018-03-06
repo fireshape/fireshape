@@ -19,7 +19,7 @@ class FluidSolver(PdeConstraint):
             inflow_expr: type ???UFL??, UFL formula for inflow bdry conditions
             noslip_bids: typ list (of ints), list of bdries with homogeneous
                          Dirichlet bdry condition for velocity
-            nu: type bool, ????
+            nu: type float, viscosity
         """
         super().__init__()
         self.mesh_m = mesh_m

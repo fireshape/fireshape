@@ -91,7 +91,7 @@ class FeControlSpace(ControlSpace):
         self.inner_product = inner_product
         self.inner_product.get_impl(self.V_r)
 
-        #Create self.id and self.T, self.mesh_m, and self.V_m.
+        # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
@@ -140,8 +140,7 @@ class FeMultiGridControlSpace(ControlSpace):
         self.inner_product.get_impl(self.V_r_coarse)
 
         # Create self.id and self.T on refined mesh.
-        # ??????shouldn't this be mesh_hierarchy[-1]???
-        self.mesh_r = self.mesh_hierarchy[1]
+        self.mesh_r = self.mesh_hierarchy[-1]
         element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
@@ -150,7 +149,6 @@ class FeMultiGridControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
-
 
     def restrict(self, residual, out):
         fd.restrict(residual, out.fun)

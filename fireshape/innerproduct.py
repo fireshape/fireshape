@@ -14,11 +14,13 @@ class InnerProduct(object):
     def get_params(self):
         """PETSc parameters to solve linear system."""
         return {
-                'ksp_solver': 'gmres',
-                'pc_type': 'lu',
-                'pc_factor_mat_solver_package': 'mumps',
-                # 'ksp_monitor': True
-                }
+            'ksp_rtol': 1e-11,
+            'ksp_atol': 1e-11,
+            'ksp_stol': 1e-16,
+            'ksp_type': 'cg',
+            'pc_type': 'hypre',
+            'pc_hypre_type': 'boomeramg'
+        }
 
     def get_weak_form(self, V):
         """ Weak formulation of inner product (in UFL)."""

@@ -37,7 +37,7 @@ class Objective(ROL.Objective):
         raise NotImplementedError
 
     def value(self, x, tol):
-        """Evaluate misfit functional."""
+        """Evaluate misfit functional. Function signature imposed by ROL."""
         return self.scale * fd.assemble(self.value_form())
 
     def derivative_form(self, v):
@@ -62,7 +62,11 @@ class Objective(ROL.Objective):
         return self.deriv_control
 
     def gradient(self, g, x, tol):
-        """Compute Riesz representative of shape directional derivative."""
+        """
+        Compute Riesz representative of shape directional derivative.
+        Function signature imposed by ROL.
+        """
+
         dir_deriv_control = self.derivative()
         self.Q.inner_product.riesz_map(dir_deriv_control, g)
 
@@ -81,6 +85,10 @@ class ReducedObjective(Objective):
         self.e = e
 
     def value(self, x, tol):
+        """
+        Evaluate reduced objective.
+        Function signature imposed by ROL.
+        """
         return self.J.value(x, tol)
 
     def derivative_form(self, v):

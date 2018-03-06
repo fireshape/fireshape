@@ -11,10 +11,10 @@ class LevelsetTest(unittest.TestCase):
 
         #tool for developing new tests, allows storing shape iterates
         if write_output:
-            out = fd.File("T.pvd")
+            out = fd.File("domain.pvd")
 
             def cb(*args):
-                out.write(Q.T)
+                out.write(Q.mesh_m.coordinates)
 
             cb()
         else:
@@ -48,7 +48,7 @@ class LevelsetTest(unittest.TestCase):
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
 
-        # verify that ???
+        # verify that the norm of the gradient at optimum is small enough
         state = solver.getAlgorithmState()
         self.assertTrue(state.gnorm < 1e-6)
 
@@ -57,11 +57,9 @@ class LevelsetTest(unittest.TestCase):
 
         #tool for developing new tests, allows storing shape iterates
         if write_output:
-            #out = fd.File("T.pvd")
             out = fd.File("domain.pvd")
 
             def cb(*args):
-                #out.write(Q.T)
                 out.write(Q.mesh_m.coordinates)
 
             cb()
