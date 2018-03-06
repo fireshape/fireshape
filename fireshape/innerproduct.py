@@ -136,6 +136,9 @@ class H1InnerProduct(InnerProduct):
             + fd.inner(u, v) * fd.dx
         return a
 
+    def get_nullspace(self, V):
+        return None
+
 
 class LaplaceInnerProduct(InnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
