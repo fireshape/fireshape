@@ -73,7 +73,71 @@ class Objective(ROL.Objective):
     def update(self, x, flag, iteration):
         """Update physical domain and possibly store current iterate."""
         self.Q.update_domain(x)
-        if iteration > 0 and self.cb is not None:
+        if iteration >= 0 and self.cb is not None:
+            self.cb()
+
+
+class DeformationObjective(ROL.Objective):
+
+    def __init__(self, Q: ControlSpace, cb=None, scale=1.0,
+                 quadrature_degree=None):
+
+        super().__init__()
+        self.Q = Q  # ControlSpace
+        self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
+        self.cb = cb
+        self.scale = scale
+
+        self.deriv_r = fd.Function(self.V_r)
+        self.deriv_control = ControlVector(Q)
+        self.quadrature_degree = quadrature_degree
+
+    def value_form(self):
+        """UFL formula of misfit functional."""
+        raise NotImplementedError
+
+    def value(self, x, tol):
+        """Evaluate misfit functional. Function signature imposed by ROL."""
+        if self.quadrature_degree is not None:
+            params = {"quadrature_degree": self.quadrature_degree}
+        else:
+            params = None
+        return self.scale * fd.assemble(self.value_form(),
+                                        form_compiler_parameters=params)
+
+    def derivative(self):
+        """
+        Assemble partial directional derivative wrt ControlSpace perturbations.
+
+        First, assemble directional derivative (wrt FEspace V_m) and
+        store it in self.deriv_m. This automatically updates self.deriv_r,
+        which is then converted to the directional derivative wrt
+        ControSpace perturbations restrict.
+        """
+        if self.quadrature_degree is not None:
+            params = {"quadrature_degree": self.quadrature_degree}
+        else:
+            params = None
+        v = fd.TestFunction(self.V_r)
+        fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
+                    form_compiler_parameters=params)
+        self.Q.restrict(self.deriv_r, self.deriv_control)
+        self.deriv_control.scale(self.scale)
+        return self.deriv_control
+
+    def gradient(self, g, x, tol):
+        """
+        Compute Riesz representative of shape directional derivative.
+        Function signature imposed by ROL.
+        """
+
+        dir_deriv_control = self.derivative()
+        self.Q.inner_product.riesz_map(dir_deriv_control, g)
+
+    def update(self, x, flag, iteration):
+        """Update physical domain and possibly store current iterate."""
+        self.Q.update_domain(x)
+        if iteration >= 0 and self.cb is not None:
             self.cb()
 
 
