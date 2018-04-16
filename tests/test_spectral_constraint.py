@@ -7,16 +7,13 @@ import numpy as np
 import ROL
 
 
-def test_box_constraint(pytestconfig):
-
+def test_spectral_constraint(pytestconfig):
     n = 5
     mesh = fd.UnitSquareMesh(n, n)
     T = mesh.coordinates.copy(deepcopy=True)
-    (x, y) = fd.SpatialCoordinate(mesh)
-    T.interpolate(T + fd.Constant((1, 0)) * x * y)
+    T.interpolate(T - fd.Constant((0.5, 0.5)))
     mesh = fd.Mesh(T)
-
-    inner = fs.LaplaceInnerProduct(fixed_bids=[1])
+    inner = fs.LaplaceInnerProduct()
     Q = fs.FeControlSpace(mesh, inner)
     mesh_m = Q.mesh_m
     q = fs.ControlVector(Q)
@@ -27,17 +24,13 @@ def test_box_constraint(pytestconfig):
     else:
         def cb(): pass
 
-    lower_bound = Q.T.copy(deepcopy=True)
-    lower_bound.interpolate(fd.Constant((-0.0, -0.0)))
-    upper_bound = Q.T.copy(deepcopy=True)
-    upper_bound.interpolate(fd.Constant((+1.3, +0.9)))
-
-    J = fsz.MoYoBoxConstraint(1, [2], Q, lower_bound=lower_bound,
-                              upper_bound=upper_bound,
-                              cb=cb,
-                              quadrature_degree=100)
+    J = fsz.MoYoSpectralConstraint(0.5, fd.Constant(0.1), Q,
+                                   cb=cb)
+    q.fun += Q.T
     g = q.clone()
+    J.update(q, None, -1)
     J.gradient(g, q, None)
+    cb()
     taylor_result = J.checkGradient(q, g, 9, 1)
 
     for i in range(len(taylor_result)-1):
@@ -61,10 +54,11 @@ def test_box_constraint(pytestconfig):
     problem = ROL.OptimizationProblem(J, q)
     solver = ROL.OptimizationSolver(problem, params)
     solver.solve()
-    Tvec = Q.T.vector()
-    nodes = fd.DirichletBC(Q.V_r, fd.Constant((0.0, 0.0)), [2]).nodes
-    assert np.all(Tvec[nodes, 0] <= 1.3 + 1e-4)
-    assert np.all(Tvec[nodes, 1] <= 0.9 + 1e-4)
+    Tvec = Q.T.vector()[:, :]
+    for i in range(Tvec.shape[0]):
+        assert abs(Tvec[i, 0]) < 0.55 + 1e-4
+        assert abs(Tvec[i, 1]) < 0.55 + 1e-4
+    assert np.any(np.abs(Tvec) > 0.55 - 1e-4)
 
 
 if __name__ == '__main__':

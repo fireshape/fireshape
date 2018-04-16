@@ -1,7 +1,5 @@
 import firedrake as fd
 import fireshape as fs
-# import numpy as np
-# from numpy.linalg import svd
 
 
 __all__ = ["MoYoBoxConstraint"]
