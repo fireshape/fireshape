@@ -169,3 +169,24 @@ class ReducedObjective(Objective):
         self.e.solve_adjoint(self.J.scale * self.J.value_form())
         if iteration > 0 and self.cb is not None:
             self.cb()
+
+
+class ObjectiveSum(ROL.Objective):
+
+    def __init__(self, a, b):
+        super().__init__()
+        self.a = a
+        self.b = b
+
+    def value(self, x, tol):
+        return self.a.value(x, tol) + self.b.value(x, tol)
+
+    def gradient(self, g, x, tol):
+        temp = g.clone()
+        self.a.gradient(g, x, tol)
+        self.b.gradient(temp, x, tol)
+        g.plus(temp)
+
+    def update(self, *args):
+        self.a.update(*args)
+        self.b.update(*args)
