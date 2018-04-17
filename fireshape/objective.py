@@ -6,7 +6,8 @@ from .pde_constraint import PdeConstraint
 
 class Objective(ROL.Objective):
     """Abstract class of shape functionals."""
-    def __init__(self, Q: ControlSpace, cb=None, scale=1.0):
+    def __init__(self, Q: ControlSpace, cb=None, scale=1.0,
+                 quadrature_degree=None):
         """
         Construct a shape functional.
 
@@ -31,6 +32,7 @@ class Objective(ROL.Objective):
         self.deriv_m = fd.Function(self.V_m)
         self.deriv_r = fd.Function(self.V_r, val=self.deriv_m)
         self.deriv_control = ControlVector(Q)
+        self.quadrature_degree = quadrature_degree
 
     def value_form(self):
         """UFL formula of misfit functional."""
@@ -38,7 +40,12 @@ class Objective(ROL.Objective):
 
     def value(self, x, tol):
         """Evaluate misfit functional. Function signature imposed by ROL."""
-        return self.scale * fd.assemble(self.value_form())
+        if self.quadrature_degree is not None:
+            params = {"quadrature_degree": self.quadrature_degree}
+        else:
+            params = None
+        return self.scale * fd.assemble(self.value_form(),
+                                        form_compiler_parameters=params)
 
     def derivative_form(self, v):
         """
@@ -55,8 +62,13 @@ class Objective(ROL.Objective):
         which is then converted to the directional derivative wrt
         ControSpace perturbations restrict.
         """
+        if self.quadrature_degree is not None:
+            params = {"quadrature_degree": self.quadrature_degree}
+        else:
+            params = None
         v = fd.TestFunction(self.V_m)
-        fd.assemble(self.derivative_form(v), tensor=self.deriv_m)
+        fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
+                    form_compiler_parameters=params)
         self.Q.restrict(self.deriv_r, self.deriv_control)
         self.deriv_control.scale(self.scale)
         return self.deriv_control
