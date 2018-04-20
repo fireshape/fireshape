@@ -101,7 +101,8 @@ class FeControlSpace(ControlSpace):
 
     def restrict(self, residual, out):
         with residual.dat.vec as vecres:
-            vecres.copy(out.vec)
+            with out.fun.dat.vec as vecout:
+                vecres.copy(vecout)
 
     def interpolate(self, vector, out):
         out.assign(vector.fun)
@@ -129,7 +130,7 @@ class FeMultiGridControlSpace(ControlSpace):
     Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
     def __init__(self, mesh_r, inner_product, refinements=1, order=1):
-        mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
+        mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
         # Control space on coarsest mesh and assemble inner product
@@ -140,9 +141,18 @@ class FeMultiGridControlSpace(ControlSpace):
         self.inner_product.get_impl(self.V_r_coarse)
 
         # Create self.id and self.T on refined mesh.
+        element = self.V_r_coarse.ufl_element()
+
+        self.intermediate_Ts = []
+        for i in range(refinements-1):
+            mesh = self.mesh_hierarchy[i+1]
+            V = fd.FunctionSpace(mesh, element)
+            self.intermediate_Ts.append(fd.Function(V))
+
         self.mesh_r = self.mesh_hierarchy[-1]
         element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
@@ -151,10 +161,18 @@ class FeMultiGridControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.fun)
+        Tf = residual
+        for Tinter in reversed(self.intermediate_Ts):
+            fd.restrict(Tf, Tinter)
+            Tf = Tinter
+        fd.restrict(Tf, out.fun)
 
     def interpolate(self, vector, out):
-        fd.prolong(vector.fun, out)
+        Tc = vector.fun
+        for Tinter in self.intermediate_Ts:
+            fd.prolong(Tc, Tinter)
+            Tc = Tinter
+        fd.prolong(Tc, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
@@ -394,11 +412,11 @@ class BsplineControlSpace(ControlSpace):
 
     def restrict(self, residual, out):
         with residual.dat.vec as w:
-            self.FullIFW.multTranspose(w, out.vec)
+            self.FullIFW.multTranspose(w, out.vec_wo())
 
     def interpolate(self, vector, out):
         with out.dat.vec as w:
-            self.FullIFW.mult(vector.vec, w)
+            self.FullIFW.mult(vector.vec_ro(), w)
 
     def get_zero_vec(self):
         vec = PETSc.Vec().createSeq(self.N*self.dim,
@@ -423,19 +441,33 @@ class ControlVector(ROL.Vector):
         if data is None:
             data = controlspace.get_zero_vec()
 
+        self.data = data
         if isinstance(data, fd.Function):
             self.fun = data
-            with data.dat.vec as v:
-                self.vec = v
         else:
-            self.vec = data
             self.fun = None
 
+    def vec_ro(self):
+        if isinstance(self.data, fd.Function):
+            with self.data.dat.vec_ro as v:
+                return v
+        else:
+            return self.data
+
+    def vec_wo(self):
+        if isinstance(self.data, fd.Function):
+            with self.data.dat.vec_wo as v:
+                return v
+        else:
+            return self.data
+
     def plus(self, v):
-        self.vec += v.vec
+        vec = self.vec_wo()
+        vec += v.vec_ro()
 
     def scale(self, alpha):
-        self.vec *= alpha
+        vec = self.vec_wo()
+        vec *= alpha
 
     def clone(self):
         """
@@ -452,11 +484,13 @@ class ControlVector(ROL.Vector):
         return self.controlspace.inner_product.eval(self, v)
 
     def axpy(self, alpha, x):
-        self.vec.axpy(alpha, x.vec)
+        vec = self.vec_wo()
+        vec.axpy(alpha, x.vec_ro())
 
     def set(self, v):
-        v.vec.copy(self.vec)
+        vec = self.vec_wo()
+        v.vec_ro().copy(vec)
 
     def __str__(self):
         """String representative, so we can call print(vec)."""
-        return self.vec[:].__str__()
+        return self.vec_ro()[:].__str__()
