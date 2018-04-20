@@ -121,7 +121,7 @@ class StokesSolver(FluidSolver):
                 "ksp_type": "fgmres",
                 "mat_type": "aij",
                 "pc_type": "lu",
-                "pc_factor_mat_solver_package": "mumps",
+                "pc_factor_mat_solver_type": "mumps",
                 "ksp_atol": 1e-15,
             }
         else:
