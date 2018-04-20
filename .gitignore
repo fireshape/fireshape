@@ -3,3 +3,4 @@
 *.pvtu
 *.pyc
 .cache/
+.pytest_cache/
