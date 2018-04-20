@@ -102,7 +102,7 @@ class InnerProduct(object):
             Aksp.setOperators(ITAI)
             Aksp.setType("preonly")
             Aksp.pc.setType("cholesky")
-            Aksp.pc.setFactorSolverPackage("mumps")
+            Aksp.pc.setFactorSolverType("mumps")
             Aksp.setFromOptions()
             Aksp.setUp()
             self.Aksp = Aksp
