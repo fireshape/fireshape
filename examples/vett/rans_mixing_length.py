@@ -1,7 +1,7 @@
 import fireshape.zoo as fsz
 from firedrake import split, TestFunctions, inner, grad, dx, dot, div, \
     Constant, NonlinearVariationalProblem, NonlinearVariationalSolver, \
-    ConvergenceError, tr, sym, sqrt
+    ConvergenceError, tr, sym, sqrt, replace
 from eikonal_solver import EikonalSolver
 import numpy as np
 
@@ -59,7 +59,7 @@ class NavierStokesSolver(fsz.FluidSolver):
 
     def get_parameters(self):
         snes_params = {
-            "snes_monitor": True,
+            "snes_monitor": False,
             "snes_max_it": 50,
             "snes_atol": 1e-10,
             "snes_linesearch_type": "l2"
@@ -77,7 +77,7 @@ class NavierStokesSolver(fsz.FluidSolver):
             raise NotImplementedError("This is not really working so far.")
         return {**snes_params, **ksp_params}
 
-    def shape_derivative_form(self, deformation):
+    def derivative_form(self, deformation):
         w = deformation
         u = self.solution.split()[0]
         p = self.solution.split()[1]
@@ -139,15 +139,12 @@ class RANSMixingLengthSolver(NavierStokesSolver):
 
     def solve_adjoint(self, J):
         super().solve_adjoint(J)
-        from firedrake import replace, derivative, TestFunction
         eikonal_j = replace(self.F, {self.F.arguments()[0]: self.solution_adj})
-        e = self.eikonal_solver
-        rhs = -derivative(eikonal_j, e.solution, TestFunction(e.V))
-        self.eikonal_solver.solve_adjoint(rhs)
+        self.eikonal_solver.solve_adjoint(eikonal_j)
 
-    def shape_derivative_form(self, deformation):
+    def derivative_form(self, deformation):
         w = deformation
-        deriv = super().shape_derivative_form(w)
+        deriv = super().derivative_form(w)
         u = self.solution.split()[0]
         v = self.solution_adj.split()[0]
         d = self.eikonal_solver.solution
@@ -166,5 +163,5 @@ class RANSMixingLengthSolver(NavierStokesSolver):
         deriv -= nut * inner(sym(grad(u)), grad(v)*grad(w)) * dx
 
         deriv += nut * inner(sym(grad(u)), grad(v)) * div(w) * dx
-        deriv += self.eikonal_solver.shape_derivative_form(w)
+        deriv += self.eikonal_solver.derivative_form(w)
         return deriv

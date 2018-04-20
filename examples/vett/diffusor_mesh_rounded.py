@@ -9,7 +9,7 @@ def create_rounded_diffusor(xvals, hvals):
     l = len(xvals)  # noqa
     top_points = []
     for i in range(l):
-        lcar = 0.02 * fak
+        lcar = 0.03 * fak
         if i == 0:
             lcar *= 0.1
         x = np.asarray([xvals[i], hvals[i], 0.])

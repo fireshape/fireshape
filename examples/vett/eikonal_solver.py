@@ -26,7 +26,8 @@ class EikonalSolver(fs.PdeConstraint):
             "pc_type": "lu",
             "pc_factor_mat_solver_type": "mumps",
             "ksp_max_it": 2,
-            "snes_max_it": 10
+            "snes_max_it": 10,
+            "snes_tol": 1e-10
         }
         solver = NonlinearVariationalSolver(problem,
                                             solver_parameters=self.params)
@@ -53,7 +54,7 @@ class EikonalSolver(fs.PdeConstraint):
             self.solver.solve()
         return d
 
-    def shape_derivative_form(self, deformation):
+    def derivative_form(self, deformation):
         w = deformation
         d = self.solution
         v = self.solution_adj
