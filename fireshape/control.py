@@ -130,7 +130,7 @@ class FeMultiGridControlSpace(ControlSpace):
     Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
     def __init__(self, mesh_r, inner_product, refinements=1, order=1):
-        mh = fd.MeshHierarchy(mesh_r, 1, refinements_per_level=refinements)
+        mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
         # Control space on coarsest mesh and assemble inner product
@@ -141,9 +141,18 @@ class FeMultiGridControlSpace(ControlSpace):
         self.inner_product.get_impl(self.V_r_coarse)
 
         # Create self.id and self.T on refined mesh.
+        element = self.V_r_coarse.ufl_element()
+
+        self.intermediate_Ts = []
+        for i in range(refinements-1):
+            mesh = self.mesh_hierarchy[i+1]
+            V = fd.FunctionSpace(mesh, element)
+            self.intermediate_Ts.append(fd.Function(V))
+
         self.mesh_r = self.mesh_hierarchy[-1]
         element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
@@ -152,10 +161,18 @@ class FeMultiGridControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.fun)
+        Tf = residual
+        for Tinter in reversed(self.intermediate_Ts):
+            fd.restrict(Tf, Tinter)
+            Tf = Tinter
+        fd.restrict(Tf, out.fun)
 
     def interpolate(self, vector, out):
-        fd.prolong(vector.fun, out)
+        Tc = vector.fun
+        for Tinter in self.intermediate_Ts:
+            fd.prolong(Tc, Tinter)
+            Tc = Tinter
+        fd.prolong(Tc, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
