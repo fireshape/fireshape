@@ -92,24 +92,25 @@ def test_objective_plus_box_constraint(pytestconfig):
     upper_bound = Q.T.copy(deepcopy=True)
     upper_bound.interpolate(fd.Constant((+1.2, +1.2)))
 
-    J1 = fsz.MoYoBoxConstraint(10., [1, 2, 3, 4], Q, lower_bound=lower_bound,
-                               upper_bound=upper_bound,
-                               cb=cb,
-                               quadrature_degree=10)
     # levelset test case
     (x, y) = fd.SpatialCoordinate(Q.mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 4.
-    J2 = fsz.LevelsetFunctional(0.1 * f, Q, cb=cb, quadrature_degree=10)
-    J3 = fsz.MoYoSpectralConstraint(100, fd.Constant(0.6), Q, cb=cb, quadrature_degree=100)
-    # J = fs.ObjectiveSum(J2, J3)
-    J = fs.ObjectiveSum(fs.ObjectiveSum(J1, J2), J3)
+    J1 = fsz.LevelsetFunctional(f, Q, cb=cb, quadrature_degree=10)
+    J2 = fsz.MoYoBoxConstraint(10., [1, 2, 3, 4], Q, lower_bound=lower_bound,
+                               upper_bound=upper_bound,
+                               cb=cb,
+                               quadrature_degree=10)
+    J3 = fsz.MoYoSpectralConstraint(100, fd.Constant(0.6), Q, cb=cb,
+                                    quadrature_degree=100)
+
+    J = 0.1 * J1 + J2 + J3
     g = q.clone()
     J.gradient(g, q, None)
     taylor_result = J.checkGradient(q, g, 9, 1)
 
-    # for i in range(len(taylor_result)-1):
-    #     if taylor_result[i][3] > 1e-6 and taylor_result[i][3] < 1e-3:
-    #         assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.15
+    for i in range(len(taylor_result)-1):
+        if taylor_result[i][3] > 1e-6 and taylor_result[i][3] < 1e-3:
+            assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.15
 
     params_dict = {
         'General': {

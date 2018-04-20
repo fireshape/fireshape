@@ -1,6 +1,6 @@
 import ROL
 import firedrake as fd
-from .control import ControlSpace, ControlVector
+from .control import ControlSpace, ControlVector, FeMultiGridControlSpace
 from .pde_constraint import PdeConstraint
 
 
