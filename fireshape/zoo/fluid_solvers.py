@@ -1,13 +1,15 @@
 import firedrake as fd
 from ..pde_constraint import PdeConstraint
 
-__all__ = ["StokesSolver"]
+__all__ = ["StokesSolver", "FluidSolver"]
+
 
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
     def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
-                 noslip_bids=[], nu=1.0):
+                 noslip_bids=[], symmetry_bids=[], nu=1.0, 
+                 velocity_degree=2):
         """
         Instantiate a FluidSolver.
 
@@ -28,7 +30,9 @@ class FluidSolver(PdeConstraint):
         self.inflow_bids = inflow_bids
         self.inflow_expr = inflow_expr
         self.noslip_bids = noslip_bids
+        self.symmetry_bids = symmetry_bids
         self.nu = fd.Constant(nu)
+        self.velocity_degree = velocity_degree
 
         # Setup problem
         self.V = self.get_functionspace()
@@ -57,9 +61,10 @@ class FluidSolver(PdeConstraint):
                 + fd.FiniteElement("B", fd.triangle, 3)
             Vvel = fd.VectorFunctionSpace(self.mesh_m, mini)
         else:
-            #P2/P1 Taylor-Hood elements
-            Vvel = fd.VectorFunctionSpace(self.mesh_m, "Lagrange", 2)
-        Vpres = fd.FunctionSpace(self.mesh_m, "CG", 1)
+            # P2/P1 Taylor-Hood elements
+            Vvel = fd.VectorFunctionSpace(self.mesh_m, "Lagrange",
+                                          self.velocity_degree)
+        Vpres = fd.FunctionSpace(self.mesh_m, "CG", self.velocity_degree-1)
         return Vvel * Vpres
 
     def get_boundary_conditions(self):
@@ -77,6 +82,9 @@ class FluidSolver(PdeConstraint):
         if len(self.noslip_bids)>0:
             bcs.append(fd.DirichletBC(self.V.sub(0), zerovector,
                                    self.noslip_bids))
+        if len(self.symmetry_bids) > 0:
+            bcs.append(fd.DirichletBC(self.V.sub(0).sub(1), 0,
+                                      self.symmetry_bids))
         return bcs
 
     def get_nullspace(self):
