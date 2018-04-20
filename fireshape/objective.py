@@ -5,16 +5,77 @@ from .pde_constraint import PdeConstraint
 
 
 class Objective(ROL.Objective):
+
+    def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
+                 quadrature_degree: int = None):
+
+        """
+        Inputs: Q: ControlSpace
+                cb: method to store current shape iterate at self.udpate
+                scale: scaling factor that multiplies shape
+                       functional and directional derivative
+                quadrature_degree: quadrature degree to use. If None, then
+                ufl will guesstimate the degree
+        """
+        super().__init__()
+        self.Q = Q  # ControlSpace
+        self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
+        self.V_m = Q.V_m  # clone of V_r of physical mesh
+        self.cb = cb
+        self.scale = scale
+        self.deriv_r = fd.Function(self.V_r)
+        self.deriv_control = ControlVector(self.Q)
+        if quadrature_degree is not None:
+            self.params = {"quadrature_degree": quadrature_degree}
+        else:
+            self.params = None
+
+    def value_form(self):
+        """UFL formula of misfit functional."""
+        raise NotImplementedError
+
+    def value(self, x, tol):
+        """Evaluate misfit functional. Function signature imposed by ROL."""
+        return self.scale * fd.assemble(self.value_form(),
+                                        form_compiler_parameters=self.params)
+
+    def derivative_form(self, v):
+        """
+        UFL formula of partial shape directional derivative
+        """
+        raise NotImplementedError
+
+    def gradient(self, g, x, tol):
+        """
+        Compute Riesz representative of shape directional derivative.
+        Function signature imposed by ROL.
+        """
+
+        dir_deriv_control = self.derivative()
+        self.Q.inner_product.riesz_map(dir_deriv_control, g)
+
+    def update(self, x, flag, iteration):
+        """Update physical domain and possibly store current iterate."""
+        self.Q.update_domain(x)
+        if iteration >= 0 and self.cb is not None:
+            self.cb()
+
+    def __add__(self, other):
+        if isinstance(other, Objective):
+            return ObjectiveSum(self, other)
+
+    def __mul__(self, alpha):
+        return ScaledObjective(self, alpha)
+
+    def __rmul__(self, alpha):
+        return ScaledObjective(self, alpha)
+
+
+class ShapeObjective(Objective):
     """Abstract class of shape functionals."""
-    def __init__(self, Q: ControlSpace, cb=None, scale=1.0,
-                 quadrature_degree=None):
+    def __init__(self, *args, **kwargs):
         """
         Construct a shape functional.
-
-        Inputs: Q: type ControlSpace
-                cb: method to store current shape iterate at self.udpate
-                scale: type double, scaling factor that multiplies shape
-                       functional and directional derivative
 
         Preallocate vectors for directional derivatives with respect to
         perturbations in self.V_m, for their clone on self.V_r, and for
@@ -22,36 +83,9 @@ class Objective(ROL.Objective):
         that they are not created every time the derivative is evaluated).
         Note that self.deriv_r is updated whenever self.deriv_m is.
         """
-        super().__init__()
-        self.Q = Q # ControlSpace
-        self.V_r = Q.V_r # fd.VectorFunctionSpace on reference mesh
-        self.V_m = Q.V_m # clone of V_r of physical mesh
-        self.cb = cb
-        self.scale = scale
+        super().__init__(*args, **kwargs)
 
-        self.deriv_m = fd.Function(self.V_m)
-        self.deriv_r = fd.Function(self.V_r, val=self.deriv_m)
-        self.deriv_control = ControlVector(Q)
-        self.quadrature_degree = quadrature_degree
-
-    def value_form(self):
-        """UFL formula of misfit functional."""
-        raise NotImplementedError
-
-    def value(self, x, tol):
-        """Evaluate misfit functional. Function signature imposed by ROL."""
-        if self.quadrature_degree is not None:
-            params = {"quadrature_degree": self.quadrature_degree}
-        else:
-            params = None
-        return self.scale * fd.assemble(self.value_form(),
-                                        form_compiler_parameters=params)
-
-    def derivative_form(self, v):
-        """
-        UFL formula of partial shape directional derivative of misfit functional
-        """
-        raise NotImplementedError
+        self.deriv_m = fd.Function(self.V_m, val=self.deriv_r)
 
     def derivative(self):
         """
@@ -62,100 +96,70 @@ class Objective(ROL.Objective):
         which is then converted to the directional derivative wrt
         ControSpace perturbations restrict.
         """
-        if self.quadrature_degree is not None:
-            params = {"quadrature_degree": self.quadrature_degree}
-        else:
-            params = None
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
-                    form_compiler_parameters=params)
+                    form_compiler_parameters=self.params)
         self.Q.restrict(self.deriv_r, self.deriv_control)
         self.deriv_control.scale(self.scale)
         return self.deriv_control
 
-    def gradient(self, g, x, tol):
-        """
-        Compute Riesz representative of shape directional derivative.
-        Function signature imposed by ROL.
-        """
 
-        dir_deriv_control = self.derivative()
-        self.Q.inner_product.riesz_map(dir_deriv_control, g)
+class DeformationObjective(Objective):
+    """
+    Abstract class for functionals that depend on the deformation of the mesh.
+    These are different from shape functionals, as they are entirely defined on
+    the reference mesh. Examples are regularizing functionals like 
+    J(f) = int |nabla(f)| dx.
+    """
 
-    def update(self, x, flag, iteration):
-        """Update physical domain and possibly store current iterate."""
-        self.Q.update_domain(x)
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
-
-
-class DeformationObjective(ROL.Objective):
-
-    def __init__(self, Q: ControlSpace, cb=None, scale=1.0,
-                 quadrature_degree=None):
-
-        super().__init__()
-        self.Q = Q  # ControlSpace
-        self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
-        self.cb = cb
-        self.scale = scale
-
-        self.deriv_r = fd.Function(self.V_r)
-        self.deriv_control = ControlVector(Q)
-        self.quadrature_degree = quadrature_degree
-
-    def value_form(self):
-        """UFL formula of misfit functional."""
-        raise NotImplementedError
-
-    def value(self, x, tol):
-        """Evaluate misfit functional. Function signature imposed by ROL."""
-        if self.quadrature_degree is not None:
-            params = {"quadrature_degree": self.quadrature_degree}
-        else:
-            params = None
-        return self.scale * fd.assemble(self.value_form(),
-                                        form_compiler_parameters=params)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def derivative(self):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
-
-        First, assemble directional derivative (wrt FEspace V_m) and
-        store it in self.deriv_m. This automatically updates self.deriv_r,
-        which is then converted to the directional derivative wrt
-        ControSpace perturbations restrict.
         """
-        if self.quadrature_degree is not None:
-            params = {"quadrature_degree": self.quadrature_degree}
-        else:
-            params = None
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
-                    form_compiler_parameters=params)
+                    form_compiler_parameters=self.params)
         self.Q.restrict(self.deriv_r, self.deriv_control)
         self.deriv_control.scale(self.scale)
         return self.deriv_control
 
-    def gradient(self, g, x, tol):
+class MultigridCoarseDeformationObjective(Objective):
+
+    """
+    Similar to DeformationObjective, but in the case of a 
+    FeMultigridConstrolSpace might want to formulate functionals
+    in term of the deformation defined on the coarse grid, 
+    and not in terms of the prolonged deformation.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not isinstance(self.Q, FeMultiGridControlSpace):
+            raise TypeError("Only supported for Q of type FeMultigridControlSpace")
+        self.V_r_coarse = self.Q.V_r_coarse
+        self.deriv_r = fd.Function(self.V_r_coarse)
+
+    def derivative(self):
         """
-        Compute Riesz representative of shape directional derivative.
-        Function signature imposed by ROL.
+        Assemble partial directional derivative wrt ControlSpace perturbations.
         """
-
-        dir_deriv_control = self.derivative()
-        self.Q.inner_product.riesz_map(dir_deriv_control, g)
-
-    def update(self, x, flag, iteration):
-        """Update physical domain and possibly store current iterate."""
-        self.Q.update_domain(x)
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
+        v = fd.TestFunction(self.V_r_coarse)
+        fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
+                    form_compiler_parameters=self.params)
+        self.deriv_control.fun.assign(self.deriv_r)
+        self.deriv_control.scale(self.scale)
+        return self.deriv_control
 
 
-class ReducedObjective(Objective):
+class ReducedObjective(ShapeObjective):
     """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
+        if not isinstance(J, ShapeObjective):
+            raise NotImplementedError("PDE constraints are currently only supported"
+                                      + " for shape objectives.")
         super().__init__(J.Q, J.cb)
         self.J = J
         self.e = e
@@ -169,7 +173,8 @@ class ReducedObjective(Objective):
 
     def derivative_form(self, v):
         """
-        Add shape partial derivatives of misfit functional and state constraint.
+        The derivative of the reduced objective is given by the derivative of
+        the Lagrangian.
         """
         return (self.J.scale * self.J.derivative_form(v)
                 + self.e.derivative_form(v))
@@ -177,28 +182,63 @@ class ReducedObjective(Objective):
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
         self.Q.update_domain(x)
-        self.e.solve()
-        self.e.solve_adjoint(self.J.scale * self.J.value_form())
-        if iteration > 0 and self.cb is not None:
+        try:
+            self.e.solve()
+            self.e.solve_adjoint(self.J.scale * self.J.value_form())
+        except:
+            if self.cb is not None:
+                self.cb()
+            raise
+        if iteration >= 0 and self.cb is not None:
             self.cb()
 
 
-class ObjectiveSum(ROL.Objective):
+class ObjectiveSum(Objective):
 
     def __init__(self, a, b):
-        super().__init__()
+        super().__init__(a.Q)
         self.a = a
         self.b = b
 
     def value(self, x, tol):
         return self.a.value(x, tol) + self.b.value(x, tol)
 
-    def gradient(self, g, x, tol):
-        temp = g.clone()
-        self.a.gradient(g, x, tol)
-        self.b.gradient(temp, x, tol)
-        g.plus(temp)
+    def value_form(self):
+        return self.a.value_form() + self.b.value_form()
+
+    def derivative(self):
+        self.deriv_control.set(self.a.derivative())
+        self.deriv_control.plus(self.b.derivative())
+        return self.deriv_control
+
+    def derivative_form(self, v):
+        return self.a.derivative_form(v) + self.b.derivative_form(v)
 
     def update(self, *args):
         self.a.update(*args)
         self.b.update(*args)
+
+
+class ScaledObjective(Objective):
+
+    def __init__(self, J, alpha):
+        super().__init__(J.Q)
+        self.J = J
+        self.alpha = alpha
+
+    def value(self, *args):
+        return self.alpha * self.J.value(*args)
+
+    # def value_form(self):
+    #     return self.alpha * self.J.value_form()
+
+    def derivative(self):
+        self.deriv_control.set(self.J.derivative())
+        self.deriv_control.scale(self.alpha)
+        return self.deriv_control
+
+    # def derivative_form(self, v):
+    #     return self.alpha * self.derivative_form(v)
+
+    def update(self, *args):
+        self.J.update(*args)
