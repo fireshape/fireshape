@@ -1,11 +1,11 @@
 import firedrake as fd
-from ..objective import Objective
+from ..objective import ShapeObjective
 
 
 __all__ = ["LevelsetFunctional"]
 
 
-class LevelsetFunctional(Objective):
+class LevelsetFunctional(ShapeObjective):
     """
     Implementation of level-set shape functional.
 
