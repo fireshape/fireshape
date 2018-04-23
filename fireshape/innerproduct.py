@@ -30,7 +30,10 @@ class UflInnerProduct(InnerProduct):
     firedrake.FunctionSpace, then an interpolation matrix between the two is
     necessary.
     """
-    def __init__(self, Q, fixed_bids=[]):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[]):
+        if isinstance(extra_bcs, fd.DirichletBC):
+            extra_bcs = [extra_bcs]
+
         self.fixed_bids = fixed_bids  # fixed parts of bdry
         self.params = self.get_params()  # solver parameters
         self.Q = Q
@@ -55,6 +58,7 @@ class UflInnerProduct(InnerProduct):
                 nsp = fd.VectorSpaceBasis(nsp_functions)
                 nsp.orthonormalize()
 
+        bcs = []
         # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
         if len(self.fixed_bids) > 0:
             dim = V.value_size
@@ -64,12 +68,16 @@ class UflInnerProduct(InnerProduct):
                 zerovector = fd.Constant((0, 0, 0))
             else:
                 raise NotImplementedError
-            bc = fd.DirichletBC(V, zerovector, self.fixed_bids)
-        else:
-            bc = None
+            bcs.append(fd.DirichletBC(V, zerovector, self.fixed_bids))
+
+        if len(extra_bcs) > 0:
+            bcs += extra_bcs
+
+        if len(bcs) == 0:
+            bcs = None
 
         a = self.get_weak_form(V)
-        A = fd.assemble(a, mat_type='aij', bcs=bc)
+        A = fd.assemble(a, mat_type='aij', bcs=bcs)
         ls = fd.LinearSolver(A, solver_parameters=self.params,
                              nullspace=nsp, transpose_nullspace=nsp)
         self.ls = ls
