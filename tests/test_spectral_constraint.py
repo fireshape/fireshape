@@ -31,11 +31,10 @@ def test_spectral_constraint(pytestconfig):
     J.update(q, None, -1)
     J.gradient(g, q, None)
     cb()
-    taylor_result = J.checkGradient(q, g, 9, 1)
+    taylor_result = J.checkGradient(q, g, 7, 1)
 
     for i in range(len(taylor_result)-1):
-        if taylor_result[i][3] > 1e-7:
-            assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.11
+        assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.11
 
     params_dict = {
         'General': {
