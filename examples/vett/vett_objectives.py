@@ -2,7 +2,7 @@ import fireshape as fs
 from firedrake import split, FacetNormal, inner, ds, Constant, dx
 
 
-class EnergyRecovery(fs.Objective):
+class EnergyRecovery(fs.ShapeObjective):
 
     def __init__(self, pde_solver, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -60,7 +60,7 @@ class NavierStokesSolver(fsz.FluidSolver):
     def get_parameters(self):
         snes_params = {
             "snes_monitor": False,
-            "snes_max_it": 50,
+            "snes_max_it": 20,
             "snes_atol": 1e-10,
             "snes_linesearch_type": "l2"
         }
