@@ -1,43 +1,45 @@
 import firedrake as fd
 
+
 class InnerProduct(object):
+
     """
     Generic implementation of an inner product.
-
-    The inner product is associated to a fd.FunctionSpace
-    only after calling the method self.get_impl.
     """
-    def __init__(self, fixed_bids=[]):
-        self.fixed_bids = fixed_bids # fixed parts of bdry
-        self.params = self.get_params() # solver parameters
 
-    def get_params(self):
-        """PETSc parameters to solve linear system."""
-        return {
-            'ksp_rtol': 1e-11,
-            'ksp_atol': 1e-11,
-            'ksp_stol': 1e-16,
-            'ksp_type': 'cg',
-            'pc_type': 'hypre',
-            'pc_hypre_type': 'boomeramg'
-        }
-
-    def get_weak_form(self, V):
-        """ Weak formulation of inner product (in UFL)."""
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
         raise NotImplementedError
 
-    def get_nullspace(self, V):
-        """Nullspace of weak formulation of inner product (in UFL)."""
-        raise NotImplementedError
-
-    def get_impl(self, V, I = None):
+    def riesz_map(self, v, out):  # dual to primal
         """
-        Assemble the inner product. This method is called by ControlSpace.
+        Compute Riesz representative of v and save it in out.
 
         Input:
-            V: type fd.FunctionSpace
-            I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
+        v: ControlVector, in the dual space
+        out: ControlVector, in the primal space
         """
+        raise NotImplementedError
+
+
+class UflInnerProduct(InnerProduct):
+
+    """
+    Implementation of an inner product that is build on a
+    firedrake.FunctionSpace.  If the ControlSpace is not itselt the
+    firedrake.FunctionSpace, then an interpolation matrix between the two is
+    necessary.
+    """
+    def __init__(self, Q, fixed_bids=[]):
+        self.fixed_bids = fixed_bids  # fixed parts of bdry
+        self.params = self.get_params()  # solver parameters
+        self.Q = Q
+
+        """
+        V: type fd.FunctionSpace
+        I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
+        """
+        (V, I_interp) = Q.get_space_for_inner()
         self.free_bids = list(
                            V.mesh().topology.exterior_facets.unique_markers)
         for bid in self.fixed_bids:
@@ -76,14 +78,14 @@ class InnerProduct(object):
 
         # If the matrix I is passed, replace A with transpose(I)*A*I
         # and set up a ksp solver for self.riesz_map
-        if I is not None:
+        if I_interp is not None:
             self.interpolated = True
-            ITAI = self.A.PtAP(I)
+            ITAI = self.A.PtAP(I_interp)
             from firedrake.petsc import PETSc
             import numpy as np
             zero_rows = []
 
-            # if there are zero-rows, replace them with rows that 
+            # if there are zero-rows, replace them with rows that
             # have 1 on the diagonal entry
             for row in range(ITAI.size[0]):
                 (cols, vals) = ITAI.getRow(row)
@@ -94,7 +96,7 @@ class InnerProduct(object):
                 ITAI.setValue(row, row, 1.0)
             ITAI.assemble()
 
-            #overwrite the self.A created by get_impl
+            # overwrite the self.A created by get_impl
             self.A = ITAI
 
             # create ksp solver for self.riesz_map
@@ -106,6 +108,25 @@ class InnerProduct(object):
             Aksp.setFromOptions()
             Aksp.setUp()
             self.Aksp = Aksp
+
+    def get_params(self):
+        """PETSc parameters to solve linear system."""
+        return {
+            'ksp_rtol': 1e-11,
+            'ksp_atol': 1e-11,
+            'ksp_stol': 1e-16,
+            'ksp_type': 'cg',
+            'pc_type': 'hypre',
+            'pc_hypre_type': 'boomeramg'
+        }
+
+    def get_weak_form(self, V):
+        """ Weak formulation of inner product (in UFL)."""
+        raise NotImplementedError
+
+    def get_nullspace(self, V):
+        """Nullspace of weak formulation of inner product (in UFL)."""
+        raise NotImplementedError
 
     def eval(self, u, v):
         """Evaluate inner product in primal space."""
@@ -129,7 +150,7 @@ class InnerProduct(object):
             self.ls.solve(out.fun, v.fun)
 
 
-class H1InnerProduct(InnerProduct):
+class H1InnerProduct(UflInnerProduct):
     """Inner product on H1. It involves stiffness and mass matrices."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
@@ -142,7 +163,7 @@ class H1InnerProduct(InnerProduct):
         return None
 
 
-class LaplaceInnerProduct(InnerProduct):
+class LaplaceInnerProduct(UflInnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
@@ -166,7 +187,7 @@ class LaplaceInnerProduct(InnerProduct):
         return res
 
 
-class ElasticityInnerProduct(InnerProduct):
+class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
@@ -177,7 +198,7 @@ class ElasticityInnerProduct(InnerProduct):
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
         b = fd.inner(fd.Constant(0.), v) * fd.dx
         mu = fd.Function(W)
-        fd.solve(a == b, mu, bcs = [bc_fix, bc_free])
+        fd.solve(a == b, mu, bcs=[bc_fix, bc_free])
         return mu
 
     def get_weak_form(self, V):
@@ -186,11 +207,10 @@ class ElasticityInnerProduct(InnerProduct):
         of the elasticity equations. The idea is to make the mesh stiff near
         the boundary that is being deformed.
         """
-        if self.fixed_bids is not None and len(self.fixed_bids)>0:
+        if self.fixed_bids is not None and len(self.fixed_bids) > 0:
             mu = self.get_mu(V)
         else:
             mu = fd.Constant(1.0)
-
 
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)

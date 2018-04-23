@@ -16,10 +16,10 @@ def test_box_constraint(pytestconfig):
     T.interpolate(T + fd.Constant((1, 0)) * x * y)
     mesh = fd.Mesh(T)
 
-    inner = fs.LaplaceInnerProduct(fixed_bids=[1])
-    Q = fs.FeControlSpace(mesh, inner)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1])
     mesh_m = Q.mesh_m
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 
@@ -76,10 +76,10 @@ def test_objective_plus_box_constraint(pytestconfig):
     T.interpolate(T + fd.Constant((0, 0)))
     mesh = fd.Mesh(T)
 
-    inner = fs.LaplaceInnerProduct()
-    Q = fs.FeControlSpace(mesh, inner)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.LaplaceInnerProduct(Q)
     mesh_m = Q.mesh_m
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 

@@ -12,12 +12,12 @@ class EqualityConstraintTest(unittest.TestCase):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
 
-        inner = fs.LaplaceInnerProduct()
-        Q = fs.FeControlSpace(mesh, inner)
+        Q = fs.FeControlSpace(mesh)
+        inner = fs.LaplaceInnerProduct(Q)
         mesh_m = Q.mesh_m
         (x, y) = fd.SpatialCoordinate(mesh_m)
 
-        q = fs.ControlVector(Q)
+        q = fs.ControlVector(Q, inner)
         #out = fd.File("T.pvd") # commented to stop storing vtu files
 
         #def cb(*args):

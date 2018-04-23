@@ -8,11 +8,11 @@ import ROL
 def test_taylor_tests():
     n = 5
     mesh = fd.UnitSquareMesh(n, n)
-    inner = fs.LaplaceInnerProduct()
-    Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=1, order=1)
+    Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=1)
+    inner = fs.LaplaceInnerProduct(Q)
     mesh_m = Q.mesh_m
 
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
 
     X = fd.SpatialCoordinate(mesh)
     q.fun.interpolate(0.5 * X)
