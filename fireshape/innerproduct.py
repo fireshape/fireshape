@@ -102,7 +102,7 @@ class InnerProduct(object):
             Aksp.setOperators(ITAI)
             Aksp.setType("preonly")
             Aksp.pc.setType("cholesky")
-            Aksp.pc.setFactorSolverPackage("mumps")
+            Aksp.pc.setFactorSolverType("mumps")
             Aksp.setFromOptions()
             Aksp.setUp()
             self.Aksp = Aksp
@@ -110,8 +110,10 @@ class InnerProduct(object):
     def eval(self, u, v):
         """Evaluate inner product in primal space."""
         A_u = self.A.createVecLeft()
-        self.A.mult(u.vec, A_u)
-        return v.vec.dot(A_u)
+        uvec = u.vec_ro()
+        vvec = v.vec_ro()
+        self.A.mult(uvec, A_u)
+        return vvec.dot(A_u)
 
     def riesz_map(self, v, out):  # dual to primal
         """
@@ -122,7 +124,7 @@ class InnerProduct(object):
         out: ControlVector, in the primal space
         """
         if self.interpolated:
-            self.Aksp.solve(v.vec, out.vec)
+            self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
             self.ls.solve(out.fun, v.fun)
 
