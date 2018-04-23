@@ -1,14 +1,16 @@
+from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
 
-#new imports for splines
+# new imports for splines
 from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
+
 
 class ControlSpace(object):
     """
@@ -80,16 +82,22 @@ class ControlSpace(object):
         """
         raise NotImplementedError
 
+    def get_space_for_inner(self):
+        """
+        return the functionspace V to define the inner product on
+        and possibly an interpolation matrix I between the finite element
+        functions in V and the control functions.
+        """
+        raise NotImplementedError
+
 
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
-    def __init__(self, mesh_r, inner_product):
+    def __init__(self, mesh_r):
         # Create mesh_r, V_r, and assemble inner product.
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r)
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
@@ -112,6 +120,9 @@ class FeControlSpace(ControlSpace):
         fun *= 0.
         return fun
 
+    def get_space_for_inner(self):
+        return (self.V_r, None)
+
 
 class FeMultiGridControlSpace(ControlSpace):
     """
@@ -129,7 +140,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
     Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
-    def __init__(self, mesh_r, inner_product, refinements=1, order=1):
+    def __init__(self, mesh_r, refinements=1, order=1):
         mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
@@ -137,8 +148,6 @@ class FeMultiGridControlSpace(ControlSpace):
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
                                                  order)
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r_coarse)
 
         # Create self.id and self.T on refined mesh.
         element = self.V_r_coarse.ufl_element()
@@ -179,10 +188,13 @@ class FeMultiGridControlSpace(ControlSpace):
         fun *= 0.
         return fun
 
+    def get_space_for_inner(self):
+        return (self.V_r_coarse, None)
+
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, inner_product, bbox, orders, levels):
+    def __init__(self, mesh, bbox, orders, levels):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -197,11 +209,12 @@ class BsplineControlSpace(ControlSpace):
                 univariate B-splines
         """
         # information on B-splines
-        self.dim = len(bbox) # geometric dimension
+        self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
         self.orders = orders
         self.levels = levels
         self.construct_knots()
+        self.comm = mesh.mpi_comm()
         # create temporary self.mesh_r and self.V_r to assemble innerproduct
         if self.dim == 2:
             nx = len(self.knots[0]) - 1
@@ -209,11 +222,11 @@ class BsplineControlSpace(ControlSpace):
             Lx = self.bbox[0][1] - self.bbox[0][0]
             Ly = self.bbox[1][1] - self.bbox[1][0]
             meshloc = fd.RectangleMesh(nx, ny, Lx, Ly, quadrilateral=True,
-                                    comm = mesh.mpi_comm()) #quadrilaterals or triangle?
+                                       comm=self.comm)  # quads or triangle?
             # shift in x- and y-direction
-            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0]
-            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0]
-            inner_product.fixed_bids = [1,2,3,4]
+            meshloc.coordinates.dat.data[:, 0] += self.bbox[0][0]
+            meshloc.coordinates.dat.data[:, 1] += self.bbox[1][0]
+            # inner_product.fixed_bids = [1,2,3,4]
 
         elif self.dim == 3:
             # maybe use extruded meshes, quadrilateral not available
@@ -223,20 +236,22 @@ class BsplineControlSpace(ControlSpace):
             Lx = self.bbox[0][1] - self.bbox[0][0]
             Ly = self.bbox[1][1] - self.bbox[1][0]
             Lz = self.bbox[2][1] - self.bbox[2][0]
-            meshloc = fd.BoxMesh(nx, ny, nz, Lx, Ly, Lz,
-                              comm = mesh.mpi_comm())
+            meshloc = fd.BoxMesh(nx, ny, nz, Lx, Ly, Lz, comm=self.comm)
             # shift in x-, y-, and z-direction
-            meshloc.coordinates.dat.data[:,0] += self.bbox[0][0]
-            meshloc.coordinates.dat.data[:,1] += self.bbox[1][0]
-            meshloc.coordinates.dat.data[:,2] += self.bbox[2][0]
-            inner_product.fixed_bids = [1,2,3,4,5,6]
+            meshloc.coordinates.dat.data[:, 0] += self.bbox[0][0]
+            meshloc.coordinates.dat.data[:, 1] += self.bbox[1][0]
+            meshloc.coordinates.dat.data[:, 2] += self.bbox[2][0]
+            # inner_product.fixed_bids = [1,2,3,4,5,6]
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders)-1
-        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree ) #is this the proper space?
-        self.build_interpolation_matrix()
-        self.inner_product = inner_product
-        self.inner_product.get_impl(self.V_r, self.FullIFW)
+        # self.V_r =
+        # self.inner_product = inner_product
+        # self.inner_product.get_impl(self.V_r, self.FullIFW)
+
+        # is this the proper space?
+        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
+        self.I_control = self.build_interpolation_matrix(self.V_control)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
@@ -252,8 +267,7 @@ class BsplineControlSpace(ControlSpace):
         assert self.dim == self.mesh_r.geometric_dimension()
 
         # assemble correct interpolation matrix
-        self.build_interpolation_matrix()
-
+        self.FullIFW = self.build_interpolation_matrix(self.V_r)
 
     def construct_knots(self):
         """
@@ -274,8 +288,8 @@ class BsplineControlSpace(ControlSpace):
             level = self.levels[dim]
 
             assert order >= 1
-            #degree = order-1 # splev uses degree, not order
-            assert level >= 1 # with level=1 only bdry Bsplines
+            # degree = order-1 # splev uses degree, not order
+            assert level >= 1  # with level=1 only bdry Bsplines
 
             knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
                                        np.linspace(0., 1., 2**level+1),
@@ -294,21 +308,21 @@ class BsplineControlSpace(ControlSpace):
         N = reduce(lambda x, y: x*y, self.n)
         self.N = N
 
-    def build_interpolation_matrix(self):
+    def build_interpolation_matrix(self, V):
         """
         Construct the matrix self.FullIFW.
 
         The columns of self.FullIFW are the interpolant
-        of (vectorial tensorized) Bsplines into self.V_r
+        of (vectorial tensorized) Bsplines into V
         """
         # construct list of scalar univariate interpolation matrices
-        interp_1d = self.construct_1d_interpolation_matrices()
+        interp_1d = self.construct_1d_interpolation_matrices(V)
         # construct scalar tensorial interpolation matrix
         IFW = self.construct_kronecker_matrix(interp_1d)
         # interleave self.dim-many IFW matrices among each other
-        self.FullIFW = self.construct_full_interpolation_matrix(IFW)
+        return self.construct_full_interpolation_matrix(IFW)
 
-    def construct_1d_interpolation_matrices(self):
+    def construct_1d_interpolation_matrices(self, V):
         """
         Create a list of sparse matrices (one per geometric dimension).
 
@@ -323,9 +337,9 @@ class BsplineControlSpace(ControlSpace):
 
         # this code is correct but can be made more beautiful
         # by replacing x_fct with self.id
-        x_fct = fd.SpatialCoordinate(self.mesh_r) #used for x_int
+        x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
-        x_int = fd.interpolate(x_fct[0], self.V_r.sub(0))
+        x_int = fd.interpolate(x_fct[0], V.sub(0))
         self.M = x_int.vector().size()
 
         for dim in range(self.dim):
@@ -333,18 +347,18 @@ class BsplineControlSpace(ControlSpace):
             knots = self.knots[dim]
             n = self.n[dim]
 
-            I = PETSc.Mat().create(comm=self.mesh_r.mpi_comm())
+            I = PETSc.Mat().create(comm=self.comm) # noqa
             I.setType(PETSc.Mat.Type.AIJ)
             I.setSizes((self.M, n))
             # BIG TODO: figure out the sparsity pattern
             I.setUp()
 
-            x_int = fd.interpolate(x_fct[dim], self.V_r.sub(0))
+            x_int = fd.interpolate(x_fct[dim], V.sub(0))
             with x_int.dat.vec_ro as x:
                 for idx in range(n):
                     coeffs = np.zeros(knots.shape, dtype=float)
                     coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
-                    degree = order - 1 # splev uses degree, not order
+                    degree = order - 1  # splev uses degree, not order
                     tck = (knots, coeffs, degree)
 
                     values = splev(x.array, tck, der=0, ext=1)
@@ -352,7 +366,7 @@ class BsplineControlSpace(ControlSpace):
                     values = values[rows]
                     I.setValues(rows, [idx], values)
 
-            I.assemble() # lazy strategy for kron
+            I.assemble()  # lazy strategy for kron
             interp_1d.append(I)
 
         return interp_1d
@@ -366,7 +380,7 @@ class BsplineControlSpace(ControlSpace):
         In the future, this may be done matrix-free.
         """
         # this is awfully slow in 3D!!!!!!!!!!!
-        IFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
+        IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
         IFW.setSizes((self.M, self.N))
         # BIG TODO: figure out the sparsity pattern
@@ -391,7 +405,7 @@ class BsplineControlSpace(ControlSpace):
         Assemble interpolation matrix for vectorial tensorized spline space.
         """
         # this is THE MOST awfully slow in 3D!!!!!!!!!!!
-        FullIFW = PETSc.Mat().create(self.mesh_r.mpi_comm())
+        FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
         FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
         # BIG TODO: figure out the sparsity pattern
@@ -419,9 +433,12 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.mult(vector.vec_ro(), w)
 
     def get_zero_vec(self):
-        vec = PETSc.Vec().createSeq(self.N*self.dim,
-                                    comm=self.mesh_r.mpi_comm())
+        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.comm)
         return vec
+
+    def get_space_for_inner(self):
+        return (self.V_control, self.I_control)
+
 
 class ControlVector(ROL.Vector):
     """
@@ -434,9 +451,11 @@ class ControlVector(ROL.Vector):
     A ControlVector is a ROL.Vector and thus needs the following methods:
     plus, scale, clone, dot, axpy, set.
     """
-    def __init__(self, controlspace: ControlSpace, data=None):
+    def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
+                 data=None):
         super().__init__()
         self.controlspace = controlspace
+        self.inner_product = inner_product
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -475,13 +494,20 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace)
+        res = ControlVector(self.controlspace, self.inner_product)
         # res.set(self)
         return res
 
+    def apply_riesz_map(self):
+        """
+        Maps this vector into the dual space.
+        Overwrites the content.
+        """
+        self.inner_product.riesz_map(self, self)
+
     def dot(self, v):
         """Inner product between self and v."""
-        return self.controlspace.inner_product.eval(self, v)
+        return self.inner_product.eval(self, v)
 
     def axpy(self, alpha, x):
         vec = self.vec_wo()

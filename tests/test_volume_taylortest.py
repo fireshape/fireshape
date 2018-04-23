@@ -6,10 +6,10 @@ import fireshape.zoo as fsz
 
 class VolumeTaylorTest(unittest.TestCase):
 
-    def run_taylor_test(self, Q):
+    def run_taylor_test(self, Q, inner):
         f = fd.Constant(1.0)
 
-        x = fs.ControlVector(Q)
+        x = fs.ControlVector(Q, inner)
         J = fsz.LevelsetFunctional(f, Q)
         """
         move mesh a bit to check that we are not doing the
@@ -30,16 +30,16 @@ class VolumeTaylorTest(unittest.TestCase):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
 
-        inner = fs.LaplaceInnerProduct()
-        Q = fs.FeControlSpace(mesh, inner)
-        self.run_taylor_test(Q)
+        Q = fs.FeControlSpace(mesh)
+        inner = fs.LaplaceInnerProduct(Q)
+        self.run_taylor_test(Q, inner)
 
     def run_fe_mg(self, order):
         mesh = fd.UnitSquareMesh(10, 10)
 
-        inner = fs.LaplaceInnerProduct()
-        Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
-        self.run_taylor_test(Q)
+        Q = fs.FeMultiGridControlSpace(mesh, refinements=4, order=order)
+        inner = fs.LaplaceInnerProduct(Q)
+        self.run_taylor_test(Q, inner)
 
     def test_fe_mg_first_order(self):
         self.run_fe_mg(1)

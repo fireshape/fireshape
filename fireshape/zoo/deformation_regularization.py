@@ -7,7 +7,8 @@ __all__ = ["DeformationRegularization", "CoarseDeformationRegularization"]
 
 class DeformationRegularization(fs.DeformationObjective):
 
-    def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1., **kwargs):
+    def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1.,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.T = self.Q.T
         self.id = self.T.copy(deepcopy=True)
@@ -18,7 +19,9 @@ class DeformationRegularization(fs.DeformationObjective):
 
     def value_form(self):
         f = self.T-self.id
-        norm = lambda u: fd.inner(u, u) * fd.dx
+
+        def norm(u):
+            return fd.inner(u, u) * fd.dx
         val = self.l2_reg * norm(f)
         val += self.sym_grad_reg * norm(fd.sym(fd.grad(f)))
         val += self.skew_grad_reg * norm(fd.skew(fd.grad(f)))
@@ -29,9 +32,10 @@ class DeformationRegularization(fs.DeformationObjective):
         return fd.derivative(self.value_form(), T, test)
 
 
-class CoarseDeformationRegularization(fs.MultigridCoarseDeformationObjective):
+class CoarseDeformationRegularization(fs.ControlObjective):
 
-    def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1., **kwargs):
+    def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1.,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.f = fd.Function(self.Q.V_r_coarse)
         self.l2_reg = l2_reg
@@ -40,7 +44,9 @@ class CoarseDeformationRegularization(fs.MultigridCoarseDeformationObjective):
 
     def value_form(self):
         f = self.f
-        norm = lambda u: fd.inner(u, u) * fd.dx
+
+        def norm(u):
+            return fd.inner(u, u) * fd.dx
         val = self.l2_reg * norm(f)
         val += self.sym_grad_reg * norm(fd.sym(fd.grad(f)))
         val += self.skew_grad_reg * norm(fd.skew(fd.grad(f)))
@@ -50,7 +56,3 @@ class CoarseDeformationRegularization(fs.MultigridCoarseDeformationObjective):
         f = self.f
         deriv = fd.derivative(self.value_form(), f, test)
         return deriv
-    
-    def update(self, x, flag, iteration):
-        self.f.assign(x.fun)
-        super().update(x, flag, iteration)
