@@ -1,6 +1,8 @@
 import firedrake as fd
 from ..objective import Objective
 from .fluid_solvers import FluidSolver, StokesSolver
+
+
 __all__ = ["EnergyObjective"]
 
 
