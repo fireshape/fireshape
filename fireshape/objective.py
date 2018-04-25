@@ -7,7 +7,7 @@ from .pde_constraint import PdeConstraint
 class Objective(ROL.Objective):
 
     def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
-                 quadrature_degree: int = None):
+                 quadrature_degree: int = None, deformation_check=None):
 
         """
         Inputs: Q: ControlSpace
@@ -28,15 +28,23 @@ class Objective(ROL.Objective):
             self.params = {"quadrature_degree": quadrature_degree}
         else:
             self.params = None
+        self.deformation_check = deformation_check
+        self.last_value = None
+        self.deformation_too_severe = False
 
     def value_form(self):
         """UFL formula of misfit functional."""
         raise NotImplementedError
 
-    def value(self, x, tol):
-        """Evaluate misfit functional. Function signature imposed by ROL."""
+    def val(self):
         return self.scale * fd.assemble(self.value_form(),
                                         form_compiler_parameters=self.params)
+
+    def value(self, x, tol):
+        """Evaluate misfit functional. Function signature imposed by ROL."""
+        if not self.deformation_too_severe:
+            self.last_value = self.val()
+        return self.last_value
 
     def derivative_form(self, v):
         """
@@ -62,8 +70,21 @@ class Objective(ROL.Objective):
     def update(self, x, flag, iteration):
         """Update physical domain and possibly store current iterate."""
         self.Q.update_domain(x)
+
+        if self.deformation_check is not None:
+            self.deformation_check.update(x, flag, iteration)
+            if self.deformation_check.value(x, None) > 1e-8:
+                self.deformation_too_severe = True
+                print("Deformation too severe!")
+            else:
+                self.deformation_too_severe = False
+
+        self.after_domain_update()
         if iteration >= 0 and self.cb is not None:
             self.cb()
+
+    def after_domain_update(self):
+        pass
 
     def __add__(self, other):
         if isinstance(other, Objective):
@@ -169,16 +190,15 @@ class ReducedObjective(ShapeObjective):
             + " for shape objectives."
             raise NotImplementedError(msg)
 
-        super().__init__(J.Q, J.cb)
+        super().__init__(J.Q)
         self.J = J
         self.e = e
 
-    def value(self, x, tol):
+    def val(self):
         """
         Evaluate reduced objective.
-        Function signature imposed by ROL.
         """
-        return self.J.value(x, tol)
+        return self.J.val()
 
     def derivative_form(self, v):
         """
@@ -189,17 +209,19 @@ class ReducedObjective(ShapeObjective):
                 + self.e.derivative_form(v))
 
     def update(self, x, flag, iteration):
+        self.J.update(x, flag, iteration)
+        super().update(x, flag, iteration)
+
+    def after_domain_update(self):
         """Update domain and solution to state and adjoint equation."""
-        self.Q.update_domain(x)
-        try:
-            self.e.solve()
-            self.e.solve_adjoint(self.J.scale * self.J.value_form())
-        except fd.ConvergenceError:
-            if self.cb is not None:
-                self.cb()
-            raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
+        if not self.J.deformation_too_severe:
+            try:
+                self.e.solve()
+                self.e.solve_adjoint(self.J.scale * self.J.value_form())
+            except fd.ConvergenceError:
+                if self.cb is not None:
+                    self.cb()
+                raise
 
 
 class ObjectiveSum(Objective):
@@ -209,8 +231,8 @@ class ObjectiveSum(Objective):
         self.a = a
         self.b = b
 
-    def value(self, x, tol):
-        return self.a.value(x, tol) + self.b.value(x, tol)
+    def val(self):
+        return self.a.val() + self.b.val()
 
     def value_form(self):
         return self.a.value_form() + self.b.value_form()
@@ -225,6 +247,7 @@ class ObjectiveSum(Objective):
         return self.a.derivative_form(v) + self.b.derivative_form(v)
 
     def update(self, *args):
+        super().update(*args)
         self.a.update(*args)
         self.b.update(*args)
 
@@ -236,8 +259,8 @@ class ScaledObjective(Objective):
         self.J = J
         self.alpha = alpha
 
-    def value(self, *args):
-        return self.alpha * self.J.value(*args)
+    def val(self):
+        return self.alpha * self.J.val()
 
     # def value_form(self):
     #     return self.alpha * self.J.value_form()
@@ -250,4 +273,5 @@ class ScaledObjective(Objective):
     #     return self.alpha * self.derivative_form(v)
 
     def update(self, *args):
+        super().update(*args)
         self.J.update(*args)

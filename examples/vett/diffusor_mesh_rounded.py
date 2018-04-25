@@ -11,7 +11,7 @@ def create_rounded_diffusor(xvals, hvals):
     for i in range(l):
         lcar = 0.06 * fak
         if i == 0:
-            lcar *= 0.1
+            lcar *= 0.3
         x = np.asarray([xvals[i], hvals[i], 0.])
         top_points.append(geom.add_point(x=x, lcar=lcar))
     bottom_points = []
