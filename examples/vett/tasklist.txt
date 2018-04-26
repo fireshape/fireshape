@@ -1,0 +1,25 @@
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 1.0 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.9 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.8 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.7 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.6 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.5 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.4 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.3 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.2 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.1 --box 0
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 0.0 --box 0
+
+python3 vett.py --x1 7 --x2 19 --f 1 --geo 1 --inflow 1 --wokeness 1.0 --box 1
+
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 1.0 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.9 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.8 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.7 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.6 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.5 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.4 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.3 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.2 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.1 --box 0
+python3 vett.py --x1 5 --x2 8 --f 2 --geo 2 --inflow 2 --wokeness 0.0 --box 0

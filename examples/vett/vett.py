@@ -4,28 +4,62 @@ from firedrake import File, SpatialCoordinate, conditional, ge, \
     sinh, as_vector, DumbCheckpoint, FILE_READ, FILE_CREATE, \
     Constant, MeshHierarchy
 from rans_mixing_length import RANSMixingLengthSolver
-from vett_objectives import EnergyRecovery
-from vett_helpers import get_extra_bc, NavierStokesWriter
+from vett_objectives import EnergyRecovery, PressureRecovery
+from vett_helpers import get_extra_bc, NavierStokesWriter, export_boundary
 import fireshape as fs
 import fireshape.zoo as fsz
 import ROL
 import os
+import argparse
+import shutil
+import csv
+import numpy as np
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 
-wokeness = 1.0
-inflow_type = 1
-
-if True:
-    xvals = [0.0, 1.0, 6.9, 7.0, 18.9, 19.0, 29.0, 30.0]
+parser = argparse.ArgumentParser()
+parser.add_argument("--x1", type=int, default=10)
+parser.add_argument("--x2", type=int, default=20)
+parser.add_argument("--f", type=int, default=1)
+parser.add_argument("--geo", type=int, default=1)
+parser.add_argument("--inflow", type=int, default=1)
+parser.add_argument("--wokeness", type=float, default=1.0)
+parser.add_argument("--box", type=int, default=0)
+args = parser.parse_args()
+x1 = args.x1
+x2 = args.x2
+functional = args.f
+geometry = args.geo
+inflow_type = args.inflow
+wokeness = args.wokeness
+box = args.box
+label = f"x1_{x1}_x2_{x2}_geometry_{geometry}_inflow_{inflow_type}_wokeness_{wokeness:.2}"
+print(f"label={label}")
+num_ref = 2
+""" Create geometry """
+if geometry == 1:
+    clscale = 0.3 * (2**num_ref)
+    h1 = 1.0
     h2 = 1.5
-    hvals = [1.0, 1.0, 1.0, 1.0, h2, h2, h2, h2]
+    xvals = [0.0, 1.0, x1+0.1, x1, x2+0.1, x2, 29, 30]
+    hvals = [h1, h1, h1, h1, h2, h2, h2, h2]
+    geo_code = create_rounded_diffusor(xvals, hvals)
+    omega_free_start = 1
+    omega_free_end = max(xvals)-1.0
 else:
-    xvals = [0.0, 1.0, 4.9, 5.0, 7.9, 8.0, 9.0, 10.0]
-    h2 = 1./1.5
-    hvals = [1.0, 1.0, 1.0, 1.0, h2, h2, h2, h2]
+    h1 = 1.0
+    h2 = 2./3.
+    clscale = 0.2 * 2**num_ref
+    xvals = [0.0, 1.0, x1, x1+0.1, x2+0.1, x2, 9, 10]
+    hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
+    geo_code = create_rounded_diffusor(xvals, hvals)
+    omega_free_start = 1.0
+    omega_free_end = max(xvals)-1.0
+
 mesh_code = create_rounded_diffusor(xvals, hvals)
-mesh = mesh_from_gmsh_code(mesh_code, clscale=1.0, smooth=100)
+mesh = mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100)
+
+
 inflow_bids = [1]
 noslip_fixed_bids = [2]
 noslip_free_bids = [3]
@@ -33,9 +67,16 @@ outflow_bids = [4]
 symmetry_bids = [5]
 
 
-Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=1)
+Q = fs.FeMultiGridControlSpace(mesh, refinements=num_ref, order=1)
 # Q = fs.FeControlSpace(mesh)
 mesh_m = Q.mesh_m
+
+local_mesh_size = np.asarray([mesh_m.num_cells()])
+global_mesh_size = np.asarray([0])
+comm.Reduce(local_mesh_size, global_mesh_size)
+comm.Bcast(global_mesh_size)
+global_mesh_size = global_mesh_size[0]
+
 # mesh_f = MeshHierarchy(mesh_m, 2)[-1]
 
 (V_control, _) = Q.get_space_for_inner()
@@ -67,7 +108,7 @@ else:
 inflow_expr = as_vector([smoother * xvel, 0])
 solver_t = RANSMixingLengthSolver
 Re = 1e6
-pvel = 3
+pvel = 2
 s = solver_t(mesh_m, inflow_bids=inflow_bids,
              inflow_expr=inflow_expr,
              noslip_bids=noslip_free_bids + noslip_fixed_bids,
@@ -76,36 +117,55 @@ s = solver_t(mesh_m, inflow_bids=inflow_bids,
 
 (u, p) = s.solution.split()
 (v, q) = s.solution_adj.split()
-outdir = f"output_5/"
+
+outdir = f"output4/{label}/{global_mesh_size}/"
+
 if comm.rank == 0:
     if not os.path.exists(outdir):
         os.makedirs(outdir)
-
+comm.Barrier()
 
 try:
-    chk = DumbCheckpoint(f"{outdir}continued_solution", mode=FILE_READ)
-    chk.load(s.solution, name="State")
+    dumpfile = f"{outdir}continued_solution"
+    dumpfile = comm.bcast(dumpfile, root=0)
+    with DumbCheckpoint(dumpfile, mode=FILE_READ) as chk:
+        chk.load(s.solution, name="State")
     print("Found continued solution.")
 except: # noqa
     writer = NavierStokesWriter(outdir + "continuation/", s, comm)
-    s.solve_by_continuation(post_solve_cb=lambda nu: writer.write(), steps=16)
-    writer.fine_write()
-    chk = DumbCheckpoint(f"{outdir}continued_solution", mode=FILE_CREATE)
-    chk.store(s.solution, name="State")
+    s.solve_by_continuation(post_solve_cb=lambda nu: writer.write(), steps=21)
+    with DumbCheckpoint(f"{outdir}continued_solution", mode=FILE_CREATE) as chk:
+        chk.store(s.solution, name="State")
 
-
-outu = File(outdir + "u.pvd")
-
-
-def cb():
-    outu.write(s.solution.split()[0])
-
+export_boundary(mesh_m, outdir)
 
 Js2 = fsz.MoYoSpectralConstraint(1.e2, Constant(0.8), Q)
-Je = EnergyRecovery(s, Q, scale=1e0, cb=cb, deformation_check=Js2)
-Jr = fs.ReducedObjective(Je, s)
+
+""" Start setting up the optimization """
+if functional == 1:
+    f = PressureRecovery(s, Q, scale=1e-2, deformation_check=Js2)
+elif functional == 2:
+    f = EnergyRecovery(s, Q, scale=1e0, deformation_check=Js2)
+else:
+    raise NotImplementedError
+
+if geometry == 1:
+    upper_bnd = Q.T.copy(deepcopy=True).interpolate(Constant((+100, 1.5)))
+    lower_bnd = Q.T.copy(deepcopy=True).interpolate(Constant((-100, 1.0)))
+else:
+    upper_bnd = Q.T.copy(deepcopy=True).interpolate(Constant((+100, 1.)))
+    lower_bnd = Q.T.copy(deepcopy=True).interpolate(Constant((-100, h2)))
+
+if box == 1:
+    c1 = 1e-2 * f.scale
+else:
+    c1 = 1e-10
+
+Jr = fs.ReducedObjective(f, s)
 Js = fsz.MoYoSpectralConstraint(1.e1, Constant(0.5), Q)
-J = Jr + Js
+Jb = fsz.MoYoBoxConstraint(c1, noslip_free_bids, Q, lower_bound=lower_bnd,
+                           upper_bound=upper_bnd)
+J = Jr + Js + Jb
 q = fs.ControlVector(Q, inner)
 J.update(q, None, 1)
 g = q.clone()
@@ -126,7 +186,56 @@ params_dict = {
         'Step Tolerance': 1e-10,
         'Iteration Limit': 150}}
 
-params = ROL.ParameterList(params_dict, "Parameters")
-problem = ROL.OptimizationProblem(J, q)
-solver = ROL.OptimizationSolver(problem, params)
-solver.solve()
+functional_outdir = outdir + f.__class__.__name__ + f"_box_{box}/"
+if box == 1:
+    itercounts = [70] * 5
+else:
+    itercounts = [250]
+
+
+for i in range(len(itercounts)):
+    maxiter = itercounts[i]
+    iter_outdir = functional_outdir + f"{i}/"
+    try:
+        with DumbCheckpoint(f"{iter_outdir}T", mode=FILE_READ) as chk:
+            chk.load(q.fun, name="Control")
+        with DumbCheckpoint(f"{iter_outdir}state", mode=FILE_READ) as chk:
+            chk.load(s.solution, name="State")
+        print(f"Found deformed domain after optimization iteration {i}.")
+    except: # noqa
+        if comm.rank == 0:
+            if os.path.exists(iter_outdir):
+                shutil.rmtree(iter_outdir)
+            os.makedirs(iter_outdir)
+            csvfile = open(f"{iter_outdir}log.csv", "w")
+            csvwriter = csv.writer(csvfile, delimiter=",")
+            csvwriter.writerow(["iter", "functional", "box-violation"])
+        comm.Barrier()
+        writer = NavierStokesWriter(iter_outdir, s, comm)
+
+        def optim_cb():
+            if i >= 0:
+                writer.coarse_write()
+                val = f.val()
+                if comm.rank == 0:
+                    csvwriter.writerow([val])  # , myp1.violation()])
+                    csvfile.flush()
+        J.cb = optim_cb
+
+        params_dict["Status Test"]["Iteration Limit"] = maxiter
+        params = ROL.ParameterList(params_dict, "Parameters")
+        problem = ROL.OptimizationProblem(J, q)
+        solver = ROL.OptimizationSolver(problem, params)
+        solver.solve()
+        writer.fine_write()
+        if comm.rank == 0:
+            csvfile.close()
+        export_boundary(mesh_m, iter_outdir)
+        with DumbCheckpoint(f"{iter_outdir}T", mode=FILE_CREATE) as chk:
+            chk.store(q.fun, name="Control")
+        with DumbCheckpoint(f"{iter_outdir}state", mode=FILE_CREATE) as chk:
+            chk.store(s.solution, name="State")
+    if box == 1:
+        Jb.c *= 2.
+
+print(f"label={label}")

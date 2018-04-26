@@ -3,6 +3,7 @@ from firedrake import DirichletBC, utils, Constant, Function, \
     SpatialCoordinate, File, prolong, FunctionSpace
 import os
 import shutil
+import csv
 
 
 class NodeDirichletBC(DirichletBC):
@@ -30,6 +31,7 @@ class NavierStokesWriter(object):
             if os.path.exists(outdir):
                 shutil.rmtree(outdir)
             os.makedirs(outdir)
+        comm.Barrier()
         self.outdir = outdir
         self.s = s
         self.solution = s.solution
@@ -76,3 +78,43 @@ class NavierStokesWriter(object):
             self.pvdfp.write(fp)
             self.pvdfv.write(fv)
             self.pvdfq.write(fq)
+
+
+def collect_1d_arrays(local_array, comm):
+    rank = comm.rank
+    root = 0
+    sendbuf = np.array(local_array)
+    sendcounts = np.array(comm.gather(len(sendbuf), root))
+    if rank == root:
+        recvbuf = np.empty((sum(sendcounts), 1), dtype=local_array.dtype)
+    else:
+        recvbuf = None
+    comm.Gatherv(sendbuf=sendbuf, recvbuf=(recvbuf, sendcounts), root=root)
+    return recvbuf
+
+
+def collect_2d_arrays(local_array, comm):
+    return np.hstack([collect_1d_arrays(local_array[:, i], comm) for i in range(local_array.shape[1])])
+
+
+def get_boundary_coords(mesh):
+    coords = []
+    vec = mesh.coordinates.vector()
+    markers = mesh.topological.exterior_facets.unique_markers
+    for marker in markers:
+        bc = DirichletBC(mesh.coordinates.function_space(), 0, int(marker))
+        nodes = bc.nodes
+        nodes = nodes[nodes < vec.local_size()]
+        coords.append(collect_2d_arrays(vec[nodes, :], mesh.comm))
+    return coords
+
+
+def export_boundary(mesh, outdir):
+    coords = get_boundary_coords(mesh)
+    if mesh.comm.rank == 0:
+        for i in range(len(coords)):
+            with open(f"{outdir}coords_boundary_{i}.csv", "w") as csvfile:
+                writer = csv.writer(csvfile, delimiter=",")
+                for x in coords[i]:
+                    writer.writerow(x)
+    mesh.comm.Barrier()
