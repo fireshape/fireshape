@@ -41,7 +41,7 @@ if geometry == 1:
     clscale = 0.3 * (2**num_ref)
     h1 = 1.0
     h2 = 1.5
-    xvals = [0.0, 1.0, x1+0.1, x1, x2+0.1, x2, 29, 30]
+    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.05, x2+0.05, 29, 30]
     hvals = [h1, h1, h1, h1, h2, h2, h2, h2]
     geo_code = create_rounded_diffusor(xvals, hvals)
     omega_free_start = 1
@@ -50,7 +50,7 @@ else:
     h1 = 1.0
     h2 = 2./3.
     clscale = 0.2 * 2**num_ref
-    xvals = [0.0, 1.0, x1, x1+0.1, x2+0.1, x2, 9, 10]
+    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.05, x2+0.05, 9, 10]
     hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
     geo_code = create_rounded_diffusor(xvals, hvals)
     omega_free_start = 1.0
