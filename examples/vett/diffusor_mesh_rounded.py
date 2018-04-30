@@ -2,14 +2,14 @@ import pygmsh
 import numpy as np
 
 
-def create_rounded_diffusor(xvals, hvals):
+def create_rounded_diffusor(xvals, hvals, top_scale=0.06):
     geom = pygmsh.built_in.Geometry()
     fak = 0.7
 
     l = len(xvals)  # noqa
     top_points = []
     for i in range(l):
-        lcar = 0.06 * fak
+        lcar = top_scale * fak
         if i == 0:
             lcar *= 0.3
         x = np.asarray([xvals[i], hvals[i], 0.])

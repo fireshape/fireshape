@@ -1,8 +1,9 @@
 from diffusor_mesh_rounded import create_rounded_diffusor
+from diffusor_mesh_rounded_bl import create_rounded_diffusor_bl
 from gmsh_helpers import mesh_from_gmsh_code
 from firedrake import File, SpatialCoordinate, conditional, ge, \
     sinh, as_vector, DumbCheckpoint, FILE_READ, FILE_CREATE, \
-    Constant, MeshHierarchy
+    Constant, MeshHierarchy, assemble, ds
 from rans_mixing_length import RANSMixingLengthSolver
 from vett_objectives import EnergyRecovery, PressureRecovery
 from vett_helpers import get_extra_bc, NavierStokesWriter, export_boundary
@@ -18,8 +19,8 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--x1", type=int, default=10)
-parser.add_argument("--x2", type=int, default=20)
+parser.add_argument("--x1", type=float, default=10)
+parser.add_argument("--x2", type=float, default=20)
 parser.add_argument("--f", type=int, default=1)
 parser.add_argument("--geo", type=int, default=1)
 parser.add_argument("--inflow", type=int, default=1)
@@ -38,26 +39,30 @@ print(f"label={label}")
 num_ref = 2
 """ Create geometry """
 if geometry == 1:
-    clscale = 0.3 * (2**num_ref)
+    clscale = 0.4 * (2**num_ref)
     h1 = 1.0
     h2 = 1.5
     xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.05, x2+0.05, 29, 30]
     hvals = [h1, h1, h1, h1, h2, h2, h2, h2]
-    geo_code = create_rounded_diffusor(xvals, hvals)
     omega_free_start = 1
-    omega_free_end = max(xvals)-1.0
+    omega_free_end = xvals[-2]
+    Re = 1e6
+    top_scale = 0.06
+    mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
 else:
     h1 = 1.0
     h2 = 2./3.
-    clscale = 0.2 * 2**num_ref
-    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.05, x2+0.05, 9, 10]
+    clscale = 0.18 * 2**num_ref
+    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 9.0, 10.]
     hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
-    geo_code = create_rounded_diffusor(xvals, hvals)
     omega_free_start = 1.0
-    omega_free_end = max(xvals)-1.0
+    omega_free_end = xvals[-2]
+    Re = 1e6
+    top_scale = 0.08
+    # mesh_code = create_rounded_diffusor_bl(xvals, hvals, top_scale=top_scale, layer_thickness=clscale*top_scale*0.25)
+    mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
 
-mesh_code = create_rounded_diffusor(xvals, hvals)
-mesh = mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100)
+mesh = mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=False)
 
 
 inflow_bids = [1]
@@ -80,7 +85,7 @@ global_mesh_size = global_mesh_size[0]
 # mesh_f = MeshHierarchy(mesh_m, 2)[-1]
 
 (V_control, _) = Q.get_space_for_inner()
-extra_bc = get_extra_bc(V_control, 1., max(xvals)-1.0)
+extra_bc = get_extra_bc(V_control, omega_free_start, omega_free_end)
 inner = fs.ElasticityInnerProduct(Q, fixed_bids=inflow_bids + noslip_fixed_bids
                                   + outflow_bids + symmetry_bids,
                                   extra_bcs=extra_bc)
@@ -104,11 +109,12 @@ if inflow_type == 1:
     xvel = linear_wake_function(y, wokeness)
 else:
     xvel = sinh_wake_function(2.0 * y, -wokeness, 2)
+    integral = sum([assemble(xvel * ds(bid, domain=mesh_m)) for bid in inflow_bids])
+    xvel = xvel/integral
 
 inflow_expr = as_vector([smoother * xvel, 0])
 solver_t = RANSMixingLengthSolver
-Re = 1e6
-pvel = 2
+pvel = 3
 s = solver_t(mesh_m, inflow_bids=inflow_bids,
              inflow_expr=inflow_expr,
              noslip_bids=noslip_free_bids + noslip_fixed_bids,
@@ -118,7 +124,7 @@ s = solver_t(mesh_m, inflow_bids=inflow_bids,
 (u, p) = s.solution.split()
 (v, q) = s.solution_adj.split()
 
-outdir = f"output4/{label}/{global_mesh_size}/"
+outdir = f"output7/{label}/{global_mesh_size}/"
 
 if comm.rank == 0:
     if not os.path.exists(outdir):
@@ -144,8 +150,10 @@ Js2 = fsz.MoYoSpectralConstraint(1.e2, Constant(0.8), Q)
 """ Start setting up the optimization """
 if functional == 1:
     f = PressureRecovery(s, Q, scale=1e-2, deformation_check=Js2)
+    c2 = f.scale * 1e1
 elif functional == 2:
-    f = EnergyRecovery(s, Q, scale=1e0, deformation_check=Js2)
+    f = EnergyRecovery(s, Q, scale=1e-2, deformation_check=Js2)
+    c2 = f.scale * 1e1
 else:
     raise NotImplementedError
 
@@ -162,7 +170,7 @@ else:
     c1 = 1e-10
 
 Jr = fs.ReducedObjective(f, s)
-Js = fsz.MoYoSpectralConstraint(1.e1, Constant(0.5), Q)
+Js = fsz.MoYoSpectralConstraint(c2, Constant(0.5), Q)
 Jb = fsz.MoYoBoxConstraint(c1, noslip_free_bids, Q, lower_bound=lower_bnd,
                            upper_bound=upper_bnd)
 J = Jr + Js + Jb
@@ -182,7 +190,7 @@ params_dict = {
         'Line Search': {'Descent Method': {
             'Type': 'Quasi-Newton Step'}}},
     'Status Test': {
-        'Gradient Tolerance': 1e-6,
+        'Gradient Tolerance': 1e-7,
         'Step Tolerance': 1e-10,
         'Iteration Limit': 150}}
 

@@ -21,8 +21,9 @@ class EnergyRecovery(fs.ShapeObjective):
 
 class PressureRecovery(fs.ShapeObjective):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, pde_solver, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.pde_solver = pde_solver
 
     def value_form(self):
         (u, p) = split(self.pde_solver.solution)

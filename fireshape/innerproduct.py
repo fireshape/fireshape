@@ -200,7 +200,7 @@ class ElasticityInnerProduct(UflInnerProduct):
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
         bc_fix = fd.DirichletBC(W, 1, self.fixed_bids)
-        bc_free = fd.DirichletBC(W, 10, self.free_bids)
+        bc_free = fd.DirichletBC(W, 100, self.free_bids)
         u = fd.TrialFunction(W)
         v = fd.TestFunction(W)
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
