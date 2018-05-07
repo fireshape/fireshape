@@ -141,12 +141,10 @@ class UflInnerProduct(InnerProduct):
     def eval(self, u, v):
         """Evaluate inner product in primal space."""
         A_u = self.A.createVecLeft()
-        with u.fun.dat.vec as uvec:
-            with v.fun.dat.vec as vvec:
-                # uvec = u.vec_ro()
-                # vvec = v.vec_ro()
-                self.A.mult(uvec, A_u)
-                return vvec.dot(A_u)
+        uvec = u.vec_ro()
+        vvec = v.vec_ro()
+        self.A.mult(uvec, A_u)
+        return vvec.dot(A_u)
 
     def riesz_map(self, v, out):  # dual to primal
         """
