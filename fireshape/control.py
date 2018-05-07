@@ -94,7 +94,7 @@ class ControlSpace(object):
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
     def __init__(self, mesh_r):
-        # Create mesh_r, V_r, and assemble inner product.
+        # Create mesh_r and V_r
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
@@ -144,7 +144,7 @@ class FeMultiGridControlSpace(ControlSpace):
         mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
-        # Control space on coarsest mesh and assemble inner product
+        # Control space on coarsest mesh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
                                                  order)
