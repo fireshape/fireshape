@@ -1,4 +1,6 @@
 import firedrake as fd
+import numpy as np
+from firedrake.petsc import PETSc
 
 
 class InnerProduct(object):
@@ -139,10 +141,12 @@ class UflInnerProduct(InnerProduct):
     def eval(self, u, v):
         """Evaluate inner product in primal space."""
         A_u = self.A.createVecLeft()
-        uvec = u.vec_ro()
-        vvec = v.vec_ro()
-        self.A.mult(uvec, A_u)
-        return vvec.dot(A_u)
+        with u.fun.dat.vec as uvec:
+            with v.fun.dat.vec as vvec:
+                # uvec = u.vec_ro()
+                # vvec = v.vec_ro()
+                self.A.mult(uvec, A_u)
+                return vvec.dot(A_u)
 
     def riesz_map(self, v, out):  # dual to primal
         """
@@ -246,3 +250,77 @@ class ElasticityInnerProduct(UflInnerProduct):
         else:
             raise NotImplementedError
         return res
+
+class SurfaceInnerProduct(InnerProduct):
+
+    def __init__(self, Q, fixed_bids=[]):
+
+        self.fixed_bids = fixed_bids
+        
+        (V, I_interp) = Q.get_space_for_inner()
+
+        self.free_bids = list(
+                           V.mesh().topology.exterior_facets.unique_markers)
+        for bid in self.fixed_bids:
+            self.free_bids.remove(bid)
+        print("free_bids %s" % (self.free_bids))
+
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+
+        n = fd.FacetNormal(V.mesh())
+        def surf_grad(u):
+            return fd.sym(fd.grad(u) - fd.outer(fd.grad(u)*n, n))
+        a = fd.inner(surf_grad(u), surf_grad(v)) * fd.ds + fd.inner(u, v) * fd.ds
+        a += 1e-10 * fd.inner(u, v) * fd.dx # petsc doesn't like matrices with zero rows
+        A = fd.assemble(a, mat_type="aij")
+        A.force_evaluation()
+        A = A.petscmat
+        tdim = V.mesh().topological_dimension()
+        def get_nodes(bid):
+            lsize = V.mesh().coordinates.vector().local_size()
+            nodes = fd.DirichletBC(V, fd.Constant(tdim * (0, )), int(bid)).nodes
+            return nodes[nodes<lsize]
+
+        free_nodes = np.concatenate([get_nodes(bid) for bid in self.free_bids])
+        free_dofs = np.unique(np.sort(np.concatenate([tdim * free_nodes + i for i in range(tdim)])))
+        self.free_is = PETSc.IS().createGeneral(free_dofs)
+        lgr, lgc = A.getLGMap()
+        self.global_free_is_row = lgr.applyIS(self.free_is)
+        self.global_free_is_col = lgc.applyIS(self.free_is)
+        A = A.createSubMatrix(self.global_free_is_row, self.global_free_is_col)
+        # A.view()
+        # print(A.getType())
+        A.assemble()
+        self.A = A
+        Aksp = PETSc.KSP().create()
+        Aksp.setOperators(self.A)
+        Aksp.setOptionsPrefix("A_")
+        opts = PETSc.Options()
+        opts["A_ksp_type"] = "cg"
+        opts["A_pc_type"] = "hypre"
+        opts["A_ksp_atol"] = 1e-10
+        opts["A_ksp_rtol"] = 1e-10
+        Aksp.setUp()
+        Aksp.setFromOptions()
+        self.Aksp = Aksp
+        # viewer = PETSc.Viewer().STDOUT()
+        
+
+    def eval(self, u, v):
+        usub = u.vec_ro().getSubVector(self.global_free_is_col)
+        vsub = v.vec_ro().getSubVector(self.global_free_is_col)
+        A_u = self.A.createVecLeft()
+        self.A.mult(usub, A_u)
+        return vsub.dot(A_u)
+
+
+    def riesz_map(self, v, out):  # dual to primal
+        vsub = v.vec_ro().getSubVector(self.global_free_is_col)
+        res = self.A.createVecLeft()
+        self.Aksp.solve(vsub, res)
+        with out.fun.dat.vec as outvec:
+            # outvec = out.vec_wo()
+            outvec *= 0.
+            outvec.setValues(self.global_free_is_col.array, res.array)
+            outvec.assemble()
