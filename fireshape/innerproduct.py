@@ -249,12 +249,13 @@ class ElasticityInnerProduct(UflInnerProduct):
             raise NotImplementedError
         return res
 
+
 class SurfaceInnerProduct(InnerProduct):
 
     def __init__(self, Q, fixed_bids=[]):
 
         self.fixed_bids = fixed_bids
-        
+
         (V, I_interp) = Q.get_space_for_inner()
 
         self.free_bids = list(
@@ -267,28 +268,31 @@ class SurfaceInnerProduct(InnerProduct):
         v = fd.TestFunction(V)
 
         n = fd.FacetNormal(V.mesh())
+
         def surf_grad(u):
             return fd.sym(fd.grad(u) - fd.outer(fd.grad(u)*n, n))
-        a = fd.inner(surf_grad(u), surf_grad(v)) * fd.ds + fd.inner(u, v) * fd.ds
-        a += 1e-10 * fd.inner(u, v) * fd.dx # petsc doesn't like matrices with zero rows
+        a = (fd.inner(surf_grad(u), surf_grad(v)) + fd.inner(u, v)) * fd.ds
+        # petsc doesn't like matrices with zero rows
+        a += 1e-10 * fd.inner(u, v) * fd.dx
         A = fd.assemble(a, mat_type="aij")
         A.force_evaluation()
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
+
         def get_nodes(bid):
             lsize = V.mesh().coordinates.vector().local_size()
-            nodes = fd.DirichletBC(V, fd.Constant(tdim * (0, )), int(bid)).nodes
-            return nodes[nodes<lsize]
+            nodes = fd.DirichletBC(V, fd.Constant(tdim * (0,)), int(bid)).nodes
+            return nodes[nodes < lsize]
 
         free_nodes = np.concatenate([get_nodes(bid) for bid in self.free_bids])
-        free_dofs = np.unique(np.sort(np.concatenate([tdim * free_nodes + i for i in range(tdim)])))
+        free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
+        free_dofs = np.unique(np.sort())
         self.free_is = PETSc.IS().createGeneral(free_dofs)
         lgr, lgc = A.getLGMap()
         self.global_free_is_row = lgr.applyIS(self.free_is)
         self.global_free_is_col = lgc.applyIS(self.free_is)
         A = A.createSubMatrix(self.global_free_is_row, self.global_free_is_col)
         # A.view()
-        # print(A.getType())
         A.assemble()
         self.A = A
         Aksp = PETSc.KSP().create()
@@ -302,8 +306,6 @@ class SurfaceInnerProduct(InnerProduct):
         Aksp.setUp()
         Aksp.setFromOptions()
         self.Aksp = Aksp
-        # viewer = PETSc.Viewer().STDOUT()
-        
 
     def eval(self, u, v):
         usub = u.vec_ro().getSubVector(self.global_free_is_col)
@@ -312,13 +314,11 @@ class SurfaceInnerProduct(InnerProduct):
         self.A.mult(usub, A_u)
         return vsub.dot(A_u)
 
-
     def riesz_map(self, v, out):  # dual to primal
         vsub = v.vec_ro().getSubVector(self.global_free_is_col)
         res = self.A.createVecLeft()
         self.Aksp.solve(vsub, res)
-        with out.fun.dat.vec as outvec:
-            # outvec = out.vec_wo()
-            outvec *= 0.
-            outvec.setValues(self.global_free_is_col.array, res.array)
-            outvec.assemble()
+        outvec = out.vec_wo()
+        outvec *= 0.
+        outvec.setValues(self.global_free_is_col.array, res.array)
+        outvec.assemble()
