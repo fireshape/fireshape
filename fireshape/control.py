@@ -143,13 +143,14 @@ class FeBoundaryControlSpace(ControlSpace):
         self.extension = ElasticityExtension(self.V_r)
 
     def restrict(self, residual, out):
-        with residual.dat.vec as vecres:
-            with out.fun.dat.vec as vecout:
-                vecres.copy(vecout)
+        p1 = residual
+        p1 *= -1
+        self.extension.solve_homogeneous_adjoint(p1, out.fun)
+        self.extension.apply_adjoint_action(out.fun, out.fun)
+        out.fun -= p1
 
     def interpolate(self, vector, out):
         self.extension.extend(vector.fun, out)
-        # out.assign(vector.fun)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r)
