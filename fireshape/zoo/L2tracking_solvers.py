@@ -21,8 +21,9 @@ class PoissonSolver(PdeConstraint):
         self.solution = fd.Function(self.V, name="State")
         self.solution_adj = fd.Function(self.V, name="Adjoint")
 
+        self.f = Constant(4.)
         u, v = Function(self.V), TestFuntion(self.v)
-        self.F = inner(grad(u), grad(v)) * dx  + u*v*dx - Constant(4.)*v*dx
+        self.F = inner(grad(u), grad(v)) * dx  + u*v*dx - self.f*v*dx
         self.bcs = []
         self.nsp = None
         self.params = {
@@ -50,5 +51,5 @@ class PoissonSolver(PdeConstraint):
         deriv = -fd.inner(fd.grad(u), (fd.grad(w)+ transpose(fd.grad(w))*fd.grad(v)) * fd.dx
         deriv += fd.div(w) * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
         deriv += fd.div(w) * u * p * fd.dx
-        deriv -= fd.div(w) * Constant(4.) * q * fd.dx
+        deriv -= fd.div(w) * self.f * q * fd.dx
         return deriv
