@@ -8,4 +8,4 @@ before_install:
   - docker pull florianwechsung/firedrake:latest
 
 script:
-  - travis_wait 30 docker build .
+  - travis_wait 10 docker build .
