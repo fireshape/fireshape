@@ -1,0 +1,4 @@
+python3 stokes_conformal.py --base_inner elasticity --use_cr 1 
+python3 stokes_conformal.py --base_inner elasticity --use_cr 0 
+python3 stokes_conformal.py --base_inner laplace    --use_cr 1 
+python3 stokes_conformal.py --base_inner laplace    --use_cr 0 

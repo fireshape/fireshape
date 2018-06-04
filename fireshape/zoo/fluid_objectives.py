@@ -10,20 +10,20 @@ class EnergyObjective(ShapeObjective):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
 
-    def solve_adjoint(self):
-        super().solve_adjoint()
-        # if isinstance(self.pde_solver, StokesSolver):
-        #     """
-        #     In the Stokes case we can calculate the adjoint by hand
-        #     """
-        #     (u, p) = self.pde_solver.solution.split()
-        #     (v, q) = self.pde_solver.solution_adj.split()
-        #     q.assign(p)
-        #     q *= -1
-        #     v *= 0
-        #     pass
-        # else:
-        #     super().solve_adjoint()
+    # def solve_adjoint(self):
+    #     if isinstance(self.pde_solver, StokesSolver):
+    #         """
+    #         In the Stokes case we can calculate the adjoint by hand
+    #         """
+    #         (u, p) = self.pde_solver.solution.split()
+    #         (v, q) = self.pde_solver.solution_adj.split()
+    #         q.assign(p)
+    #         q *= -1
+    #         v *= 0
+    #         print("here")
+    #         pass
+    #     else:
+    #         super().solve_adjoint()
 
     def value_form(self):
         """Evaluate misfit functional."""

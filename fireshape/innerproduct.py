@@ -35,6 +35,7 @@ class UflInnerProduct(InnerProduct):
     def __init__(self, Q, fixed_bids=[], extra_bcs=[]):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
+        self.extra_bcs = extra_bcs
 
         self.fixed_bids = fixed_bids  # fixed parts of bdry
         self.params = self.get_params()  # solver parameters
@@ -161,6 +162,7 @@ class UflInnerProduct(InnerProduct):
 
 
 class H1InnerProduct(UflInnerProduct):
+
     """Inner product on H1. It involves stiffness and mass matrices."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
@@ -174,11 +176,15 @@ class H1InnerProduct(UflInnerProduct):
 
 
 class LaplaceInnerProduct(UflInnerProduct):
+    def __init__(self, *args, mu=fd.Constant(1.0), **kwargs):
+        self.mu = mu
+        super().__init__(*args, **kwargs)
+
     """Inner product on H10. It comprises only the stiffness matrix."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
+        return self.mu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
 
     def get_nullspace(self, V):
         """This nullspace contains constant functions."""
@@ -199,10 +205,14 @@ class LaplaceInnerProduct(UflInnerProduct):
 
 class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
+    def __init__(self, *args, mu=None, **kwargs):
+        self.mu = mu
+        super().__init__(*args, **kwargs)
+
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
-        bc_fix = fd.DirichletBC(W, 1, self.fixed_bids)
-        bc_free = fd.DirichletBC(W, 10, self.free_bids)
+        bc_fix = fd.DirichletBC(W, 1./100, self.fixed_bids)
+        bc_free = fd.DirichletBC(W, 1., self.free_bids)
         u = fd.TrialFunction(W)
         v = fd.TestFunction(W)
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
@@ -217,10 +227,13 @@ class ElasticityInnerProduct(UflInnerProduct):
         of the elasticity equations. The idea is to make the mesh stiff near
         the boundary that is being deformed.
         """
-        if self.fixed_bids is not None and len(self.fixed_bids) > 0:
-            mu = self.get_mu(V)
+        if self.mu is None:
+            if self.fixed_bids is not None and len(self.fixed_bids) > 0:
+                mu = self.get_mu(V)
+            else:
+                mu = fd.Constant(1.0)
         else:
-            mu = fd.Constant(1.0)
+            mu = self.mu
 
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
