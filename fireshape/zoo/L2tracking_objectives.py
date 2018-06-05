@@ -1,12 +1,12 @@
 import firedrake as fd
 from ..objective import Objective
-from .L2tracking_solvers import FullH1Solver
+from .L2tracking_solvers import PoissonSolver
 
 __all__ = ["L2trackingObjective"]
 
 class L2trackingObjective(Objective):
     """L2 tracking functional for Poisson problem."""
-    def __init__(self, pde_solver: FullH1Solver, *args,  **kwargs):
+    def __init__(self, pde_solver: PoissonSolver, *args,  **kwargs):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
 

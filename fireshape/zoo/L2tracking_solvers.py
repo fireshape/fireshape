@@ -1,9 +1,9 @@
 import firedrake as fd
 from ..pde_constraint import PdeConstraint
 
-__all__ = ["FullH1Solver"]
+__all__ = ["PoissonSolver"]
 
-class FullH1Solver(PdeConstraint):
+class PoissonSolver(PdeConstraint):
     """Class for fullH1 (good Helmholtz, hom NeumannBC) problems as PdeContraint."""
     def __init__(self, mesh_m): 
         super().__init__()
