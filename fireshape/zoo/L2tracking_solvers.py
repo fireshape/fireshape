@@ -17,8 +17,9 @@ class FullH1Solver(PdeConstraint):
         self.solution_adj = fd.Function(self.V, name="Adjoint")
 
         self.f = fd.Constant(4.)
-        u, v = fd.TrialFunction(self.V), fd.TestFunction(self.V)
-        self.F = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx  - self.f*v*fd.dx
+        #u, v = fd.TrialFunction(self.V), fd.TestFunction(self.V)
+        v = fd.TestFunction(self.V)
+        self.F = fd.inner(fd.grad(self.solution), fd.grad(v)) * fd.dx  - self.f*v*fd.dx
         self.bcs = fd.DirichletBC(self.V, 0., "on_boundary")
         self.nsp = None
         self.params = {
@@ -33,7 +34,7 @@ class FullH1Solver(PdeConstraint):
 
     def solve(self):
         super().solve()
-        fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
                  solver_parameters=self.params)
         return self.solution
 
@@ -42,9 +43,11 @@ class FullH1Solver(PdeConstraint):
         w = deformation
         u = self.solution
         p = self.solution_adj
-        Dw = fd.grad(w)
-        deriv = -fd.inner(fd.grad(u), (Dw + fd.transpose(Dw))*fd.grad(p)) * fd.dx
-        deriv += fd.div(w) * fd.inner(fd.grad(u), fd.grad(p)) * fd.dx
-        deriv -= fd.div(w) * self.f * p * fd.dx
-        deriv -= 
+        f = self.f
+        Dw = fd.nabla_grad(w)
+
+        deriv = fd.div(w) * (fd.inner(fd.grad(u), fd.grad(p)) - f * p) * fd.dx
+        deriv -= fd.inner(Dw * fd.grad(u), fd.grad(p)) * fd.dx
+        deriv -= fd.inner(fd.grad(u), Dw * fd.grad(p)) * fd.dx
+        #deriv -= fd.inner(fd.grad(f), w) * p * fd.dx
         return deriv
