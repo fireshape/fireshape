@@ -1,16 +1,17 @@
 import firedrake as fd
 from ..objective import Objective
-from .L2tracking_solvers import PoissonSolver
+from .L2tracking_solvers import FullH1Solver
+
 __all__ = ["L2trackingObjective"]
 
-
-class L2trackingOjective(Objective):
+class L2trackingObjective(Objective):
     """L2 tracking functional for Poisson problem."""
-    def __init__(self, pde_solver: PoissonSolver, *args,  **kwargs):
+    def __init__(self, pde_solver: FullH1Solver, *args,  **kwargs):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
+
         (x, y) = fd.SpatialCoordinate(pde_solver.mesh_m)
-        self.u_target = (x-0.5)*(x-0.5) + (y-0.5)*(y-0.5) - 1
+        self.u_target = (x-0.5)*(x-0.5) + (y-0.5)*(y-0.5) - 2
 
     def solve_adjoint(self):
         super().solve_adjoint()
@@ -25,4 +26,5 @@ class L2trackingOjective(Objective):
         u = self.pde_solver.solution
         w = deformation
         deriv = (u - self.u_target)**2 * fd.div(w) * fd.dx
+        deriv -= 2*(u - self.u_target) * fd.inner(fd.grad(self.u_target), w) * fd.dx
         return deriv
