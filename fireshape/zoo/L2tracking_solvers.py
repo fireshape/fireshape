@@ -1,30 +1,25 @@
 import firedrake as fd
 from ..pde_constraint import PdeConstraint
 
-__all__ = ["PoissonSolver"]
+__all__ = ["FullH1Solver"]
 
-class PoissonSolver(PdeConstraint):
-    """Class for Poisson problems as PdeContraint."""
+class FullH1Solver(PdeConstraint):
+    """Class for fullH1 (good Helmholtz, hom NeumannBC) problems as PdeContraint."""
     def __init__(self, mesh_m): 
-        """
-        Inputs:
-            mesh_m: type fd.Mesh
-        """
         super().__init__()
         self.mesh_m = mesh_m
-        self.direct = True
 
         # Setup problem
-        self.V = FunctionSpace(self.mesh_m, "CG", 1)
+        self.V = fd.FunctionSpace(self.mesh_m, "CG", 1)
 
         # Preallocate solution variables for state and adjoint equations
         self.solution = fd.Function(self.V, name="State")
         self.solution_adj = fd.Function(self.V, name="Adjoint")
 
-        self.f = Constant(4.)
-        u, v = Function(self.V), TestFuntion(self.v)
-        self.F = inner(grad(u), grad(v)) * dx  + u*v*dx - self.f*v*dx
-        self.bcs = []
+        self.f = fd.Constant(4.)
+        u, v = fd.TrialFunction(self.V), fd.TestFunction(self.V)
+        self.F = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx  - self.f*v*fd.dx
+        self.bcs = fd.DirichletBC(self.V, 0., "on_boundary")
         self.nsp = None
         self.params = {
                 # "ksp_monitor": shopt_parameters['verbose_state_solver'],
@@ -47,9 +42,9 @@ class PoissonSolver(PdeConstraint):
         w = deformation
         u = self.solution
         p = self.solution_adj
-
-        deriv = -fd.inner(fd.grad(u), (fd.grad(w)+ transpose(fd.grad(w))*fd.grad(v)) * fd.dx
-        deriv += fd.div(w) * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
-        deriv += fd.div(w) * u * p * fd.dx
-        deriv -= fd.div(w) * self.f * q * fd.dx
+        Dw = fd.grad(w)
+        deriv = -fd.inner(fd.grad(u), (Dw + fd.transpose(Dw))*fd.grad(p)) * fd.dx
+        deriv += fd.div(w) * fd.inner(fd.grad(u), fd.grad(p)) * fd.dx
+        deriv -= fd.div(w) * self.f * p * fd.dx
+        deriv -= 
         return deriv
