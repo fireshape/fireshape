@@ -11,7 +11,7 @@ class L2trackingObjective(Objective):
         self.pde_solver = pde_solver
 
         (x, y) = fd.SpatialCoordinate(pde_solver.mesh_m)
-        self.u_target = (x-0.5)*(x-0.5) + (y-0.5)*(y-0.5) - 2
+        self.u_target = 0.36 - (x-0.5)*(x-0.5) - (y-0.5)*(y-0.5)
 
     def solve_adjoint(self):
         super().solve_adjoint()
