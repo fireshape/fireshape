@@ -12,7 +12,7 @@ class EqualityConstraintTest(unittest.TestCase):
         n = 100
         mesh = fd.UnitSquareMesh(n, n)
 
-        inner = fs.LaplaceInnerProduct()
+        inner = fs.ElasticityInnerProduct()
         Q = fs.FeControlSpace(mesh, inner)
         mesh_m = Q.mesh_m
         (x, y) = fd.SpatialCoordinate(mesh_m)
@@ -34,21 +34,22 @@ class EqualityConstraintTest(unittest.TestCase):
         params_dict = {
             'General': {
                 'Secant': {'Type': 'Limited-Memory BFGS',
-                           'Maximum Storage': 25}},
+                           'Maximum Storage': 5}},
             'Step': {
                 'Type': 'Augmented Lagrangian',
                 'Line Search': {'Descent Method': {
                     'Type': 'Quasi-Newton Step'}},
                 'Augmented Lagrangian': {
                     'Subproblem Step Type': 'Line Search',
-                    'Penalty Parameter Growth Factor': 5.,
-                    'Initial Penalty Parameter' : 1.
+                    'Penalty Parameter Growth Factor': 2.,
+                    'Initial Penalty Parameter' : 1.,
+                    'Subproblem Iteration Limit': 20,
                     }},
             'Status Test': {
                 'Gradient Tolerance': 1e-7,
                 'Relative Gradient Tolerance': 1e-6,
                 'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
-                'Iteration Limit': 150}}
+                'Iteration Limit': 4}}
 
         params = ROL.ParameterList(params_dict, "Parameters")
         problem = ROL.OptimizationProblem(J, q, econ=e, emul=emul)
