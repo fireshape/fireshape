@@ -1,9 +1,10 @@
 from .innerproduct import InnerProduct
+from .boundary_extension import ElasticityExtension
 import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -94,7 +95,7 @@ class ControlSpace(object):
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
     def __init__(self, mesh_r):
-        # Create mesh_r, V_r, and assemble inner product.
+        # Create mesh_r and V_r
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
@@ -114,6 +115,42 @@ class FeControlSpace(ControlSpace):
 
     def interpolate(self, vector, out):
         out.assign(vector.fun)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_r)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        return (self.V_r, None)
+
+
+class FeBoundaryControlSpace(ControlSpace):
+
+    def __init__(self, mesh_r):
+        # Create mesh_r, V_r and assemble inner product.
+        self.mesh_r = mesh_r
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+
+        # Create self.id and self.T, self.mesh_m, and self.V_m.
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(X, self.V_r)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.extension = ElasticityExtension(self.V_r)
+
+    def restrict(self, residual, out):
+        p1 = residual
+        p1 *= -1
+        self.extension.solve_homogeneous_adjoint(p1, out.fun)
+        self.extension.apply_adjoint_action(out.fun, out.fun)
+        out.fun -= p1
+
+    def interpolate(self, vector, out):
+        self.extension.extend(vector.fun, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r)
@@ -144,7 +181,7 @@ class FeMultiGridControlSpace(ControlSpace):
         mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
-        # Control space on coarsest mesh and assemble inner product
+        # Control space on coarsest mesh
         self.mesh_r_coarse = self.mesh_hierarchy[0]
         self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
                                                  order)
