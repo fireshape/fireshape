@@ -30,10 +30,11 @@ class UflInnerProduct(InnerProduct):
     firedrake.FunctionSpace, then an interpolation matrix between the two is
     necessary.
     """
-    def __init__(self, Q, fixed_bids=[], extra_bcs=[]):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
 
+        self.direct_solve = direct_solve
         self.fixed_bids = fixed_bids  # fixed parts of bdry
         self.params = self.get_params()  # solver parameters
         self.Q = Q
@@ -119,14 +120,19 @@ class UflInnerProduct(InnerProduct):
 
     def get_params(self):
         """PETSc parameters to solve linear system."""
-        return {
+        params = {
             'ksp_rtol': 1e-11,
             'ksp_atol': 1e-11,
             'ksp_stol': 1e-16,
             'ksp_type': 'cg',
-            'pc_type': 'hypre',
-            'pc_hypre_type': 'boomeramg'
         }
+        if self.direct_solve:
+            params["pc_type"] = "cholesky"
+            params["pc_factor_mat_solver_type"] = "mumps"
+        else:
+            params["pc_type"] = "hypre"
+            params["pc_hypre_type"] = "boomeramg"
+        return params
 
     def get_weak_form(self, V):
         """ Weak formulation of inner product (in UFL)."""
