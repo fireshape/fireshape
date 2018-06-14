@@ -4,10 +4,10 @@ import fireshape as fs
 import fireshape.zoo as fsz
 
 
-def run_taylor_test(Q):
+def run_taylor_test(Q, inner):
     f = fd.Constant(1.0)
 
-    x = fs.ControlVector(Q)
+    x = fs.ControlVector(Q, inner)
     J = fsz.LevelsetFunctional(f, Q)
     """
     move mesh a bit to check that we are not doing the
@@ -28,16 +28,15 @@ def test_fe():
     n = 100
     mesh = fd.UnitSquareMesh(n, n)
 
-    inner = fs.LaplaceInnerProduct(direct_solve=True)
-    Q = fs.FeControlSpace(mesh, inner)
-    run_taylor_test(Q)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.LaplaceInnerProduct(Q, direct_solve=True)
+    run_taylor_test(Q, inner)
 
 def run_fe_mg(order):
     mesh = fd.UnitSquareMesh(10, 10)
-
-    inner = fs.H1InnerProduct(direct_solve=True)
-    Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
-    run_taylor_test(Q)
+    Q = fs.FeMultiGridControlSpace(mesh, refinements=4, order=order)
+    inner = fs.LaplaceInnerProduct(Q, direct_solve=True)
+    run_taylor_test(Q, inner)
 
 def test_fe_mg_first_order():
     run_fe_mg(1)

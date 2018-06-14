@@ -6,14 +6,14 @@ import ROL
 
 mesh = fd.Mesh("Sphere2D.msh")
 
-inner = fs.ElasticityInnerProduct(fixed_bids=[1, 2, 3])
-# Q = fs.FeControlSpace(mesh, inner)
-Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=2, order=2)
+# Q = fs.FeControlSpace(mesh)
+Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=1)
+inner = fs.ElasticityInnerProduct(Q, fixed_bids=[1, 2, 3])
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)
-inflow_expr = fd.Constant((1.0, 0.0)) * (2-y) * (2+y)
-e = fsz.StokesSolver(mesh_m, inflow_bids=[2],
-                     inflow_expr=inflow_expr, noslip_bids=[1, 4])
+inflow_expr = fd.Constant((1.0, 0.0))
+e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
+                     inflow_expr=inflow_expr, noslip_bids=[4])
 e.solve()
 out = fd.File("u.pvd")
 
@@ -24,40 +24,42 @@ def cb(*args):
 
 cb()
 
-J = fsz.EnergyObjective(e, Q, cb=cb, scale=0.001)
-Jr = fs.ReducedObjective(J, e)
-q = fs.ControlVector(Q)
-print(Jr.value(q, None))
+Je = fsz.EnergyObjective(e, Q, cb=cb)
+Jr = 1e-2 * fs.ReducedObjective(Je, e)
+Js = fsz.MoYoSpectralConstraint(10., fd.Constant(0.7), Q)
+Jd = 1e-3 * fsz.DeformationRegularization(Q, l2_reg=1e-2, sym_grad_reg=1e0,
+                                          skew_grad_reg=1e-2)
+J = Jr + Jd + Js
+q = fs.ControlVector(Q, inner)
 g = q.clone()
 
-Jr.gradient(g, q, None)
-Jr.checkGradient(q, g, 5, 1)
-
-vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q, scale=2.)
-econ = fs.EqualityConstraint([vol])
-emul = ROL.StdVector(1)
+vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q)
+baryx = fsz.LevelsetFunctional(x, Q)
+baryy = fsz.LevelsetFunctional(y, Q)
+econ = fs.EqualityConstraint([vol, baryx, baryy])
+emul = ROL.StdVector(3)
 
 params_dict = {
-        'General': {
-            'Secant': { 'Type': 'Limited-Memory BFGS', 'Maximum Storage': 25 } },
-            'Step': {
-                'Type': 'Augmented Lagrangian',
-                'Line Search': {'Descent Method': {
-                    'Type': 'Quasi-Newton Step'}
-                    },
-                'Augmented Lagrangian': {
-                    'Subproblem Step Type': 'Line Search',
-                    'Penalty Parameter Growth Factor': 2.,
-                    'Print Intermediate Optimization History': True
-                    }},
-        'Status Test': {
-            'Gradient Tolerance': 1e-15, 'Relative Gradient Tolerance': 1e-10,
-            'Step Tolerance': 1e-16, 'Relative Step Tolerance': 1e-10,
-            'Iteration Limit': 3}
-        }
-
+    'General': {
+        'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 5}},
+    'Step': {
+        'Type': 'Augmented Lagrangian',
+        'Line Search': {'Descent Method': {
+            'Type': 'Quasi-Newton Step'}
+        },
+        'Augmented Lagrangian': {
+            'Subproblem Step Type': 'Line Search',
+            'Penalty Parameter Growth Factor': 2.,
+            'Print Intermediate Optimization History': True,
+            'Subproblem Iteration Limit': 20
+        }},
+    'Status Test': {
+        'Gradient Tolerance': 1e-4,
+        'Step Tolerance': 1e-5,
+        'Iteration Limit': 4}
+}
 params = ROL.ParameterList(params_dict, "Parameters")
-problem = ROL.OptimizationProblem(Jr, q, econ=[econ], emul=[emul])
+problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
 vol_before = vol.value(q, None)
 solver.solve()

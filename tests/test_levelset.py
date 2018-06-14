@@ -4,7 +4,8 @@ import fireshape as fs
 import fireshape.zoo as fsz
 import ROL
 
-def run_levelset_optimization(Q, write_output=False):
+
+def run_levelset_optimization(Q, inner, write_output=False):
     """ Test template for fsz.LevelsetFunctional."""
 
     #tool for developing new tests, allows storing shape iterates
@@ -23,7 +24,7 @@ def run_levelset_optimization(Q, write_output=False):
     f = (pow(2*x, 2))+pow(y, 2) - 2.
     J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
 
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
 
     # ROL parameters
     params_dict = {
@@ -50,7 +51,7 @@ def run_levelset_optimization(Q, write_output=False):
     state = solver.getAlgorithmState()
     assert (state.gnorm < 1e-6)
 
-def run_levelset_optimization_3D(Q, write_output=False):
+def run_levelset_optimization_3D(Q, inner, write_output=False):
     """ Test template for fsz.LevelsetFunctional."""
 
     #tool for developing new tests, allows storing shape iterates
@@ -68,7 +69,7 @@ def run_levelset_optimization_3D(Q, write_output=False):
     (x, y, z) = fd.SpatialCoordinate(Q.mesh_m)
     f = (pow(2*x, 2))+pow(1.5*y, 2)+pow(z, 2) - 2.
     J = fsz.LevelsetFunctional(f, Q, cb=cb)
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
 
     # ROL parameters
     params_dict = {
@@ -107,34 +108,34 @@ def test_fe(pytestconfig):
 
 def run_fe_test(inner, verbose=False):
     mesh = fs.DiskMesh(0.03)
-    inner = inner(direct_solve=True)
-    Q = fs.FeControlSpace(mesh, inner)
-    run_levelset_optimization(Q, write_output=verbose)
+    Q = fs.FeControlSpace(mesh)
+    inner = inner(Q, direct_solve=True)
+    run_levelset_optimization(Q, inner, write_output=verbose)
 
 def test_fe_3D(pytestconfig):
     """3D Test for FeControlSpace."""
     mesh = fs.SphereMesh(0.1)
-    inner = fs.LaplaceInnerProduct()
-    Q = fs.FeControlSpace(mesh, inner)
-    run_levelset_optimization_3D(Q, write_output=pytestconfig.getoption("verbose"))
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.LaplaceInnerProduct(Q)
+    run_levelset_optimization_3D(Q, inner, write_output=pytestconfig.getoption("verbose"))
 
 def run_fe_mg(order, write_output=False):
     """Test template for FeMultiGridControlSpace."""
     mesh = fs.DiskMesh(0.25)
-    inner = fs.LaplaceInnerProduct(direct_solve=True)
     # State space mesh arises from 4 refinements of control space mesh
-    Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4,
+    Q = fs.FeMultiGridControlSpace(mesh, refinements=4,
                                    order=order)
-    run_levelset_optimization(Q, write_output=write_output)
+    inner = fs.LaplaceInnerProduct(Q, direct_solve=True)
+    run_levelset_optimization(Q, inner, write_output=write_output)
 
 def run_fe_mg_3D(order, write_output=False):
     """Test template for FeMultiGridControlSpace."""
     mesh = fs.SphereMesh(0.2)
-    inner = fs.LaplaceInnerProduct()
     # State space mesh arises from 4 refinements of control space mesh
-    Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=1,
+    Q = fs.FeMultiGridControlSpace(mesh, refinements=1,
                                    order=order)
-    run_levelset_optimization_3D(Q, write_output=write_output)
+    inner = fs.LaplaceInnerProduct(Q)
+    run_levelset_optimization_3D(Q, inner, write_output=write_output)
 
 def test_fe_mg_first_order(pytestconfig):
     """Test FeMultiGridControlSpace with CG1 control."""
@@ -149,23 +150,23 @@ def test_fe_mg_second_order(pytestconfig):
 def test_bsplines(pytestconfig):
     """Test for BsplineControlSpace."""
     mesh = fs.DiskMesh(0.03)
-    inner = fs.H1InnerProduct(direct_solve=True)
     bbox = [(-3, 3), (-3,3)]
     orders = [3, 3]
     levels = [5, 5]
-    Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
-    run_levelset_optimization(Q, write_output=pytestconfig.getoption("verbose"))
+    Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+    run_levelset_optimization(Q, inner, write_output=pytestconfig.getoption("verbose"))
 
 @pytest.mark.skip(reason="works locally, not on travis, have to figure out whats happening here at some point")
 def test_bsplines_3D(pytestconfig):
     """3D Test for BsplineControlSpace."""
     mesh = fs.SphereMesh(0.1)
-    inner = fs.H1InnerProduct()
     bbox = [(-3, 3), (-3, 3), (-3,3)]
     orders = [2, 2, 2]
     levels =  [4, 4, 4]
-    Q = fs.BsplineControlSpace(mesh, inner, bbox, orders, levels)
-    run_levelset_optimization_3D(Q, write_output=pytestconfig.getoption("verbose"))
+    Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
+    inner = fs.H1InnerProduct(Q)
+    run_levelset_optimization_3D(Q, inner, write_output=pytestconfig.getoption("verbose"))
 
 
 if __name__ == '__main__':

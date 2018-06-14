@@ -1,16 +1,122 @@
 import firedrake as fd
 
+
 class InnerProduct(object):
+
     """
     Generic implementation of an inner product.
-
-    The inner product is associated to a fd.FunctionSpace
-    only after calling the method self.get_impl.
     """
-    def __init__(self, fixed_bids=[], direct_solve=False):
-        self.fixed_bids = fixed_bids # fixed parts of bdry
+
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
+        raise NotImplementedError
+
+    def riesz_map(self, v, out):  # dual to primal
+        """
+        Compute Riesz representative of v and save it in out.
+
+        Input:
+        v: ControlVector, in the dual space
+        out: ControlVector, in the primal space
+        """
+        raise NotImplementedError
+
+
+class UflInnerProduct(InnerProduct):
+
+    """
+    Implementation of an inner product that is build on a
+    firedrake.FunctionSpace.  If the ControlSpace is not itselt the
+    firedrake.FunctionSpace, then an interpolation matrix between the two is
+    necessary.
+    """
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
+        if isinstance(extra_bcs, fd.DirichletBC):
+            extra_bcs = [extra_bcs]
+
         self.direct_solve = direct_solve
-        self.params = self.get_params() # solver parameters
+        self.fixed_bids = fixed_bids  # fixed parts of bdry
+        self.params = self.get_params()  # solver parameters
+        self.Q = Q
+
+        """
+        V: type fd.FunctionSpace
+        I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
+        """
+        (V, I_interp) = Q.get_space_for_inner()
+        self.free_bids = list(
+                           V.mesh().topology.exterior_facets.unique_markers)
+        for bid in self.fixed_bids:
+            self.free_bids.remove(bid)
+
+        # Some weak forms have a nullspace. We import the nullspace if no
+        # parts of the bdry are fixed (we assume that a DirichletBC is
+        # sufficient to empty the nullspace).
+        nsp = None
+        if len(self.fixed_bids) == 0:
+            nsp_functions = self.get_nullspace(V)
+            if nsp_functions is not None:
+                nsp = fd.VectorSpaceBasis(nsp_functions)
+                nsp.orthonormalize()
+
+        bcs = []
+        # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
+        if len(self.fixed_bids) > 0:
+            dim = V.value_size
+            if dim == 2:
+                zerovector = fd.Constant((0, 0))
+            elif dim == 3:
+                zerovector = fd.Constant((0, 0, 0))
+            else:
+                raise NotImplementedError
+            bcs.append(fd.DirichletBC(V, zerovector, self.fixed_bids))
+
+        if len(extra_bcs) > 0:
+            bcs += extra_bcs
+
+        if len(bcs) == 0:
+            bcs = None
+
+        a = self.get_weak_form(V)
+        A = fd.assemble(a, mat_type='aij', bcs=bcs)
+        ls = fd.LinearSolver(A, solver_parameters=self.params,
+                             nullspace=nsp, transpose_nullspace=nsp)
+        self.ls = ls
+        self.A = A.petscmat
+        self.interpolated = False
+
+        # If the matrix I is passed, replace A with transpose(I)*A*I
+        # and set up a ksp solver for self.riesz_map
+        if I_interp is not None:
+            self.interpolated = True
+            ITAI = self.A.PtAP(I_interp)
+            from firedrake.petsc import PETSc
+            import numpy as np
+            zero_rows = []
+
+            # if there are zero-rows, replace them with rows that
+            # have 1 on the diagonal entry
+            for row in range(ITAI.size[0]):
+                (cols, vals) = ITAI.getRow(row)
+                valnorm = np.linalg.norm(vals)
+                if valnorm < 1e-13:
+                    zero_rows.append(row)
+            for row in zero_rows:
+                ITAI.setValue(row, row, 1.0)
+            ITAI.assemble()
+
+            # overwrite the self.A created by get_impl
+            self.A = ITAI
+
+            # create ksp solver for self.riesz_map
+            Aksp = PETSc.KSP().create(comm=V.comm)
+            Aksp.setOperators(ITAI)
+            Aksp.setType("preonly")
+            Aksp.pc.setType("cholesky")
+            Aksp.pc.setFactorSolverType("mumps")
+            Aksp.setFromOptions()
+            Aksp.setUp()
+            self.Aksp = Aksp
 
     def get_params(self):
         """PETSc parameters to solve linear system."""
@@ -36,83 +142,6 @@ class InnerProduct(object):
         """Nullspace of weak formulation of inner product (in UFL)."""
         raise NotImplementedError
 
-    def get_impl(self, V, I = None):
-        """
-        Assemble the inner product. This method is called by ControlSpace.
-
-        Input:
-            V: type fd.FunctionSpace
-            I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
-        """
-        self.free_bids = list(
-                           V.mesh().topology.exterior_facets.unique_markers)
-        for bid in self.fixed_bids:
-            self.free_bids.remove(bid)
-
-        # Some weak forms have a nullspace. We import the nullspace if no
-        # parts of the bdry are fixed (we assume that a DirichletBC is
-        # sufficient to empty the nullspace).
-        nsp = None
-        if len(self.fixed_bids) == 0:
-            nsp_functions = self.get_nullspace(V)
-            if nsp_functions is not None:
-                nsp = fd.VectorSpaceBasis(nsp_functions)
-                nsp.orthonormalize()
-
-        # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
-        if len(self.fixed_bids) > 0:
-            dim = V.value_size
-            if dim == 2:
-                zerovector = fd.Constant((0, 0))
-            elif dim == 3:
-                zerovector = fd.Constant((0, 0, 0))
-            else:
-                raise NotImplementedError
-            bc = fd.DirichletBC(V, zerovector, self.fixed_bids)
-        else:
-            bc = None
-
-        a = self.get_weak_form(V)
-        A = fd.assemble(a, mat_type='aij', bcs=bc)
-        ls = fd.LinearSolver(A, solver_parameters=self.params,
-                             nullspace=nsp, transpose_nullspace=nsp)
-        self.ls = ls
-        self.A = A.petscmat
-        self.interpolated = False
-
-        # If the matrix I is passed, replace A with transpose(I)*A*I
-        # and set up a ksp solver for self.riesz_map
-        if I is not None:
-            self.interpolated = True
-            ITAI = self.A.PtAP(I)
-            from firedrake.petsc import PETSc
-            import numpy as np
-            zero_rows = []
-
-            # if there are zero-rows, replace them with rows that 
-            # have 1 on the diagonal entry
-            for row in range(ITAI.size[0]):
-                (cols, vals) = ITAI.getRow(row)
-                valnorm = np.linalg.norm(vals)
-                if valnorm < 1e-13:
-                    zero_rows.append(row)
-            for row in zero_rows:
-                ITAI.setValue(row, row, 1.0)
-            ITAI.assemble()
-
-            #overwrite the self.A created by get_impl
-            self.A = ITAI
-
-            # create ksp solver for self.riesz_map
-            Aksp = PETSc.KSP().create(comm=V.comm)
-            Aksp.setOperators(ITAI)
-            Aksp.setType("preonly")
-            Aksp.pc.setType("cholesky")
-            Aksp.pc.setFactorSolverType("mumps")
-            Aksp.setFromOptions()
-            Aksp.setUp()
-            self.Aksp = Aksp
-
     def eval(self, u, v):
         """Evaluate inner product in primal space."""
         A_u = self.A.createVecLeft()
@@ -135,7 +164,7 @@ class InnerProduct(object):
             self.ls.solve(out.fun, v.fun)
 
 
-class H1InnerProduct(InnerProduct):
+class H1InnerProduct(UflInnerProduct):
     """Inner product on H1. It involves stiffness and mass matrices."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
@@ -148,7 +177,7 @@ class H1InnerProduct(InnerProduct):
         return None
 
 
-class LaplaceInnerProduct(InnerProduct):
+class LaplaceInnerProduct(UflInnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
@@ -172,7 +201,7 @@ class LaplaceInnerProduct(InnerProduct):
         return res
 
 
-class ElasticityInnerProduct(InnerProduct):
+class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
@@ -183,7 +212,7 @@ class ElasticityInnerProduct(InnerProduct):
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
         b = fd.inner(fd.Constant(0.), v) * fd.dx
         mu = fd.Function(W)
-        fd.solve(a == b, mu, bcs = [bc_fix, bc_free])
+        fd.solve(a == b, mu, bcs=[bc_fix, bc_free])
         return mu
 
     def get_weak_form(self, V):
@@ -192,11 +221,10 @@ class ElasticityInnerProduct(InnerProduct):
         of the elasticity equations. The idea is to make the mesh stiff near
         the boundary that is being deformed.
         """
-        if self.fixed_bids is not None and len(self.fixed_bids)>0:
+        if self.fixed_bids is not None and len(self.fixed_bids) > 0:
             mu = self.get_mu(V)
         else:
             mu = fd.Constant(1.0)
-
 
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)

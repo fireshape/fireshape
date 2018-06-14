@@ -3,7 +3,7 @@ import fireshape as fs
 import fireshape.zoo as fsz
 import ROL
 
-dim = 3
+dim = 2
 if dim == 2:
     n = 100
     mesh = fd.UnitSquareMesh(n, n)
@@ -11,8 +11,8 @@ else:
     n = 30
     mesh = fd.UnitCubeMesh(n, n, n)
 
-inner = fs.LaplaceInnerProduct()
-Q = fs.FeControlSpace(mesh, inner)
+Q = fs.FeControlSpace(mesh)
+inner = fs.LaplaceInnerProduct(Q)
 
 mesh_m = Q.mesh_m
 
@@ -23,9 +23,8 @@ else:
     (x, y, z) = fd.SpatialCoordinate(mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
 
+q = fs.ControlVector(Q, inner)
 out = fd.File("domain.pvd")
-
-q = fs.ControlVector(Q)
 J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 
 

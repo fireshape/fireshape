@@ -9,12 +9,12 @@ import ROL
 def test_equality_constraint(pytestconfig):
     mesh = fs.DiskMesh(0.05, radius=2.)
 
-    inner = fs.ElasticityInnerProduct(direct_solve=True)
-    Q = fs.FeControlSpace(mesh, inner)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.ElasticityInnerProduct(Q, direct_solve=True)
     mesh_m = Q.mesh_m
     (x, y) = fd.SpatialCoordinate(mesh_m)
 
-    q = fs.ControlVector(Q)
+    q = fs.ControlVector(Q, inner)
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 
