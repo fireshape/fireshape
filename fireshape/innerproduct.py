@@ -292,7 +292,7 @@ class SurfaceInnerProduct(InnerProduct):
 
         free_nodes = np.concatenate([get_nodes(bid) for bid in self.free_bids])
         free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
-        free_dofs = np.unique(np.sort())
+        free_dofs = np.unique(np.sort(free_dofs))
         self.free_is = PETSc.IS().createGeneral(free_dofs)
         lgr, lgc = A.getLGMap()
         self.global_free_is_row = lgr.applyIS(self.free_is)

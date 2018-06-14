@@ -4,7 +4,8 @@ import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace"]
+           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace",
+           "FeMultiGridBoundaryControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -125,21 +126,10 @@ class FeControlSpace(ControlSpace):
         return (self.V_r, None)
 
 
-class FeBoundaryControlSpace(ControlSpace):
+class FeBoundaryControlSpace(FeControlSpace):
 
     def __init__(self, mesh_r):
-        # Create mesh_r, V_r and assemble inner product.
-        self.mesh_r = mesh_r
-        element = self.mesh_r.coordinates.function_space().ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-
-        # Create self.id and self.T, self.mesh_m, and self.V_m.
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.interpolate(X, self.V_r)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        super().__init__(mesh_r)
         self.extension = ElasticityExtension(self.V_r)
 
     def restrict(self, residual, out):
@@ -151,14 +141,6 @@ class FeBoundaryControlSpace(ControlSpace):
 
     def interpolate(self, vector, out):
         self.extension.extend(vector.fun, out)
-
-    def get_zero_vec(self):
-        fun = fd.Function(self.V_r)
-        fun *= 0.
-        return fun
-
-    def get_space_for_inner(self):
-        return (self.V_r, None)
 
 
 class FeMultiGridControlSpace(ControlSpace):
@@ -227,6 +209,26 @@ class FeMultiGridControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r_coarse, None)
+
+
+class FeMultiGridBoundaryControlSpace(FeMultiGridControlSpace):
+
+    def __init__(self, mesh_r, refinements=1, order=1):
+        super().__init__(mesh_r, refinements=refinements, order=order)
+        self.extension = ElasticityExtension(self.V_r_coarse)
+
+    def restrict(self, residual, out):
+        residual_coarse = out.clone()
+        super().restrict(residual, residual_coarse)
+        p1 = residual_coarse.fun
+        p1 *= -1
+        self.extension.solve_homogeneous_adjoint(p1, out.fun)
+        self.extension.apply_adjoint_action(out.fun, out.fun)
+        out.fun -= p1
+
+    def interpolate(self, vector, out):
+        self.extension.extend(vector.fun, vector.fun)
+        super().interpolate(vector, out)
 
 
 class BsplineControlSpace(ControlSpace):
