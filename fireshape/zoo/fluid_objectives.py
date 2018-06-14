@@ -1,12 +1,12 @@
 import firedrake as fd
-from ..objective import Objective
+from ..objective import ShapeObjective
 from .fluid_solvers import FluidSolver, StokesSolver
 
 
 __all__ = ["EnergyObjective"]
 
 
-class EnergyObjective(Objective):
+class EnergyObjective(ShapeObjective):
     """Energy functional for fluid problems."""
     def __init__(self, pde_solver: FluidSolver, *args,  **kwargs):
         super().__init__(*args, **kwargs)
