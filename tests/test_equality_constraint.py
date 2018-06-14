@@ -9,7 +9,7 @@ import ROL
 def test_equality_constraint(pytestconfig):
     mesh = fs.DiskMesh(0.05, radius=2.)
 
-    inner = fs.ElasticityInnerProduct()
+    inner = fs.ElasticityInnerProduct(direct_solve=True)
     Q = fs.FeControlSpace(mesh, inner)
     mesh_m = Q.mesh_m
     (x, y) = fd.SpatialCoordinate(mesh_m)
