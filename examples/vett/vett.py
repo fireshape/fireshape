@@ -1,6 +1,5 @@
 from diffusor_mesh_rounded import create_rounded_diffusor
 from diffusor_mesh_rounded_bl import create_rounded_diffusor_bl
-from gmsh_helpers import mesh_from_gmsh_code
 from firedrake import File, SpatialCoordinate, conditional, ge, \
     sinh, as_vector, DumbCheckpoint, FILE_READ, FILE_CREATE, \
     Constant, MeshHierarchy, assemble, ds
@@ -36,7 +35,7 @@ wokeness = args.wokeness
 box = args.box
 label = f"x1_{x1}_x2_{x2}_geometry_{geometry}_inflow_{inflow_type}_wokeness_{wokeness:.2}"
 print(f"label={label}")
-num_ref = 2
+num_ref = 1
 """ Create geometry """
 if geometry == 1:
     clscale = 0.4 * (2**num_ref)
@@ -52,7 +51,7 @@ if geometry == 1:
 else:
     h1 = 1.0
     h2 = 2./3.
-    clscale = 0.18 * 2**num_ref
+    clscale = 0.30 * 2**num_ref
     xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 9.0, 10.]
     hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
     omega_free_start = 1.0
@@ -62,7 +61,7 @@ else:
     # mesh_code = create_rounded_diffusor_bl(xvals, hvals, top_scale=top_scale, layer_thickness=clscale*top_scale*0.25)
     mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
 
-mesh = mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=False)
+mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=False)
 
 
 inflow_bids = [1]
@@ -72,7 +71,7 @@ outflow_bids = [4]
 symmetry_bids = [5]
 
 
-Q = fs.FeMultiGridControlSpace(mesh, refinements=num_ref, order=1)
+Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
 # Q = fs.FeControlSpace(mesh)
 mesh_m = Q.mesh_m
 
