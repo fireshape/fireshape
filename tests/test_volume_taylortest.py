@@ -24,18 +24,18 @@ def run_taylor_test(Q):
     errors = [l[-1] for l in res]
     assert (errors[-1] < 0.11 * errors[-2])
 
-def test_fe(self):
+def test_fe():
     n = 100
     mesh = fd.UnitSquareMesh(n, n)
 
-    inner = fs.LaplaceInnerProduct()
+    inner = fs.LaplaceInnerProduct(direct_solve=True)
     Q = fs.FeControlSpace(mesh, inner)
     run_taylor_test(Q)
 
 def run_fe_mg(order):
     mesh = fd.UnitSquareMesh(10, 10)
 
-    inner = fs.H1InnerProduct()
+    inner = fs.H1InnerProduct(direct_solve=True)
     Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4, order=order)
     run_taylor_test(Q)
 

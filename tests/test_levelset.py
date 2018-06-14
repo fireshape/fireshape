@@ -106,8 +106,8 @@ def test_fe(pytestconfig):
         run_fe_test(inner)
 
 def run_fe_test(inner, verbose=False):
-    mesh = fs.DiscMesh(0.03)
-    inner = inner()
+    mesh = fs.DiskMesh(0.03)
+    inner = inner(direct_solve=True)
     Q = fs.FeControlSpace(mesh, inner)
     run_levelset_optimization(Q, write_output=verbose)
 
@@ -120,8 +120,8 @@ def test_fe_3D(pytestconfig):
 
 def run_fe_mg(order, write_output=False):
     """Test template for FeMultiGridControlSpace."""
-    mesh = fs.DiscMesh(0.25)
-    inner = fs.LaplaceInnerProduct()
+    mesh = fs.DiskMesh(0.25)
+    inner = fs.LaplaceInnerProduct(direct_solve=True)
     # State space mesh arises from 4 refinements of control space mesh
     Q = fs.FeMultiGridControlSpace(mesh, inner, refinements=4,
                                    order=order)
@@ -148,8 +148,8 @@ def test_fe_mg_second_order(pytestconfig):
 
 def test_bsplines(pytestconfig):
     """Test for BsplineControlSpace."""
-    mesh = fs.DiscMesh(0.03)
-    inner = fs.H1InnerProduct()
+    mesh = fs.DiskMesh(0.03)
+    inner = fs.H1InnerProduct(direct_solve=True)
     bbox = [(-3, 3), (-3,3)]
     orders = [3, 3]
     levels = [5, 5]

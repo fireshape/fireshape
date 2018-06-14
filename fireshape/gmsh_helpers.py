@@ -69,30 +69,30 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
     else:
         raise SystemError("What are you using if not linux or macOS?!")
 
-def DiscMesh(clscale):
+def DiskMesh(clscale, radius=1.):
     geo_code = """
 Point(1) = {-0, 0, 0, 1.0};
-Point(2) = {1, 0, 0, 1.0};
-Point(3) = {-1, 0, 0, 1.0};
+Point(2) = {%f, 0, 0, 1.0};
+Point(3) = {-%f, 0, 0, 1.0};
 Circle(4) = {2, 1, 3};
 Circle(5) = {3, 1, 2};
 Line Loop(6) = {4, 5};
 Plane Surface(7) = {6};
 Physical Line("Boundary") = {6};
 Physical Surface("Disk") = {7};
-    """
+    """ % ((radius,)*2)
     return mesh_from_gmsh_code(geo_code, clscale=clscale, dim=2)
 
 
-def SphereMesh(clscale):
+def SphereMesh(clscale, radius=1.):
     geo_code="""
 Point(11) = {0, 0, 0, 1.0};
-Point(12) = {1.0, 0, 0, 1.0};
-Point(13) = {-1.0, 0, 0, 1.0};
-Point(14) = {0, 1.0, 0, 1.0};
-Point(15) = {0, -1.0, 0, 1.0};
-Point(16) = {0, 0, 1.0, 1.0};
-Point(17) = {0, 0, -1.0, 1.0};
+Point(12) = {%f, 0, 0, 1.0};
+Point(13) = {-%f, 0, 0, 1.0};
+Point(14) = {0, %f, 0, 1.0};
+Point(15) = {0, -%f, 0, 1.0};
+Point(16) = {0, 0, %f, 1.0};
+Point(17) = {0, 0, -%f, 1.0};
 
 Circle(9) = {13, 11, 15};
 Circle(10) = {15, 11, 12};
@@ -128,5 +128,5 @@ Surface Loop(54) = {50, 48, 46, 40, 42, 52, 44, 38};
 Volume(55) = {54};
 Physical Surface("Surface") = {54};
 Physical Volume("Sphere") = {55};
-"""
+""" % ((radius, ) * 6)
     return mesh_from_gmsh_code(geo_code, clscale=clscale, dim=3)
