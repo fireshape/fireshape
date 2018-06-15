@@ -258,17 +258,10 @@ class ElasticityInnerProduct(UflInnerProduct):
 
 class SurfaceInnerProduct(InnerProduct):
 
-    def __init__(self, Q, fixed_bids=[]):
-
-        self.fixed_bids = fixed_bids
-
+    def __init__(self, Q, free_bids=["on_boundary"]):
         (V, I_interp) = Q.get_space_for_inner()
 
-        self.free_bids = list(
-                           V.mesh().topology.exterior_facets.unique_markers)
-        for bid in self.fixed_bids:
-            self.free_bids.remove(bid)
-        print("free_bids %s" % (self.free_bids))
+        self.free_bids = free_bids
 
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -285,12 +278,15 @@ class SurfaceInnerProduct(InnerProduct):
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
 
-        def get_nodes(bid):
-            lsize = V.mesh().coordinates.vector().local_size()
-            nodes = fd.DirichletBC(V, fd.Constant(tdim * (0,)), int(bid)).nodes
+        lsize = fd.Function(V).vector().local_size()
+        def get_nodes_bc(bc):
+            nodes = bc.nodes
             return nodes[nodes < lsize]
 
-        free_nodes = np.concatenate([get_nodes(bid) for bid in self.free_bids])
+        def get_nodes_bid(bid):
+            return get_nodes_bc(fd.DirichletBC(V, fd.Constant(tdim * (0,)), bid))
+
+        free_nodes = np.concatenate([get_nodes_bid(bid) for bid in self.free_bids])
         free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
         free_dofs = np.unique(np.sort(free_dofs))
         self.free_is = PETSc.IS().createGeneral(free_dofs)
