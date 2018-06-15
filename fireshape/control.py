@@ -128,9 +128,9 @@ class FeControlSpace(ControlSpace):
 
 class FeBoundaryControlSpace(FeControlSpace):
 
-    def __init__(self, mesh_r):
+    def __init__(self, mesh_r, fixed_dims=[]):
         super().__init__(mesh_r)
-        self.extension = ElasticityExtension(self.V_r)
+        self.extension = ElasticityExtension(self.V_r, fixed_dims=fixed_dims)
 
     def restrict(self, residual, out):
         p1 = residual
@@ -213,9 +213,9 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class FeMultiGridBoundaryControlSpace(FeMultiGridControlSpace):
 
-    def __init__(self, mesh_r, refinements=1, order=1):
+    def __init__(self, mesh_r, refinements=1, order=1, fixed_dims=[]):
         super().__init__(mesh_r, refinements=refinements, order=order)
-        self.extension = ElasticityExtension(self.V_r_coarse)
+        self.extension = ElasticityExtension(self.V_r_coarse, fixed_dims=fixed_dims)
 
     def restrict(self, residual, out):
         residual_coarse = out.clone()

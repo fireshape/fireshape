@@ -4,12 +4,8 @@ import fireshape.zoo as fsz
 import ROL
 
 dim = 2
-n = 4
-# mesh = fd.UnitSquareMesh(n, n)
-mesh = fd.Mesh("UnitSquareCrossed.msh")
-mesh = fd.MeshHierarchy(mesh, 5)[-1]
-
-Q = fs.FeBoundaryControlSpace(mesh)
+mesh = fs.DiskMesh(0.4)
+Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=3, order=2, fixed_dims=[0])
 inner = fs.SurfaceInnerProduct(Q)
 
 # Q = fs.FeControlSpace(mesh)
@@ -19,7 +15,7 @@ mesh_m = Q.mesh_m
 
 if dim == 2:
     (x, y) = fd.SpatialCoordinate(mesh_m)
-    f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+    f = (pow(x, 2))+pow(0.5*y, 2) - 1.
 else:
     (x, y, z) = fd.SpatialCoordinate(mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
