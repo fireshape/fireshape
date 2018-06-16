@@ -413,11 +413,7 @@ class BsplineControlSpace(ControlSpace):
         IFW.setUp()
         for row in range(lsize):
             row = self.lgr.apply([row])[0]
-            rows = [A.getRow(row) for A in interp_1d]
-            denserows = [np.zeros((n,)) for n in self.n]
-            for ii in range(self.dim):
-                denserows[ii][rows[ii][0]] = rows[ii][1]
-
+            denserows = [A[row, :] for A in interp_1d]
             values = reduce(np.kron, denserows)
             columns = np.where(values != 0)[0].astype(np.int32)
             values = values[columns]
