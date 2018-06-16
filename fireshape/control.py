@@ -344,11 +344,10 @@ class BsplineControlSpace(ControlSpace):
 
         comm = self.comm
 
+        mass_temp = fd.assemble(fd.TrialFunction(V.sub(0)) * fd.TestFunction(V.sub(0)) * fd.dx)
+        self.lg_map_fe = mass_temp.petscmat.getLGMap()[0]
+
         for dim in range(self.dim):
-            mass_temp = fd.assemble(fd.TrialFunction(V.sub(dim)) * fd.TestFunction(V.sub(dim)) * fd.dx)
-            mass_temp.force_evaluation()
-            print(mass_temp.petscmat.getSizes())
-            self.lgr, lgc = mass_temp.petscmat.getLGMap()
 
             order = self.orders[dim]
             knots = self.knots[dim]
@@ -378,7 +377,7 @@ class BsplineControlSpace(ControlSpace):
                 rows = np.where(values != 0)[0].astype(np.int32)
                 values = values[rows]
                 rows_is = PETSc.IS().createGeneral(rows)
-                global_rows_is = self.lgr.applyIS(rows_is)
+                global_rows_is = self.lg_map_fe.applyIS(rows_is)
                 rows = global_rows_is.array
                 I.setValues(rows, [idx], values)
 
@@ -396,12 +395,7 @@ class BsplineControlSpace(ControlSpace):
         the 1d univariate interpolation matrices.
         In the future, this may be done matrix-free.
         """
-        # this is awfully slow in 3D!!!!!!!!!!!
-        # IFW = PETSc.Mat().create(self.comm)
-        # IFW.setType(PETSc.Mat.Type.AIJ)
-        # IFW.setSizes((self.M, self.N))
-        # # BIG TODO: figure out the sparsity pattern
-        # IFW.setUp()
+        # this is awfully slow in 3D!!!!!!!!!!! (FW: it might not be anymore)
 
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
@@ -412,7 +406,7 @@ class BsplineControlSpace(ControlSpace):
         IFW.setSizes(((lsize, gsize), (local_N, self.N)))
         IFW.setUp()
         for row in range(lsize):
-            row = self.lgr.apply([row])[0]
+            row = self.lg_map_fe.apply([row])[0]
             denserows = [A[row, :] for A in interp_1d]
             values = reduce(np.kron, denserows)
             columns = np.where(values != 0)[0].astype(np.int32)
@@ -440,7 +434,7 @@ class BsplineControlSpace(ControlSpace):
         # but the values are interleaved as this is how
         # firedrake handles vector fields
         for row in range(lsize):
-            row = self.lgr.apply([row])[0]
+            row = self.lg_map_fe.apply([row])[0]
             (cols, vals) = IFW.getRow(row)
             for dim in range(self.dim):
                 FullIFW.setValues([self.dim * row + dim],
