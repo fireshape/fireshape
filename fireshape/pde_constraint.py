@@ -29,11 +29,11 @@ class PdeConstraint(object):
         self.num_solves += 1
         self.num_adjoint_solves += 1
         # Check if F is linear i.e. using TrialFunction
-        if len(self.F.arguments()) != 2:
+        if len(self.F.arguments()) == 2:
+            bil_form = fd.lhs(self.F)
+        else:
             bil_form = fd.derivative(self.F, self.solution,
                                      fd.TrialFunction(self.V))
-        else:
-            bil_form = fd.lhs(self.F)
         a = fd.adjoint(bil_form)
         rhs = -fd.derivative(J, self.solution, fd.TestFunction(self.V))
         fd.solve(a == rhs, self.solution_adj, bcs=fd.homogenize(self.bcs),
