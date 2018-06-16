@@ -96,13 +96,13 @@ class UflInnerProduct(InnerProduct):
 
             # if there are zero-rows, replace them with rows that
             # have 1 on the diagonal entry
-            for row in range(ITAI.size[0]):
-                (cols, vals) = ITAI.getRow(row)
-                valnorm = np.linalg.norm(vals)
-                if valnorm < 1e-13:
-                    zero_rows.append(row)
-            for row in zero_rows:
-                ITAI.setValue(row, row, 1.0)
+            # for row in range(ITAI.size[0]):
+            #     (cols, vals) = ITAI.getRow(row)
+            #     valnorm = np.linalg.norm(vals)
+            #     if valnorm < 1e-13:
+            #         zero_rows.append(row)
+            # for row in zero_rows:
+            #     ITAI.setValue(row, row, 1.0)
             ITAI.assemble()
 
             # overwrite the self.A created by get_impl

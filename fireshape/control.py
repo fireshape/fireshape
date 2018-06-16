@@ -342,33 +342,50 @@ class BsplineControlSpace(ControlSpace):
         x_int = fd.interpolate(x_fct[0], V.sub(0))
         self.M = x_int.vector().size()
 
+        comm = self.comm
+
         for dim in range(self.dim):
+            mass_temp = fd.assemble(fd.TrialFunction(V.sub(dim)) * fd.TestFunction(V.sub(dim)) * fd.dx)
+            mass_temp.force_evaluation()
+            print(mass_temp.petscmat.getSizes())
+            self.lgr, lgc = mass_temp.petscmat.getLGMap()
+
             order = self.orders[dim]
             knots = self.knots[dim]
             n = self.n[dim]
 
-            I = PETSc.Mat().create(comm=self.comm) # noqa
+            local_n = n // comm.size + int(comm.rank < (n % comm.size)) # owned part of global problem
+            print(comm.rank, "n", n)
+            print(comm.rank, "local_n", local_n)
+
+            I = PETSc.Mat().create(comm=self.comm)
             I.setType(PETSc.Mat.Type.AIJ)
-            I.setSizes((self.M, n))
-            # BIG TODO: figure out the sparsity pattern
+            lsize = x_int.vector().local_size()
+            gsize = x_int.vector().size()
+            I.setSizes(((lsize, gsize), (local_n, n)))
+            
+
             I.setUp()
-
             x_int = fd.interpolate(x_fct[dim], V.sub(0))
-            with x_int.dat.vec_ro as x:
-                for idx in range(n):
-                    coeffs = np.zeros(knots.shape, dtype=float)
-                    coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
-                    degree = order - 1  # splev uses degree, not order
-                    tck = (knots, coeffs, degree)
+            x = x_int.vector().get_local()
+            for idx in range(n):
+                coeffs = np.zeros(knots.shape, dtype=float)
+                coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
+                degree = order - 1  # splev uses degree, not order
+                tck = (knots, coeffs, degree)
 
-                    values = splev(x.array, tck, der=0, ext=1)
-                    rows = np.where(values != 0)[0].astype(np.int32)
-                    values = values[rows]
-                    I.setValues(rows, [idx], values)
+                values = splev(x, tck, der=0, ext=1)
+                rows = np.where(values != 0)[0].astype(np.int32)
+                values = values[rows]
+                rows_is = PETSc.IS().createGeneral(rows)
+                global_rows_is = self.lgr.applyIS(rows_is)
+                rows = global_rows_is.array
+                I.setValues(rows, [idx], values)
 
             I.assemble()  # lazy strategy for kron
             interp_1d.append(I)
 
+        # from IPython import embed; embed()
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
@@ -380,13 +397,22 @@ class BsplineControlSpace(ControlSpace):
         In the future, this may be done matrix-free.
         """
         # this is awfully slow in 3D!!!!!!!!!!!
+        # IFW = PETSc.Mat().create(self.comm)
+        # IFW.setType(PETSc.Mat.Type.AIJ)
+        # IFW.setSizes((self.M, self.N))
+        # # BIG TODO: figure out the sparsity pattern
+        # IFW.setUp()
+
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
-        IFW.setSizes((self.M, self.N))
-        # BIG TODO: figure out the sparsity pattern
-        IFW.setUp()
 
-        for row in range(self.M):
+        comm = self.comm
+        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size)) # owned part of global problem
+        (lsize, gsize) = interp_1d[0].getSizes()[0]
+        IFW.setSizes(((lsize, gsize), (local_N, self.N)))
+        IFW.setUp()
+        for row in range(lsize):
+            row = self.lgr.apply([row])[0]
             rows = [A.getRow(row) for A in interp_1d]
             denserows = [np.zeros((n,)) for n in self.n]
             for ii in range(self.dim):
@@ -407,7 +433,9 @@ class BsplineControlSpace(ControlSpace):
         # this is THE MOST awfully slow in 3D!!!!!!!!!!!
         FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
-        FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
+        d = self.dim
+        ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
+        FullIFW.setSizes(((d*lsize, d*gsize), (d*lsize_spline, d*gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
@@ -415,7 +443,8 @@ class BsplineControlSpace(ControlSpace):
         # on vector fields. It's not just a block matrix,
         # but the values are interleaved as this is how
         # firedrake handles vector fields
-        for row in range(self.M):
+        for row in range(lsize):
+            row = self.lgr.apply([row])[0]
             (cols, vals) = IFW.getRow(row)
             for dim in range(self.dim):
                 FullIFW.setValues([self.dim * row + dim],
@@ -433,7 +462,7 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.mult(vector.vec_ro(), w)
 
     def get_zero_vec(self):
-        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.comm)
+        vec = self.FullIFW.createVecRight()
         return vec
 
     def get_space_for_inner(self):
