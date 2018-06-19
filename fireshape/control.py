@@ -194,7 +194,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, bbox, orders, levels):
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[]):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -207,12 +207,16 @@ class BsplineControlSpace(ControlSpace):
         levels: describe the subdivision levels (one integers per
                 geometric dimension) used to construct the knots of
                 univariate B-splines
+        fixed_dims: dimensions in which the deformation should be zero
         """
         # information on B-splines
         self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
         self.orders = orders
         self.levels = levels
+        if isinstance(fixed_dims, int):
+            fixed_dims = [fixed_dims]
+        self.fixed_dims = fixed_dims
         self.construct_knots()
         self.comm = mesh.mpi_comm()
         # create temporary self.mesh_r and self.V_r to assemble innerproduct
@@ -354,9 +358,6 @@ class BsplineControlSpace(ControlSpace):
             n = self.n[dim]
 
             local_n = n // comm.size + int(comm.rank < (n % comm.size)) # owned part of global problem
-            print(comm.rank, "n", n)
-            print(comm.rank, "local_n", local_n)
-
             I = PETSc.Mat().create(comm=self.comm)
             I.setType(PETSc.Mat.Type.AIJ)
             lsize = x_int.vector().local_size()
@@ -424,8 +425,10 @@ class BsplineControlSpace(ControlSpace):
         FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
         d = self.dim
+        free_dims = list(set(range(self.dim))-set(self.fixed_dims))
+        dfree = len(free_dims)
         ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
-        FullIFW.setSizes(((d*lsize, d*gsize), (d*lsize_spline, d*gsize_spline)))
+        FullIFW.setSizes(((d*lsize, d*gsize), (dfree*lsize_spline, dfree*gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
@@ -436,9 +439,9 @@ class BsplineControlSpace(ControlSpace):
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
             (cols, vals) = IFW.getRow(row)
-            for dim in range(self.dim):
-                FullIFW.setValues([self.dim * row + dim],
-                                  [self.dim * col + dim for col in cols],
+            for j, dim in enumerate(free_dims):
+                FullIFW.setValues([d * row + dim],
+                                  [dfree * col + j for col in cols],
                                   vals)
         FullIFW.assemble()
         return FullIFW
