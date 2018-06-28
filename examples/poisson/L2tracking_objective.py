@@ -1,9 +1,8 @@
 import firedrake as fd
-from ..objective import Objective
-from .L2tracking_solvers import PoissonSolver
+from fireshape import Objective
+from L2tracking_PDEconstraint import PoissonSolver
 
 __all__ = ["L2trackingObjective"]
-
 class L2trackingObjective(Objective):
     """L2 tracking functional for Poisson problem."""
     def __init__(self, pde_solver: PoissonSolver, *args,  **kwargs):
@@ -22,9 +21,12 @@ class L2trackingObjective(Objective):
         return (u - self.u_target)**2 * fd.dx
 
     def derivative_form(self, deformation):
-        """Shape directional derivative of misfit functional wrt deformation."""
+        """
+        Shape directional derivative of misfit functional wrt deformation.
+        """
         u = self.pde_solver.solution
+        u_t = self.u_target
         w = deformation
-        deriv = (u - self.u_target)**2 * fd.div(w) * fd.dx
-        deriv -= 2*(u - self.u_target) * fd.inner(fd.grad(self.u_target), w) * fd.dx
+        deriv = ((u - u_t)**2 * fd.div(w) * fd.dx
+                - 2*(u - u_t) * fd.inner(fd.grad(u_t), w) * fd.dx)
         return deriv
