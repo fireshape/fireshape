@@ -19,15 +19,25 @@ class PdeConstraint(object):
         """Set counters of state/adjoint solves to 0."""
         self.num_solves = 0
         self.num_adjoint_solves = 0
+        self.nsp = None
+        self.params = None
+        self.adjoint_is_set = False
 
-    def solve(self):
+    def set_state(self):
+        pb = fd.NonlinearVariationalProblem(self.F, self.solution,
+                                            bcs=fd.homogenize(self.bcs))
+        self.adjproblem = fd.NonlinearVariationalSolver(pb,
+                                                        nullspace=self.nsp,
+                                                        transpose_nullspace=self.nsp,
+                                                        solver_parameters=self.params)
+
+    def solve_state(self):
         """Abstract method that solves state equation."""
         self.num_solves += 1
+        self.stateproblem.solve()
 
-    def solve_adjoint(self, J):
-        """Abstract method that solves adjoint (and state) equation."""
-        self.num_solves += 1
-        self.num_adjoint_solves += 1
+    def set_adjoint(self, J):
+        """Abstract method that create the variational formulation of the adjoint."""
         # Check if F is linear i.e. using TrialFunction
         if len(self.F.arguments()) != 2:
             bil_form = fd.derivative(self.F, self.solution,
@@ -36,9 +46,23 @@ class PdeConstraint(object):
             bil_form = fd.lhs(self.F)
         a = fd.adjoint(bil_form)
         rhs = -fd.derivative(J, self.solution, fd.TestFunction(self.V))
-        fd.solve(a == rhs, self.solution_adj, bcs=fd.homogenize(self.bcs),
-                 nullspace=self.nsp, transpose_nullspace=self.nsp,
-                 solver_parameters=self.params)
+        F = a - rhs
+        pb = fd.NonlinearVariationalProblem(F, self.solution_adj,
+                                            bcs=fd.homogenize(self.bcs))
+        self.adjproblem = fd.NonlinearVariationalSolver(pb,
+                                                        nullspace=self.nsp,
+                                                        transpose_nullspace=self.nsp,
+                                                        solver_parameters=self.params)
+
+    def solve_adjoint(self):
+        """Abstract method that solves adjoint (and state) equation."""
+        if self.adjoint_is_set is False:
+            self.set_adjoint
+            self.adjoint_is_set = True
+
+        self.num_solves += 1
+        self.num_adjoint_solves += 1
+        self.adjointproblem.solve()
         return self.solution_adj
 
     def derivative_form(self, v):
