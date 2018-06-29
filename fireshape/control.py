@@ -214,7 +214,7 @@ class BsplineControlSpace(ControlSpace):
                                [1,..,1] means that they go to zero with C^0 regularity
                                [2,..,2] means that they go to zero with C^1 regularity
         """
-        self.boundary_regularities = [o-1 for o in order] if boundary_regularities is None else boundary_regularities 
+        self.boundary_regularities = [o-1 for o in orders] if boundary_regularities is None else boundary_regularities 
         # information on B-splines
         self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
