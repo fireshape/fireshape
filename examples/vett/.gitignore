@@ -2,3 +2,5 @@
 output7/
 *msh
 *geo
+output*/
+*.log

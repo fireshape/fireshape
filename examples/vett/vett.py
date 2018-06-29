@@ -1,10 +1,9 @@
 from diffusor_mesh_rounded import create_rounded_diffusor
-from diffusor_mesh_rounded_bl import create_rounded_diffusor_bl
 from firedrake import File, SpatialCoordinate, conditional, ge, \
     sinh, as_vector, DumbCheckpoint, FILE_READ, FILE_CREATE, \
-    Constant, MeshHierarchy, assemble, ds
+    Constant, MeshHierarchy, assemble, ds, info, info_red
 from rans_mixing_length import RANSMixingLengthSolver
-from vett_objectives import EnergyRecovery, PressureRecovery
+from vett_objectives import EnergyRecovery, PressureRecovery, DissipatedEnergy
 from vett_helpers import get_extra_bc, NavierStokesWriter, export_boundary
 import fireshape as fs
 import fireshape.zoo as fsz
@@ -23,7 +22,6 @@ parser.add_argument("--x2", type=float, default=20)
 parser.add_argument("--f", type=int, default=1)
 parser.add_argument("--geo", type=int, default=1)
 parser.add_argument("--inflow", type=int, default=1)
-parser.add_argument("--wokeness", type=float, default=1.0)
 parser.add_argument("--box", type=int, default=0)
 args = parser.parse_args()
 x1 = args.x1
@@ -31,17 +29,14 @@ x2 = args.x2
 functional = args.f
 geometry = args.geo
 inflow_type = args.inflow
-wokeness = args.wokeness
 box = args.box
 label = f"x1_{x1}_x2_{x2}_geometry_{geometry}"
-print(f"label={label}")
+info_red(f"label={label}")
 num_ref = 0
-# wakes = [0.1 * i for i in reversed(range(8))]
-wakes = list(reversed([0.00, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7]))
-wakes = [0.4]
+wakes = [round(0.05 * i, 2) for i in reversed(range(21))]
 """ Create geometry """
 if geometry == 1:
-    clscale = 0.4 * (2**num_ref)
+    clscale = 0.3 * (2**num_ref)
     h1 = 1.0
     h2 = 1.5
     xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.05, x2+0.05, 29, 30]
@@ -49,22 +44,22 @@ if geometry == 1:
     omega_free_start = 1
     omega_free_end = xvals[-2]
     Re = 1e6
-    top_scale = 0.06
+    top_scale = 0.07
     mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
 else:
     h1 = 1.0
     h2 = 2./3.
-    clscale = 0.3 * 2**num_ref
-    xvals = [0.0, 0.5, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 8.5, 10.]
+    clscale = 0.15 * 2**num_ref
+    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 9.0, 10.]
     hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
     omega_free_start = 1.0
     omega_free_end = xvals[-2]
     Re = 1e6
     top_scale = 0.07
-    # mesh_code = create_rounded_diffusor_bl(xvals, hvals, top_scale=top_scale, layer_thickness=clscale*top_scale*0.25)
     mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
+    wakes = [w for w in wakes if w <= 0.7]
 
-mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=False)
+mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=True)
 
 
 inflow_bids = [1]
@@ -73,10 +68,13 @@ noslip_free_bids = [3]
 outflow_bids = [4]
 symmetry_bids = [5]
 
+control = "bsplines"
+if control == "bsplines":
+    Q = fs.BsplineBoundaryControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[5, 1], fixed_dims=[0], boundary_regularities=[2, 1])
+else:
+    Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
+    # Q = fs.FeControlSpace(mesh)
 
-# Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
-Q = fs.BsplineControlSpace(mesh, [(0.5, 8.5), (0, 2)], orders=[3, 3], levels=[3, 2])
-# Q = fs.FeControlSpace(mesh)
 mesh_m = Q.mesh_m
 
 local_mesh_size = np.asarray([mesh_m.num_cells()])
@@ -84,15 +82,17 @@ global_mesh_size = np.asarray([0])
 comm.Reduce(local_mesh_size, global_mesh_size)
 comm.Bcast(global_mesh_size)
 global_mesh_size = global_mesh_size[0]
+info("Number of cells: ", global_mesh_size)
 
-# mesh_f = MeshHierarchy(mesh_m, 2)[-1]
 
 (V_control, _) = Q.get_space_for_inner()
-# extra_bc = get_extra_bc(V_control, omega_free_start, omega_free_end)
-# inner = fs.ElasticityInnerProduct(Q, fixed_bids=inflow_bids + noslip_fixed_bids
-#                                   + outflow_bids + symmetry_bids,
-#                                   extra_bcs=extra_bc)
-inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+if control == "bsplines":
+    inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+else:
+    extra_bc = get_extra_bc(V_control, omega_free_start, omega_free_end)
+    inner = fs.ElasticityInnerProduct(Q, fixed_bids=inflow_bids + noslip_fixed_bids
+                                      + outflow_bids + symmetry_bids,
+                                      extra_bcs=extra_bc)
 
 x, y = SpatialCoordinate(mesh_m)
 eps = 0.002
@@ -134,7 +134,7 @@ def change_bc(wake):
     s.problem.bcs[0].function_arg = new_inflow
     s.problem.bcs[0]._original_val = s.problem.bcs[0].function_arg
 
-outdir = f"output7/{label}/{global_mesh_size}/"
+outdir = f"output10/{label}/{global_mesh_size}/"
 
 if comm.rank == 0:
     if not os.path.exists(outdir):
@@ -154,15 +154,20 @@ except: # noqa
         chk.store(s.solution, name="State")
 
 export_boundary(mesh_m, outdir)
-
-Js2 = fsz.MoYoSpectralConstraint(1.e2, Constant(0.8), Q)
+if geometry == 1:
+    Js2 = None
+else:
+    Js2 = fsz.MoYoSpectralConstraint(1.e2, Constant(0.8), Q)
 
 """ Start setting up the optimization """
 if functional == 1:
     f = PressureRecovery(s, Q, scale=1e-2, deformation_check=Js2)
     c2 = f.scale * 1e1
 elif functional == 2:
-    f = EnergyRecovery(s, Q, scale=1e-2, deformation_check=Js2)
+    f = EnergyRecovery(s, Q, scale=1e0, deformation_check=Js2)
+    c2 = f.scale * 1e1
+elif functional == 3:
+    f = DissipatedEnergy(s, Q, scale=1e-2, deformation_check=Js2)
     c2 = f.scale * 1e1
 else:
     raise NotImplementedError
@@ -181,6 +186,8 @@ else:
 
 Jr = fs.ReducedObjective(f, s)
 Js = fsz.MoYoSpectralConstraint(c2, Constant(0.5), Q)
+if geometry == 1:
+    Js = 1e-10 * Js
 Jb = fsz.MoYoBoxConstraint(c1, noslip_free_bids, Q, lower_bound=lower_bnd,
                            upper_bound=upper_bnd)
 J = Jr + Js + Jb
@@ -188,7 +195,7 @@ q = fs.ControlVector(Q, inner)
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
-gradtol = (1e-3) * g.dot(g)**0.5
+gradtol = (1e-4) * g.dot(g)**0.5
 g.scale(1e2)
 J.checkGradient(q, g, 4, 1)
 
@@ -212,55 +219,55 @@ for wake in wakes:
     wake_outdir = functional_outdir + f"inflow_{inflow_type}_wake_{wake:.2f}/"
 
     if box == 1:
-        itercounts = [70] * 5
+        itercounts = [30] * 5
     else:
         if wake == wakes[0]:
-            itercounts = [80]
+            itercounts = [30]
         else:
-            itercounts = [50]
+            itercounts = [20]
 
     for i in range(len(itercounts)):
         maxiter = itercounts[i]
         iter_outdir = wake_outdir + f"{i}/"
-        try:
-            with DumbCheckpoint(f"{iter_outdir}q", mode=FILE_READ) as chk:
-                chk.load(q.fun, name="Control")
-            with DumbCheckpoint(f"{iter_outdir}u", mode=FILE_READ) as chk:
-                chk.load(s.solution, name="State")
-            print(f"Found deformed domain after optimization iteration {i}.")
-        except: # noqa
-            if comm.rank == 0:
-                if os.path.exists(iter_outdir):
-                    shutil.rmtree(iter_outdir)
-                os.makedirs(iter_outdir)
-                csvfile = open(f"{iter_outdir}log.csv", "w")
-                csvwriter = csv.writer(csvfile, delimiter=",")
-                csvwriter.writerow(["functional"])
-            comm.Barrier()
-            writer = NavierStokesWriter(iter_outdir, s, comm)
+        # try:
+            # with DumbCheckpoint(f"{iter_outdir}q", mode=FILE_READ) as chk:
+            #     chk.load(q.fun, name="Control")
+            # with DumbCheckpoint(f"{iter_outdir}u", mode=FILE_READ) as chk:
+            #     chk.load(s.solution, name="State")
+            # print(f"Found deformed domain after optimization iteration {i}.")
+        # except: # noqa
+        if comm.rank == 0:
+            if os.path.exists(iter_outdir):
+                shutil.rmtree(iter_outdir)
+            os.makedirs(iter_outdir)
+            csvfile = open(f"{iter_outdir}log.csv", "w")
+            csvwriter = csv.writer(csvfile, delimiter=",")
+            csvwriter.writerow(["functional"])
+        comm.Barrier()
+        writer = NavierStokesWriter(iter_outdir, s, comm)
 
-            def optim_cb():
-                writer.coarse_write()
-                val = f.val()
-                if comm.rank == 0:
-                    csvwriter.writerow([val])  # , myp1.violation()])
-                    csvfile.flush()
-            J.cb = optim_cb
-
-            params_dict["Status Test"]["Iteration Limit"] = maxiter
-            params = ROL.ParameterList(params_dict, "Parameters")
-            problem = ROL.OptimizationProblem(J, q)
-            solver = ROL.OptimizationSolver(problem, params)
-            solver.solve()
-            writer.fine_write()
+        def optim_cb():
+            writer.coarse_write()
+            val = f.val()
             if comm.rank == 0:
-                csvfile.close()
-            export_boundary(mesh_m, iter_outdir)
-            with DumbCheckpoint(f"{iter_outdir}q", mode=FILE_CREATE) as chk:
-                chk.store(q.fun, name="Control")
-            with DumbCheckpoint(f"{iter_outdir}u", mode=FILE_CREATE) as chk:
-                chk.store(s.solution, name="State")
-        if box == 1:
-            Jb.c *= 2.
+                csvwriter.writerow([val])  # , myp1.violation()])
+                csvfile.flush()
+        J.cb = optim_cb
+
+        params_dict["Status Test"]["Iteration Limit"] = maxiter
+        params = ROL.ParameterList(params_dict, "Parameters")
+        problem = ROL.OptimizationProblem(J, q)
+        solver = ROL.OptimizationSolver(problem, params)
+        solver.solve()
+        writer.fine_write()
+        if comm.rank == 0:
+            csvfile.close()
+        export_boundary(mesh_m, iter_outdir)
+        # with DumbCheckpoint(f"{iter_outdir}q", mode=FILE_CREATE) as chk:
+        #     chk.store(q.fun, name="Control")
+        # with DumbCheckpoint(f"{iter_outdir}u", mode=FILE_CREATE) as chk:
+        #     chk.store(s.solution, name="State")
+    if box == 1:
+        Jb.c *= 2.
 
     print(f"label={label}")
