@@ -3,7 +3,8 @@ import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace",
+           "FeMultiGridBoundaryControlSpace", "BsplineBoundaryControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -194,7 +195,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[]):
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -208,7 +209,13 @@ class BsplineControlSpace(ControlSpace):
                 geometric dimension) used to construct the knots of
                 univariate B-splines
         fixed_dims: dimensions in which the deformation should be zero
+
+        boundary_regularities: how fast the splines go to zero on the boundary for each dimension
+                               [0,..,0] means that they don't go to zero
+                               [1,..,1] means that they go to zero with C^0 regularity
+                               [2,..,2] means that they go to zero with C^1 regularity
         """
+        self.boundary_regularities = [o-1 for o in order] if boundary_regularities is None else boundary_regularities 
         # information on B-splines
         self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
@@ -259,7 +266,7 @@ class BsplineControlSpace(ControlSpace):
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
-        element = self.mesh_r.coordinates.function_space().ufl_element()
+        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
@@ -304,7 +311,7 @@ class BsplineControlSpace(ControlSpace):
             self.knots.append(knots)
             # dimension of univariate spline spaces
             # the "-2" is because we want homogeneous Dir bc
-            n = len(knots) - order - 2
+            n = len(knots) - order - 2*self.boundary_regularities[dim]
             assert n > 0
             self.n.append(n)
 
@@ -370,7 +377,7 @@ class BsplineControlSpace(ControlSpace):
             x = x_int.vector().get_local()
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
-                coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
+                coeffs[idx+self.boundary_regularities[dim]] = 1  # idx+1 because we impose hom Dir bc
                 degree = order - 1  # splev uses degree, not order
                 tck = (knots, coeffs, degree)
 
@@ -462,6 +469,26 @@ class BsplineControlSpace(ControlSpace):
         return (self.V_control, self.I_control)
 
 
+class BsplineBoundaryControlSpace(BsplineControlSpace):
+
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
+        super().__init__(mesh, bbox, orders, levels, fixed_dims=fixed_dims, boundary_regularities=boundary_regularities)
+        self.extension = ElasticityExtension(self.V_r, fixed_dims=fixed_dims)
+
+    def restrict(self, residual, out):
+        residual_smoothed = residual.copy(deepcopy=True)
+        p1 = residual
+        p1 *= -1
+        self.extension.solve_homogeneous_adjoint(p1, residual_smoothed)
+        self.extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+        residual_smoothed -= p1
+        super().restrict(residual_smoothed, out)
+
+    def interpolate(self, vector, out):
+        super().interpolate(vector, out)
+        self.extension.extend(out, out)
+
+
 class ControlVector(ROL.Vector):
     """
     A ControlVector is a variable in the ControlSpace.
@@ -530,6 +557,9 @@ class ControlVector(ROL.Vector):
     def dot(self, v):
         """Inner product between self and v."""
         return self.inner_product.eval(self, v)
+
+    def norm(self):
+        return self.dot(self)
 
     def axpy(self, alpha, x):
         vec = self.vec_wo()
