@@ -147,6 +147,23 @@ def test_fe_mg_second_order(pytestconfig):
     run_fe_mg(2, write_output=pytestconfig.getoption("verbose"))
     run_fe_mg_3D(2, write_output=pytestconfig.getoption("verbose"))
 
+def test_fe_boundary(pytestconfig):
+    """Test FeMultiGridControlSpace with CG2 control."""
+    mesh = fs.DiskMesh(0.25)
+    # State space mesh arises from 4 refinements of control space mesh
+    Q = fs.FeBoundaryControlSpace(mesh)
+    inner = fs.LaplaceInnerProduct(Q, direct_solve=True)
+    run_levelset_optimization(Q, inner, write_output=pytestconfig.getoption("verbose"))
+
+def test_fe_mg_boudnary(pytestconfig):
+    """Test FeMultiGridControlSpace with CG2 control."""
+    mesh = fs.DiskMesh(0.25)
+    # State space mesh arises from 4 refinements of control space mesh
+    Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=2,
+                                           order=2)
+    inner = fs.LaplaceInnerProduct(Q, direct_solve=True)
+    run_levelset_optimization(Q, inner, write_output=pytestconfig.getoption("verbose"))
+
 def test_bsplines(pytestconfig):
     """Test for BsplineControlSpace."""
     mesh = fs.DiskMesh(0.03)

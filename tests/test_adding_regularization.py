@@ -61,10 +61,3 @@ def test_with_boundary_control():
     Q = fs.FeBoundaryControlSpace(mesh)
     inner = fs.SurfaceInnerProduct(Q)
     run_taylor_tests(mesh, Q, inner)
-
-def test_with_mg_boundary_control():
-    n = 10
-    mesh = fd.UnitSquareMesh(n, n)
-    Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=2)
-    inner = fs.SurfaceInnerProduct(Q)
-    run_taylor_tests(mesh, Q, inner)
