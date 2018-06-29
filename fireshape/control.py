@@ -233,7 +233,7 @@ class FeMultiGridBoundaryControlSpace(FeMultiGridControlSpace):
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, bbox, orders, levels):
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -246,12 +246,22 @@ class BsplineControlSpace(ControlSpace):
         levels: describe the subdivision levels (one integers per
                 geometric dimension) used to construct the knots of
                 univariate B-splines
+        fixed_dims: dimensions in which the deformation should be zero
+
+        boundary_regularities: how fast the splines go to zero on the boundary for each dimension
+                               [0,..,0] means that they don't go to zero
+                               [1,..,1] means that they go to zero with C^0 regularity
+                               [2,..,2] means that they go to zero with C^1 regularity
         """
+        self.boundary_regularities = [o-1 for o in orders] if boundary_regularities is None else boundary_regularities 
         # information on B-splines
         self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
         self.orders = orders
         self.levels = levels
+        if isinstance(fixed_dims, int):
+            fixed_dims = [fixed_dims]
+        self.fixed_dims = fixed_dims
         self.construct_knots()
         self.comm = mesh.mpi_comm()
         # create temporary self.mesh_r and self.V_r to assemble innerproduct
@@ -294,7 +304,7 @@ class BsplineControlSpace(ControlSpace):
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
-        element = self.mesh_r.coordinates.function_space().ufl_element()
+        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
@@ -339,7 +349,7 @@ class BsplineControlSpace(ControlSpace):
             self.knots.append(knots)
             # dimension of univariate spline spaces
             # the "-2" is because we want homogeneous Dir bc
-            n = len(knots) - order - 2
+            n = len(knots) - order - 2*self.boundary_regularities[dim]
             assert n > 0
             self.n.append(n)
 
@@ -381,33 +391,46 @@ class BsplineControlSpace(ControlSpace):
         x_int = fd.interpolate(x_fct[0], V.sub(0))
         self.M = x_int.vector().size()
 
+        comm = self.comm
+
+        mass_temp = fd.assemble(fd.TrialFunction(V.sub(0)) * fd.TestFunction(V.sub(0)) * fd.dx)
+        self.lg_map_fe = mass_temp.petscmat.getLGMap()[0]
+
         for dim in range(self.dim):
+
             order = self.orders[dim]
             knots = self.knots[dim]
             n = self.n[dim]
 
-            I = PETSc.Mat().create(comm=self.comm) # noqa
+            local_n = n // comm.size + int(comm.rank < (n % comm.size)) # owned part of global problem
+            I = PETSc.Mat().create(comm=self.comm)
             I.setType(PETSc.Mat.Type.AIJ)
-            I.setSizes((self.M, n))
-            # BIG TODO: figure out the sparsity pattern
+            lsize = x_int.vector().local_size()
+            gsize = x_int.vector().size()
+            I.setSizes(((lsize, gsize), (local_n, n)))
+            
+
             I.setUp()
-
             x_int = fd.interpolate(x_fct[dim], V.sub(0))
-            with x_int.dat.vec_ro as x:
-                for idx in range(n):
-                    coeffs = np.zeros(knots.shape, dtype=float)
-                    coeffs[idx+1] = 1  # idx+1 because we impose hom Dir bc
-                    degree = order - 1  # splev uses degree, not order
-                    tck = (knots, coeffs, degree)
+            x = x_int.vector().get_local()
+            for idx in range(n):
+                coeffs = np.zeros(knots.shape, dtype=float)
+                coeffs[idx+self.boundary_regularities[dim]] = 1  # idx+1 because we impose hom Dir bc
+                degree = order - 1  # splev uses degree, not order
+                tck = (knots, coeffs, degree)
 
-                    values = splev(x.array, tck, der=0, ext=1)
-                    rows = np.where(values != 0)[0].astype(np.int32)
-                    values = values[rows]
-                    I.setValues(rows, [idx], values)
+                values = splev(x, tck, der=0, ext=1)
+                rows = np.where(values != 0)[0].astype(np.int32)
+                values = values[rows]
+                rows_is = PETSc.IS().createGeneral(rows)
+                global_rows_is = self.lg_map_fe.applyIS(rows_is)
+                rows = global_rows_is.array
+                I.setValues(rows, [idx], values)
 
             I.assemble()  # lazy strategy for kron
             interp_1d.append(I)
 
+        # from IPython import embed; embed()
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
@@ -418,19 +441,19 @@ class BsplineControlSpace(ControlSpace):
         the 1d univariate interpolation matrices.
         In the future, this may be done matrix-free.
         """
-        # this is awfully slow in 3D!!!!!!!!!!!
+        # this is awfully slow in 3D!!!!!!!!!!! (FW: it might not be anymore)
+
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
-        IFW.setSizes((self.M, self.N))
-        # BIG TODO: figure out the sparsity pattern
+
+        comm = self.comm
+        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size)) # owned part of global problem
+        (lsize, gsize) = interp_1d[0].getSizes()[0]
+        IFW.setSizes(((lsize, gsize), (local_N, self.N)))
         IFW.setUp()
-
-        for row in range(self.M):
-            rows = [A.getRow(row) for A in interp_1d]
-            denserows = [np.zeros((n,)) for n in self.n]
-            for ii in range(self.dim):
-                denserows[ii][rows[ii][0]] = rows[ii][1]
-
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
+            denserows = [A[row, :] for A in interp_1d]
             values = reduce(np.kron, denserows)
             columns = np.where(values != 0)[0].astype(np.int32)
             values = values[columns]
@@ -446,7 +469,11 @@ class BsplineControlSpace(ControlSpace):
         # this is THE MOST awfully slow in 3D!!!!!!!!!!!
         FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
-        FullIFW.setSizes((self.dim * self.M, self.dim * self.N))
+        d = self.dim
+        free_dims = list(set(range(self.dim))-set(self.fixed_dims))
+        dfree = len(free_dims)
+        ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
+        FullIFW.setSizes(((d*lsize, d*gsize), (dfree*lsize_spline, dfree*gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
@@ -454,11 +481,12 @@ class BsplineControlSpace(ControlSpace):
         # on vector fields. It's not just a block matrix,
         # but the values are interleaved as this is how
         # firedrake handles vector fields
-        for row in range(self.M):
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
             (cols, vals) = IFW.getRow(row)
-            for dim in range(self.dim):
-                FullIFW.setValues([self.dim * row + dim],
-                                  [self.dim * col + dim for col in cols],
+            for j, dim in enumerate(free_dims):
+                FullIFW.setValues([d * row + dim],
+                                  [dfree * col + j for col in cols],
                                   vals)
         FullIFW.assemble()
         return FullIFW
@@ -472,7 +500,7 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.mult(vector.vec_ro(), w)
 
     def get_zero_vec(self):
-        vec = PETSc.Vec().createSeq(self.N*self.dim, comm=self.comm)
+        vec = self.FullIFW.createVecRight()
         return vec
 
     def get_space_for_inner(self):
@@ -547,6 +575,9 @@ class ControlVector(ROL.Vector):
     def dot(self, v):
         """Inner product between self and v."""
         return self.inner_product.eval(self, v)
+
+    def norm(self):
+        return self.dot(self)
 
     def axpy(self, alpha, x):
         vec = self.vec_wo()
