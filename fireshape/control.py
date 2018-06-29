@@ -3,7 +3,8 @@ import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace",
+           "FeMultiGridBoundaryControlSpace", "BsplineBoundaryControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -466,6 +467,26 @@ class BsplineControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_control, self.I_control)
+
+
+class BsplineBoundaryControlSpace(BsplineControlSpace):
+
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
+        super().__init__(mesh, bbox, orders, levels, fixed_dims=fixed_dims, boundary_regularities=boundary_regularities)
+        self.extension = ElasticityExtension(self.V_r, fixed_dims=fixed_dims)
+
+    def restrict(self, residual, out):
+        residual_smoothed = residual.copy(deepcopy=True)
+        p1 = residual
+        p1 *= -1
+        self.extension.solve_homogeneous_adjoint(p1, residual_smoothed)
+        self.extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+        residual_smoothed -= p1
+        super().restrict(residual_smoothed, out)
+
+    def interpolate(self, vector, out):
+        super().interpolate(vector, out)
+        self.extension.extend(out, out)
 
 
 class ControlVector(ROL.Vector):
