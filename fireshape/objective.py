@@ -180,13 +180,19 @@ class ReducedObjective(ShapeObjective):
         """
         return self.J.value(x, tol)
 
-    def derivative_form(self, v):
-        """
-        The derivative of the reduced objective is given by the derivative of
-        the Lagrangian.
-        """
-        return (self.J.scale * self.J.derivative_form(v)
-                + self.e.derivative_form(v))
+    def derivative(self, out):
+        v = fd.TestFunction(self.V_m)
+
+        out2 = out.clone()
+        fd.assemble(self.J.derivative_form(v), tensor=self.J.deriv_m,
+                    form_compiler_parameters=self.params)
+        self.Q.restrict(self.J.deriv_r, out2)
+        out2.scale(self.J.scale)
+
+        fd.assemble(self.e.derivative_form(v), tensor=self.deriv_m,
+                    form_compiler_parameters=self.params)
+        self.Q.restrict(self.deriv_r, out)
+        out.plus(out2)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
@@ -212,17 +218,11 @@ class ObjectiveSum(Objective):
     def value(self, x, tol):
         return self.a.value(x, tol) + self.b.value(x, tol)
 
-    def value_form(self):
-        return self.a.value_form() + self.b.value_form()
-
     def derivative(self, out):
         temp = out.clone()
         self.a.derivative(out)
         self.b.derivative(temp)
         out.plus(temp)
-
-    def derivative_form(self, v):
-        return self.a.derivative_form(v) + self.b.derivative_form(v)
 
     def update(self, *args):
         self.a.update(*args)
@@ -239,15 +239,9 @@ class ScaledObjective(Objective):
     def value(self, *args):
         return self.alpha * self.J.value(*args)
 
-    # def value_form(self):
-    #     return self.alpha * self.J.value_form()
-
     def derivative(self, out):
         self.J.derivative(out)
         out.scale(self.alpha)
-
-    # def derivative_form(self, v):
-    #     return self.alpha * self.derivative_form(v)
 
     def update(self, *args):
         self.J.update(*args)

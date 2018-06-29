@@ -36,7 +36,7 @@ class PdeConstraint(object):
             bil_form = fd.lhs(self.F)
         a = fd.adjoint(bil_form)
         rhs = -fd.derivative(J, self.solution, fd.TestFunction(self.V))
-        fd.solve(a == rhs, self.solution_adj, bcs=fd.homogenize(self.bcs),
+        fd.solve(fd.assemble(a, mat_type="aij"), self.solution_adj, fd.assemble(rhs), bcs=fd.homogenize(self.bcs),
                  nullspace=self.nsp, transpose_nullspace=self.nsp,
                  solver_parameters=self.params)
         return self.solution_adj
