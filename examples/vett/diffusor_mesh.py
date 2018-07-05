@@ -2,7 +2,7 @@ import pygmsh
 import numpy as np
 
 
-def create_rounded_diffusor(xvals, hvals, top_scale=0.06):
+def create_diffusor(xvals, hvals, top_scale=0.06, rounded=True):
     geom = pygmsh.built_in.Geometry()
     fak = 0.7
 
@@ -20,7 +20,11 @@ def create_rounded_diffusor(xvals, hvals, top_scale=0.06):
                                             lcar=1.0 * fak))
 
     top_lines = [geom.add_line(top_points[0], top_points[1])]
-    top_lines.append(geom.add_bspline(top_points[1:l-1]))
+    if rounded:
+        top_lines.append(geom.add_bspline(top_points[1:l-1]))
+    else:
+        for i in range(1, l-2):
+            top_lines.append(geom.add_line(top_points[i], top_points[i+1]))
     top_lines.append(geom.add_line(top_points[l-2], top_points[l-1]))
 
     bottom_lines = [geom.add_line(bottom_points[0], bottom_points[1])]
@@ -32,9 +36,12 @@ def create_rounded_diffusor(xvals, hvals, top_scale=0.06):
         vert_lines.append(geom.add_line(bottom_points[i], top_points[i]))
 
     loops = []
-    for i in range(3):
-        loops.append(geom.add_line_loop([bottom_lines[i], vert_lines[i+1],
-                                         -top_lines[i], -vert_lines[i]]))
+    loops.append(geom.add_line_loop([bottom_lines[0], vert_lines[1],
+                                     -top_lines[0], -vert_lines[0]]))
+    loops.append(geom.add_line_loop([bottom_lines[1]] + [vert_lines[-2]] +
+                                     [-k for k in reversed(top_lines[1:-1])] + [-vert_lines[1]]))
+    loops.append(geom.add_line_loop([bottom_lines[-1], vert_lines[-1],
+                                     -top_lines[-1], -vert_lines[-2]]))
 
     plane_surfaces = []
     for i in range(3):
@@ -53,4 +60,6 @@ def create_rounded_diffusor(xvals, hvals, top_scale=0.06):
 if __name__ == "__main__":
     xvals = [0.0, 0.9, 1.0, 3.9, 4.0, 5.0]
     hvals = [1.0, 1.0, 1.0, 0.7, 0.7, 0.7]
-    create_rounded_diffusor(xvals, hvals)
+    code = create_diffusor(xvals, hvals, rounded=True)
+    with open("temp.geo", "w") as f:
+        f.write(code)

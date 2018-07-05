@@ -1,4 +1,4 @@
-from diffusor_mesh_rounded import create_rounded_diffusor
+from diffusor_mesh import create_diffusor
 from firedrake import File, SpatialCoordinate, conditional, ge, \
     sinh, as_vector, DumbCheckpoint, FILE_READ, FILE_CREATE, \
     Constant, MeshHierarchy, assemble, ds, info, info_red
@@ -33,7 +33,7 @@ box = args.box
 label = f"x1_{x1}_x2_{x2}_geometry_{geometry}"
 info_red(f"label={label}")
 num_ref = 0
-wakes = [round(0.05 * i, 2) for i in reversed(range(21))]
+wakes = [round(0.05 * i, 3) for i in reversed(range(21))]
 """ Create geometry """
 if geometry == 1:
     clscale = 0.3 * (2**num_ref)
@@ -49,15 +49,16 @@ if geometry == 1:
 else:
     h1 = 1.0
     h2 = 2./3.
-    clscale = 0.15 * 2**num_ref
-    xvals = [0.0, 1.0, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 9.0, 10.]
+    clscale = 0.2 * 2**num_ref
+    xvals = [0.0, 2.0, x1-0.05, x1+0.05, x2-0.10, x2+0.10, 9.0, 15.]
     hvals = [h1, h1, h1, h1, h2, h2, h2,  h2, h2]
-    omega_free_start = 1.0
+    omega_free_start = xvals[1]
     omega_free_end = xvals[-2]
     Re = 1e6
     top_scale = 0.07
     mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
-    wakes = [w for w in wakes if w <= 0.7]
+    wakes = [w for w in wakes if w <= 0.40+1e-7]
+    wakes = [0.0]
 
 mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=True)
 
@@ -68,12 +69,12 @@ noslip_free_bids = [3]
 outflow_bids = [4]
 symmetry_bids = [5]
 
-control = "bsplines"
+control = "fem"
 if control == "bsplines":
     Q = fs.BsplineBoundaryControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[5, 1], fixed_dims=[0], boundary_regularities=[2, 1])
 else:
-    Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
-    # Q = fs.FeControlSpace(mesh)
+    # Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
+    Q = fs.FeControlSpace(mesh)
 
 mesh_m = Q.mesh_m
 
@@ -134,7 +135,7 @@ def change_bc(wake):
     s.problem.bcs[0].function_arg = new_inflow
     s.problem.bcs[0]._original_val = s.problem.bcs[0].function_arg
 
-outdir = f"output10/{label}/{global_mesh_size}/"
+outdir = f"output11/{label}/{global_mesh_size}/"
 
 if comm.rank == 0:
     if not os.path.exists(outdir):
@@ -164,7 +165,7 @@ if functional == 1:
     f = PressureRecovery(s, Q, scale=1e-2, deformation_check=Js2)
     c2 = f.scale * 1e1
 elif functional == 2:
-    f = EnergyRecovery(s, Q, scale=1e0, deformation_check=Js2)
+    f = EnergyRecovery(s, Q, scale=1e0, deformation_check=Js2, quadrature_degree=100)
     c2 = f.scale * 1e1
 elif functional == 3:
     f = DissipatedEnergy(s, Q, scale=1e-2, deformation_check=Js2)
@@ -191,14 +192,15 @@ if geometry == 1:
 Jb = fsz.MoYoBoxConstraint(c1, noslip_free_bids, Q, lower_bound=lower_bnd,
                            upper_bound=upper_bnd)
 J = Jr + Js + Jb
+# J = 1e-1 * J
 q = fs.ControlVector(Q, inner)
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
 gradtol = (1e-4) * g.dot(g)**0.5
 g.scale(1e2)
-J.checkGradient(q, g, 4, 1)
-
+J.checkGradient(q, g, 6, 1)
+import sys; sys.exit(1)
 params_dict = {
     'General': {
         'Secant': {'Type': 'Limited-Memory BFGS',
@@ -216,7 +218,7 @@ functional_outdir = outdir + f.__class__.__name__ + f"_box_{box}/"
 for wake in wakes:
     change_bc(wake)
     s.solve()
-    wake_outdir = functional_outdir + f"inflow_{inflow_type}_wake_{wake:.2f}/"
+    wake_outdir = functional_outdir + f"inflow_{inflow_type}_wake_{wake:.3f}/"
 
     if box == 1:
         itercounts = [30] * 5

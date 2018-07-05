@@ -6,10 +6,10 @@ from firedrake import FunctionSpace, Function, TestFunction, DirichletBC, \
 
 class EikonalSolver(fs.PdeConstraint):
 
-    def __init__(self, m_mesh, bids):
+    def __init__(self, m_mesh, bids, degree=1):
         super().__init__()
         self.nsp = None
-        V = FunctionSpace(m_mesh, "CG", 1)
+        V = FunctionSpace(m_mesh, "CG", degree)
         self.V = V
         d = Function(V, name="eikonal_state")
         self.solution = d
@@ -56,13 +56,7 @@ class EikonalSolver(fs.PdeConstraint):
 
     def derivative_form(self, deformation):
         w = deformation
-        d = self.solution
-        v = self.solution_adj
-        deriv = -2 * inner(grad(d), nabla_grad(w)*grad(d)) * v * dx
-        deriv -= self.eps * inner(nabla_grad(w)*grad(d), grad(v)) * dx
-        deriv -= self.eps * inner(grad(d), nabla_grad(w)*grad(v)) * dx
-
-        deriv += inner(grad(d), grad(d)) * v * div(w) * dx
-        deriv += self.eps * inner(grad(d), grad(v)) * div(w) * dx
-        deriv -= v * div(w) * dx
-        return deriv
+        X = SpatialCoordinate(w.ufl_domain())
+        F = self.F
+        F = replace(self.F, {self.F.arguments()[0]: self.solution_adj})
+        return derivative(F, X, w)

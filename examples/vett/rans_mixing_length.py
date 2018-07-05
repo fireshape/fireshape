@@ -49,7 +49,8 @@ class NavierStokesSolver(fsz.FluidSolver):
         u = split(self.solution)[0]
         p = split(self.solution)[1]
         F = (
-            self.nu * inner(sym(grad(u)), grad(v)) * dx
+            self.nu * inner(grad(u), grad(v)) * dx
+            + inner(div(u), div(v)) * dx
             + inner(dot(grad(u), u), v) * dx
             - p * div(v) * dx
             + div(u) * q * dx
@@ -62,6 +63,7 @@ class NavierStokesSolver(fsz.FluidSolver):
             "snes_monitor": False,
             "snes_max_it": 20,
             "snes_atol": 1e-10,
+            "ksp_atol": 1e-11,
             "snes_linesearch_type": "l2"
         }
         if self.direct:
@@ -71,7 +73,6 @@ class NavierStokesSolver(fsz.FluidSolver):
                 "mat_type": "aij",
                 "pc_type": "lu",
                 "pc_factor_mat_solver_type": "mumps",
-                "ksp_atol": 1e-15,
             }
         else:
             raise NotImplementedError("This is not really working so far.")
@@ -96,7 +97,7 @@ class RANSMixingLengthSolver(NavierStokesSolver):
 
     def get_weak_form(self):
         F = super().get_weak_form()
-        self.eikonal_solver = EikonalSolver(self.mesh_m, self.noslip_bids)
+        self.eikonal_solver = EikonalSolver(self.mesh_m, self.noslip_bids, degree=self.velocity_degree)
         self.eikonal_solver.solve()
         u = split(self.solution)[0]
         v = split(F.arguments()[0])[0]
