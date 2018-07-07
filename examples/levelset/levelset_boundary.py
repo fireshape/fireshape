@@ -5,11 +5,12 @@ import ROL
 
 dim = 2
 mesh = fs.DiskMesh(0.4)
-Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=3, order=2, fixed_dims=[0])
-inner = fs.SurfaceInnerProduct(Q)
-
+Q = fs.FeMultiGridControlSpace(mesh, refinements=4, order=2)
 # Q = fs.FeControlSpace(mesh)
-# inner = fs.LaplaceInnerProduct(Q)
+# inner = fs.SurfaceInnerProduct(Q)
+inner = fs.ElasticityInnerProduct(Q)
+extension = fs.ElasticityExtension(Q.V_r, direct_solve=True)
+
 
 mesh_m = Q.mesh_m
 
@@ -20,7 +21,7 @@ else:
     (x, y, z) = fd.SpatialCoordinate(mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
 
-q = fs.ControlVector(Q, inner)
+q = fs.ControlVector(Q, inner, boundary_extension=extension)
 out = fd.File("domain.pvd")
 J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 J.cb()
@@ -41,10 +42,9 @@ params_dict = {
         'Line Search': {'Descent Method': {
             'Type': 'Quasi-Newton Step'}}},
     'Status Test': {
-        'Gradient Tolerance': 1e-4,
-        'Relative Gradient Tolerance': 1e-3,
-        'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
-        'Iteration Limit': 35}}
+        'Gradient Tolerance': 1e-5,
+        'Step Tolerance': 1e-10,
+        'Iteration Limit': 100}}
 
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)
