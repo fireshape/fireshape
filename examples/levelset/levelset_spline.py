@@ -5,21 +5,30 @@ import ROL
 
 mesh = fs.DiskMesh(0.1)
 
-bbox = [(-3.3, 4.3), (-3.3, 4.3)]
+bbox = [(-1.01, 1.01), (-1.01, 1.01)]
 orders = [3, 3]
-levels = [2, 2]
-Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, fixed_dims=[0])
-inner = fs.H1InnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+levels = [4, 4]
+Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, boundary_regularities=[0, 0])
+inner = fs.H1InnerProduct(Q)
+
 q = fs.ControlVector(Q, inner)
 
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)
+
 f = (pow(x, 2))+pow(2*y, 2) - 1
+outdef = fd.File("deformation.pvd")
+V, I = Q.get_space_for_inner()
+T = fd.Function(V)
+def cb():
+    out.write(mesh_m.coordinates)
+    Q.visualize_control(q, T)
+    outdef.write(T)
 
 out = fd.File("domain.pvd")
 
 
-J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
+J = fsz.LevelsetFunctional(f, Q, cb=cb)
 J = 0.1 * J
 
 g = q.clone()
