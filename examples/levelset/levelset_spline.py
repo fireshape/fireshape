@@ -9,7 +9,8 @@ bbox = [(-3.3, 4.3), (-3.3, 4.3)]
 orders = [3, 3]
 levels = [2, 2]
 Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, fixed_dims=[0])
-inner = fs.H1InnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+# inner = fs.H1InnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+inner = fs.ElasticityInnerProduct(Q, fixed_bids=[1, 2, 3, 4])
 q = fs.ControlVector(Q, inner)
 
 mesh_m = Q.mesh_m
