@@ -106,8 +106,6 @@ with open(outdir + "/%i-%i.csv" % (x1, x2), "w") as fi:
 print("--------------------")
 print("dofs:", s.V.dim())
 print("f", f.value(None, None))
-print("vol form 1", assemble(div(u*p) * dx(6)))
-print("vol form 2", assemble(div(u*p) * dx(7)))
 n = FacetNormal(mesh)
 print("surface form", assemble(inner(u,n)*p*ds))
 print("--------------------")
