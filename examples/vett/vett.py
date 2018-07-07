@@ -33,7 +33,7 @@ box = args.box
 label = f"x1_{x1}_x2_{x2}_geometry_{geometry}"
 info_red(f"label={label}")
 num_ref = 0
-wakes = [round(0.05 * i, 3) for i in reversed(range(21))]
+wakes = [round(0.1 * i, 2) for i in reversed(range(11))]
 """ Create geometry """
 if geometry == 1:
     clscale = 0.3 * (2**num_ref)
@@ -45,7 +45,7 @@ if geometry == 1:
     omega_free_end = xvals[-2]
     Re = 1e6
     top_scale = 0.07
-    mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
+    mesh_code = create_diffusor(xvals, hvals, top_scale=top_scale)
 else:
     h1 = 1.0
     h2 = 2./3.
@@ -56,7 +56,7 @@ else:
     omega_free_end = xvals[-2]
     Re = 1e6
     top_scale = 0.07
-    mesh_code = create_rounded_diffusor(xvals, hvals, top_scale=top_scale)
+    mesh_code = create_diffusor(xvals, hvals, top_scale=top_scale)
     wakes = [w for w in wakes if w <= 0.40+1e-7]
     wakes = [0.0]
 
@@ -69,9 +69,10 @@ noslip_free_bids = [3]
 outflow_bids = [4]
 symmetry_bids = [5]
 
-control = "fem"
+control = "bsplines"
 if control == "bsplines":
-    Q = fs.BsplineBoundaryControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[5, 1], fixed_dims=[0], boundary_regularities=[2, 1])
+    level = 6 if geometry == 1 else 5
+    Q = fs.BsplineBoundaryControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[level, 1], fixed_dims=[0], boundary_regularities=[2, 1])
 else:
     # Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
     Q = fs.FeControlSpace(mesh)
@@ -200,7 +201,6 @@ J.gradient(g, q, None)
 gradtol = (1e-4) * g.dot(g)**0.5
 g.scale(1e2)
 J.checkGradient(q, g, 6, 1)
-import sys; sys.exit(1)
 params_dict = {
     'General': {
         'Secant': {'Type': 'Limited-Memory BFGS',

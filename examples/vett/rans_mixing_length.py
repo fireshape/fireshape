@@ -50,7 +50,7 @@ class NavierStokesSolver(fsz.FluidSolver):
         p = split(self.solution)[1]
         F = (
             self.nu * inner(grad(u), grad(v)) * dx
-            + inner(div(u), div(v)) * dx
+            + 100 * inner(div(u), div(v)) * dx
             + inner(dot(grad(u), u), v) * dx
             - p * div(v) * dx
             + div(u) * q * dx

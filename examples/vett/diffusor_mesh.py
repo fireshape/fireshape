@@ -16,8 +16,11 @@ def create_diffusor(xvals, hvals, top_scale=0.06, rounded=True):
         top_points.append(geom.add_point(x=x, lcar=lcar))
     bottom_points = []
     for i in range(l):
+        lcar = fak
+        if i == 0:
+            lcar *= 0.2
         bottom_points.append(geom.add_point(x=np.asarray([xvals[i], 0., 0.]),
-                                            lcar=1.0 * fak))
+                                            lcar=lcar))
 
     top_lines = [geom.add_line(top_points[0], top_points[1])]
     if rounded:
