@@ -9,8 +9,7 @@ bbox = [(-1.01, 1.01), (-1.01, 1.01)]
 orders = [3, 3]
 levels = [4, 4]
 Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, boundary_regularities=[0, 0])
-inner = fs.H1InnerProduct(Q)
-
+inner = fs.ElasticityInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 mesh_m = Q.mesh_m

@@ -210,14 +210,19 @@ class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
-        bc_fix = fd.DirichletBC(W, 1, self.fixed_bids)
-        bc_free = fd.DirichletBC(W, 10, self.free_bids)
+        bcs = []
+        if len(self.fixed_bids):
+            bcs.append(fd.DirichletBC(W, 1, self.fixed_bids))
+        if len(self.free_bids):
+            bcs.append(fd.DirichletBC(W, 10, self.free_bids))
+        if len(bcs) == 0:
+            bcs = None
         u = fd.TrialFunction(W)
         v = fd.TestFunction(W)
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
         b = fd.inner(fd.Constant(0.), v) * fd.dx
         mu = fd.Function(W)
-        fd.solve(a == b, mu, bcs=[bc_fix, bc_free])
+        fd.solve(a == b, mu, bcs=bcs)
         return mu
 
     def get_weak_form(self, V):
