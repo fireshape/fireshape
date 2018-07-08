@@ -125,7 +125,7 @@ class ShapeObjective(Objective):
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.deriv_r, out)
+        out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
         # return self.deriv_control
 
@@ -148,7 +148,7 @@ class DeformationObjective(Objective):
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.deriv_r, out)
+        out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
 
 

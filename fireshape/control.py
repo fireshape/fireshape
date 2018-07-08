@@ -4,8 +4,7 @@ import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace",
-           "FeMultiGridBoundaryControlSpace", "BsplineBoundaryControlSpace"]
+           "BsplineControlSpace", "ControlVector"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -65,7 +64,7 @@ class ControlSpace(object):
         Update the interpolant self.T with q
         """
 
-        self.interpolate(q, self.T)
+        q.to_coordinatefield(self.T)
         self.T += self.id
 
     def get_zero_vec(self):
@@ -124,23 +123,6 @@ class FeControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r, None)
-
-
-class FeBoundaryControlSpace(FeControlSpace):
-
-    def __init__(self, mesh_r, fixed_dims=[]):
-        super().__init__(mesh_r)
-        self.extension = ElasticityExtension(self.V_r, fixed_dims=fixed_dims)
-
-    def restrict(self, residual, out):
-        p1 = residual
-        p1 *= -1
-        self.extension.solve_homogeneous_adjoint(p1, out.fun)
-        self.extension.apply_adjoint_action(out.fun, out.fun)
-        out.fun -= p1
-
-    def interpolate(self, vector, out):
-        self.extension.extend(vector.fun, out)
 
 
 class FeMultiGridControlSpace(ControlSpace):
@@ -209,26 +191,6 @@ class FeMultiGridControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r_coarse, None)
-
-
-class FeMultiGridBoundaryControlSpace(FeMultiGridControlSpace):
-
-    def __init__(self, mesh_r, refinements=1, order=1, fixed_dims=[]):
-        super().__init__(mesh_r, refinements=refinements, order=order)
-        self.extension = ElasticityExtension(self.V_r_coarse, fixed_dims=fixed_dims)
-
-    def restrict(self, residual, out):
-        residual_coarse = out.clone()
-        super().restrict(residual, residual_coarse)
-        p1 = residual_coarse.fun
-        p1 *= -1
-        self.extension.solve_homogeneous_adjoint(p1, out.fun)
-        self.extension.apply_adjoint_action(out.fun, out.fun)
-        out.fun -= p1
-
-    def interpolate(self, vector, out):
-        self.extension.extend(vector.fun, vector.fun)
-        super().interpolate(vector, out)
 
 
 class BsplineControlSpace(ControlSpace):
@@ -511,26 +473,6 @@ class BsplineControlSpace(ControlSpace):
                 self.I_control.mult(q.vec_wo(), outp)
 
 
-class BsplineBoundaryControlSpace(BsplineControlSpace):
-
-    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
-        super().__init__(mesh, bbox, orders, levels, fixed_dims=fixed_dims, boundary_regularities=boundary_regularities)
-        self.extension = ElasticityExtension(self.V_r, fixed_dims=fixed_dims)
-
-    def restrict(self, residual, out):
-        residual_smoothed = residual.copy(deepcopy=True)
-        p1 = residual
-        p1 *= -1
-        self.extension.solve_homogeneous_adjoint(p1, residual_smoothed)
-        self.extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
-        residual_smoothed -= p1
-        super().restrict(residual_smoothed, out)
-
-    def interpolate(self, vector, out):
-        super().interpolate(vector, out)
-        self.extension.extend(out, out)
-
-
 class ControlVector(ROL.Vector):
     """
     A ControlVector is a variable in the ControlSpace.
@@ -543,10 +485,11 @@ class ControlVector(ROL.Vector):
     plus, scale, clone, dot, axpy, set.
     """
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None):
+                 data=None, boundary_extension=None):
         super().__init__()
         self.controlspace = controlspace
         self.inner_product = inner_product
+        self.boundary_extension = boundary_extension
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -556,6 +499,32 @@ class ControlVector(ROL.Vector):
             self.fun = data
         else:
             self.fun = None
+
+
+    def from_first_derivative(self, fe_deriv):
+        if self.boundary_extension is not None:
+            residual_smoothed = fe_deriv.copy(deepcopy=True)
+            p1 = fe_deriv
+            p1 *= -1
+            self.boundary_extension.solve_homogeneous_adjoint(p1, residual_smoothed)
+            self.boundary_extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+            residual_smoothed -= p1
+            self.controlspace.restrict(residual_smoothed, self)
+        else:
+            self.controlspace.restrict(fe_deriv, self)
+
+
+    def to_coordinatefield(self, out):
+        self.controlspace.interpolate(self, out)
+        if self.boundary_extension is not None:
+            self.boundary_extension.extend(out, out)
+
+    def apply_riesz_map(self):
+        """
+        Maps this vector into the dual space.
+        Overwrites the content.
+        """
+        self.inner_product.riesz_map(self, self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
@@ -585,16 +554,10 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product)
+        res = ControlVector(self.controlspace, self.inner_product, \
+                            boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
-
-    def apply_riesz_map(self):
-        """
-        Maps this vector into the dual space.
-        Overwrites the content.
-        """
-        self.inner_product.riesz_map(self, self)
 
     def dot(self, v):
         """Inner product between self and v."""
