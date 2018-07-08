@@ -505,6 +505,10 @@ class BsplineControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_control, self.I_control)
+    
+    def visualize_control(self, q, out):
+        with out.dat.vec_wo as outp:
+                self.I_control.mult(q.vec_wo(), outp)
 
 
 class BsplineBoundaryControlSpace(BsplineControlSpace):
