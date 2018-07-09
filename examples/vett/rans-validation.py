@@ -32,7 +32,7 @@ inflow_type = 1
 wokeness = 1.
 xvals = [0., 0.5, x1, x2, 29.5, 30]
 hvals = [h1, h1, h1, h2, h2, h2]
-clscale = 0.5
+clscale = 0.3
 Re = 1e6
 top_scale = 0.05
 mesh_code = create_diffusor(xvals, hvals, top_scale=top_scale, rounded=False)
@@ -95,14 +95,17 @@ elif functional == 3:
     c2 = f.scale * 1e1
 else:
     raise NotImplementedError
-outdir = "validation"
-if not os.path.exists(outdir):
-    os.makedirs(outdir)
-with open(outdir + "/%i-%i.csv" % (x1, x2), "w") as fi:
-    fi.write("%i" % x1)
-    fi.write("%i" % x2)
-    fi.write("%f" % f.value(None, None))
 
+val = f.value(None, None)
+outdir = "validation"
+if comm.rank == 0:
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+    with open(outdir + "/%i-%i.csv" % (x1, x2), "w") as fi:
+        fi.write("%i" % x1)
+        fi.write("%i" % x2)
+        fi.write("%f" % val)
+comm.Barrier()
 print("--------------------")
 print("dofs:", s.V.dim())
 print("f", f.value(None, None))

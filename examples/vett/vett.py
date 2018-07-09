@@ -72,9 +72,9 @@ symmetry_bids = [5]
 control = "bsplines"
 if control == "bsplines":
     level = 6 if geometry == 1 else 5
-    Q = fs.BsplineBoundaryControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[level, 1], fixed_dims=[0], boundary_regularities=[2, 1])
+    Q = fs.BsplineControlSpace(mesh, [(omega_free_start, omega_free_end), (0, 2)], orders=[4, 3], levels=[level, 1], fixed_dims=[0], boundary_regularities=[2, 1])
 else:
-    # Q = fs.FeMultiGridBoundaryControlSpace(mesh, refinements=num_ref, order=1)
+    # Q = fs.FeMultiGridControlSpace(mesh, refinements=num_ref, order=1)
     Q = fs.FeControlSpace(mesh)
 
 mesh_m = Q.mesh_m
@@ -89,13 +89,13 @@ info("Number of cells: ", global_mesh_size)
 
 (V_control, _) = Q.get_space_for_inner()
 if control == "bsplines":
-    inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3, 4])
+    inner = fs.LaplaceInnerProduct(Q)
 else:
     extra_bc = get_extra_bc(V_control, omega_free_start, omega_free_end)
     inner = fs.ElasticityInnerProduct(Q, fixed_bids=inflow_bids + noslip_fixed_bids
                                       + outflow_bids + symmetry_bids,
                                       extra_bcs=extra_bc)
-
+extension = fs.ElasticityExtension(Q.V_r)
 x, y = SpatialCoordinate(mesh_m)
 eps = 0.002
 smoother = conditional(ge(y, 1-eps), (1-((1/eps)*(y-(1-eps)))**4)**4, 1.0)
@@ -136,7 +136,7 @@ def change_bc(wake):
     s.problem.bcs[0].function_arg = new_inflow
     s.problem.bcs[0]._original_val = s.problem.bcs[0].function_arg
 
-outdir = f"output11/{label}/{global_mesh_size}/"
+outdir = f"output12/{label}/{global_mesh_size}/"
 
 if comm.rank == 0:
     if not os.path.exists(outdir):
@@ -194,7 +194,7 @@ Jb = fsz.MoYoBoxConstraint(c1, noslip_free_bids, Q, lower_bound=lower_bnd,
                            upper_bound=upper_bnd)
 J = Jr + Js + Jb
 # J = 1e-1 * J
-q = fs.ControlVector(Q, inner)
+q = fs.ControlVector(Q, inner, boundary_extension=extension)
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
