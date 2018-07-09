@@ -13,8 +13,10 @@ for x1 in range(1, 26):
                 Z[x1, x2] = float(s.split("-")[1])
         except:
             pass
-print(Z)
 plt.figure()
 plt.contourf(X, Y, Z, 40)
 plt.contour(X, Y, Z, 40, colors="black")
+amax = np.unravel_index(np.nanargmax(Z, axis=None), Z.shape)
+plt.scatter([amax[1]], [amax[0]], marker="*", s=500)
+plt.savefig("validation.pdf")
 plt.show()
