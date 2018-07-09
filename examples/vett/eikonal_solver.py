@@ -43,7 +43,7 @@ class EikonalSolver(fs.PdeConstraint):
                 self.eps.assign(10**(-i))
                 try:
                     self.solver.solve()
-                    print(f"Eikonal solved for eps={self.eps.values()[0]}")
+                    print("Eikonal solved for eps=%f" % self.eps.values()[0])
                 except ConvergenceError:
                     print("Can't solve the damn eikonal equation")
                     self.eps.assign(10**(-i+1))

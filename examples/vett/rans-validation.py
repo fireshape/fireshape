@@ -77,12 +77,12 @@ s = solver_t(mesh, inflow_bids=inflow_bids,
              inflow_expr=inflow_expr,
              noslip_bids=noslip_free_bids + noslip_fixed_bids,
              symmetry_bids=symmetry_bids,
-             nu=1.0/Re, velocity_degree=pvel)
+             nu=1.0/Re, velocity_degree=pvel, dmax=Constant(0.3))
 
 (u, p) = s.solution.split()
 (v, q) = s.solution_adj.split()
 
-s.solve_by_continuation(steps=21)#, post_solve_cb= lambda mu: print("Done solving for mu=%f" % mu))
+s.solve_by_continuation(steps=21, post_solve_cb= lambda mu: print("Done solving for mu=%f" % mu))
 
 if functional == 1:
     f = PressureRecovery(s, Q)
@@ -97,7 +97,7 @@ else:
     raise NotImplementedError
 
 val = f.value(None, None)
-outdir = "validation"
+outdir = "validation-cg3cg2-clscale0_3-dmax0_3"
 if comm.rank == 0:
     if not os.path.exists(outdir):
         os.makedirs(outdir)

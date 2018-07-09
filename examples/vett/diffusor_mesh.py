@@ -55,7 +55,7 @@ def create_diffusor(xvals, hvals, top_scale=0.06, rounded=True):
     geom.add_physical_line(top_lines[1:-1], label="NoSlipFree")
     geom.add_physical_line(vert_lines[-1], label="Outflow")
     geom.add_physical_line(bottom_lines, label="Symmetry")
-    geom.add_physical_surface(plane_surfaces, label="Channel")
+    geom.add_physical_surface(plane_surfaces)
 
     return geom.get_code()
 
