@@ -1,10 +1,26 @@
+import pytest
 import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
 
 
-def run_taylor_tests(mesh, Q, inner):
-    ext = fs.ElasticityExtension(Q.V_r)
+@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace, fs.FeMultiGridControlSpace])
+@pytest.mark.parametrize("use_extension", [False, True])
+def test_regularization(controlspace_t, use_extension):
+    n = 10
+    mesh = fd.UnitSquareMesh(n, n)
+
+    if controlspace_t == fs.FeMultiGridControlSpace:
+        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=2)
+    else:
+        Q = controlspace_t(mesh)
+
+    if use_extension:
+        inner = fs.SurfaceInnerProduct(Q)
+        ext = fs.ElasticityExtension(Q.V_r)
+    else:
+        inner = fs.LaplaceInnerProduct(Q)
+        ext = None
 
     q = fs.ControlVector(Q, inner, boundary_extension=ext)
 
@@ -46,19 +62,3 @@ def run_taylor_tests(mesh, Q, inner):
     if isinstance(Q, fs.FeMultiGridControlSpace):
         check_result(run_taylor_test(J4))
     check_result(run_taylor_test(Js))
-
-
-def test_with_mg():
-    n = 5
-    mesh = fd.UnitSquareMesh(n, n)
-    Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=1)
-    inner = fs.LaplaceInnerProduct(Q)
-    run_taylor_tests(mesh, Q, inner)
-
-
-def test_with_boundary_control():
-    n = 10
-    mesh = fd.UnitSquareMesh(n, n)
-    Q = fs.FeBoundaryControlSpace(mesh)
-    inner = fs.SurfaceInnerProduct(Q)
-    run_taylor_tests(mesh, Q, inner)
