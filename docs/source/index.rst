@@ -12,6 +12,7 @@ Welcome to the documentation for Fireshape.
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
 
    introduction.rst
    installation.rst
