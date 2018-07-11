@@ -131,7 +131,7 @@ class UflInnerProduct(InnerProduct):
             'ksp_rtol': 1e-11,
             'ksp_atol': 1e-11,
             'ksp_stol': 1e-16,
-            'ksp_type': 'cg',
+            'ksp_type': 'bcgs',
         }
         if self.direct_solve:
             params["pc_type"] = "cholesky"
@@ -254,7 +254,7 @@ class ElasticityInnerProduct(UflInnerProduct):
             n3 = fd.Function(V).interpolate(fd.Constant((0.0, 0.0, 1.0)))
             n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
-            n6 = fd.Function(V).interpolate(fd.as_vector([0, X[2], X[1]]))
+            n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
             res = [n1, n2, n3, n4, n5, n6]
         else:
             raise NotImplementedError
