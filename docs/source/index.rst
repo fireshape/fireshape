@@ -13,7 +13,7 @@ Welcome to the documentation for Fireshape.
 .. toctree::
    :maxdepth: 2
 
-   introduction
-   installation
-   levelset
-   stokes
+   introduction.rst
+   installation.rst
+   levelset.rst
+   stokes.rst
