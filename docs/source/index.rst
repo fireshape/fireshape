@@ -11,8 +11,7 @@ Welcome to the documentation for Fireshape.
 
 
 .. toctree::
-   :maxdepth: 1
-   :hidden:
+   :maxdepth: 2
 
    introduction
    installation
