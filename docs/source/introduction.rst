@@ -4,16 +4,15 @@ Introduction
 Overview
 ^^^^^^^^
 Fireshape is a shape optimization toolbox for the finite
-library Firedrake.
+element library `Firedrake <https://www.firedrakeproject.org/>`_.
 
 To set up a shape optimization problem, all you need to
 provide is the mesh on an initial guess,
-the shape functional, and, if necessary,
-the weak-form of its PDE-contraint.
+the shape functional, and the weak-form of its PDE-contraint.
 
 Fireshape computes adjoints and assembles first and
 second derivatives for you, and it solves the optimization
-problem using the rapid optimization library (ROL).
+problem using the rapid optimization library (`ROL <https://trilinos.org/packages/rol/>`_).
 
 Features
 ^^^^^^^^

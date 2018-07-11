@@ -6,7 +6,7 @@ Installation
 Requirements
 ^^^^^^^^^^^^
 
-Please install the `firedrake finite element library <https://www.firedrakeproject.org>`_ first.
+Please install the `firedrake finite element library <https://www.firedrakeproject.org/download.html>`_ first.
 
 How to install Fireshape
 ^^^^^^^^^^^^^^^^^^^^^^^^
