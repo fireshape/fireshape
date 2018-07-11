@@ -6,8 +6,11 @@ Z[:,:] = np.nan
 X = range(0, 31)
 Y = range(0, 31)
 label = "validation-cg3cg2-clscale0.5"
-for x1 in range(1, 26):
-    for x2 in range(x1+4, 30):
+label = "validation-cg3cg2-clscale0.3"
+label = "validation-cg3cg2-clscale0_3-dmax0_5"
+label = "validation-cg3cg2-clscale0_3-dmax0_3"
+for x1 in range(1, 31):
+    for x2 in range(1, 31):
         try:
             with open(label + f"/{x1}-{x2}.csv", "r") as fi:
                 s = fi.readline()
