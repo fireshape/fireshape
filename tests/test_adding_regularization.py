@@ -4,8 +4,9 @@ import fireshape.zoo as fsz
 
 
 def run_taylor_tests(mesh, Q, inner):
+    ext = fs.ElasticityExtension(Q.V_r)
 
-    q = fs.ControlVector(Q, inner)
+    q = fs.ControlVector(Q, inner, boundary_extension=ext)
 
     X = fd.SpatialCoordinate(mesh)
     q.fun.interpolate(0.5 * X)

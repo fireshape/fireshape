@@ -13,7 +13,7 @@ class ElasticityExtension(object):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         self.zero_fun = fd.Function(V)
-        self.a = 1e-2 * fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)), fd.grad(v)) * fd.dx
+        self.a = 1e-2 * fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)), fd.sym(fd.grad(v))) * fd.dx
         self.bc_fun = fd.Function(V)
         if len(self.fixed_dims) == 0:
             bcs = [fd.DirichletBC(self.V, self.bc_fun, "on_boundary")]
@@ -41,7 +41,8 @@ class ElasticityExtension(object):
         self.ls_adj.solve(out, rhs)
 
     def apply_adjoint_action(self, x, out):
-        fd.assemble(fd.action(self.a, x), tensor=out)
+        # fd.assemble(fd.action(self.a, x), tensor=out)
+        out.assign(fd.assemble(fd.action(self.a, x)))
 
     def get_params(self):
         """PETSc parameters to solve linear system."""
