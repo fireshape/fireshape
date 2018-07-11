@@ -180,13 +180,19 @@ class ReducedObjective(ShapeObjective):
         """
         return self.J.value(x, tol)
 
-    def derivative_form(self, v):
-        """
-        The derivative of the reduced objective is given by the derivative of
-        the Lagrangian.
-        """
-        return (self.J.scale * self.J.derivative_form(v)
-                + self.e.derivative_form(v))
+    def derivative(self, out):
+        v = fd.TestFunction(self.V_m)
+
+        out2 = out.clone()
+        fd.assemble(self.J.derivative_form(v), tensor=self.J.deriv_m,
+                    form_compiler_parameters=self.params)
+        out2.from_first_derivative(self.J.deriv_r)
+        out2.scale(self.J.scale)
+
+        fd.assemble(self.e.derivative_form(v), tensor=self.deriv_m,
+                    form_compiler_parameters=self.params)
+        out.from_first_derivative(self.deriv_r)
+        out.plus(out2)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
