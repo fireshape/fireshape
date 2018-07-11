@@ -58,9 +58,9 @@ else:
     top_scale = 0.07
     mesh_code = create_diffusor(xvals, hvals, top_scale=top_scale)
     wakes = [w for w in wakes if w <= 0.40+1e-7]
-    wakes = [0.0]
+    wakes = [0.7]
 
-mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=100, name=label, delete_files=True)
+mesh = fs.mesh_from_gmsh_code(mesh_code, clscale=clscale, smooth=2, name=label, delete_files=True)
 
 
 inflow_bids = [1]
@@ -224,7 +224,7 @@ for wake in wakes:
         itercounts = [30] * 5
     else:
         if wake == wakes[0]:
-            itercounts = [30]
+            itercounts = [75]
         else:
             itercounts = [20]
 
