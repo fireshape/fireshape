@@ -13,12 +13,16 @@ How to install Fireshape
 
 Activate the firedrake virtualenv first and then run either:
 
-For users: ::
+For users:
+
+.. code-block:: bash
 
     pip install git+https://github.com/fireshape/fireshape.git
 
-For developers: ::
-    
+For developers:
+
+.. code-block:: bash
+
     git clone git@github.com:fireshape/fireshape.git
     cd fireshape
     pip install -e .
