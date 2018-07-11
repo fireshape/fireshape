@@ -206,12 +206,12 @@ class ReducedObjective(ShapeObjective):
         out2 = out.clone()
         fd.assemble(self.J.derivative_form(v), tensor=self.J.deriv_m,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.J.deriv_r, out2)
+        out2.from_first_derivative(self.J.deriv_r)
         out2.scale(self.J.scale)
 
         fd.assemble(self.e.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.deriv_r, out)
+        out.from_first_derivative(self.deriv_r)
         out.plus(out2)
 
     def update(self, x, flag, iteration):
