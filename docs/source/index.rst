@@ -6,17 +6,15 @@
 Fireshape
 =========
 
+Welcome to the documentation for Fireshape.
+
+
+
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :hidden:
 
-   example
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   introduction
+   installation
+   levelset
+   stokes
