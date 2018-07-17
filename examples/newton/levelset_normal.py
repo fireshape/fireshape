@@ -5,7 +5,7 @@ import fireshape.zoo as fsz
 import ROL
 
 mesh = fs.DiskMesh(0.1)
-Q = fs.FeScalarControlSpace(mesh, allow_tangential=False)
+Q = fs.FeScalarControlSpace(mesh, allow_tangential=True)
 inner = fs.SurfaceInnerProduct(Q)
 
 mesh_m = Q.mesh_m
@@ -58,7 +58,7 @@ params_dict = {
     'Status Test': {
         'Gradient Tolerance': 1e-11,
         'Step Tolerance': 1e-10,
-        'Iteration Limit': 2
+        'Iteration Limit': 20
     }
 }
 
