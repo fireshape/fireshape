@@ -1,10 +1,10 @@
 from .innerproduct import InnerProduct
-from .boundary_extension import ElasticityExtension
+from .boundary_extension import ElasticityExtension, NormalExtension
 import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector", "FeScalarControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -124,6 +124,38 @@ class FeControlSpace(ControlSpace):
     def get_space_for_inner(self):
         return (self.V_r, None)
 
+
+class FeScalarControlSpace(ControlSpace):
+    """Use self.V_r as actual ControlSpace."""
+    def __init__(self, mesh_r, allow_tangential=True):
+        # Create mesh_r and V_r
+        self.mesh_r = mesh_r
+        # element = self.mesh_r.coordinates.function_space().ufl_element()
+        self.V_r_scalar = fd.FunctionSpace(self.mesh_r, "CG", 1)
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1)
+
+        # Create self.id and self.T, self.mesh_m, and self.V_m.
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(X, self.V_r)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
+        self.extension = NormalExtension(self.V_r, allow_tangential=allow_tangential)
+
+    def restrict(self, residual, out):
+        self.extension.adjoint(residual, out.fun)
+
+    def interpolate(self, vector, out):
+        self.extension.extend(vector.fun, out)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_r_scalar)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        return (self.V_r_scalar, None)
 
 class FeMultiGridControlSpace(ControlSpace):
     """

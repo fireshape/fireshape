@@ -278,8 +278,13 @@ class SurfaceInnerProduct(InnerProduct):
 
         n = fd.FacetNormal(V.mesh())
 
-        def surf_grad(u):
-            return fd.sym(fd.grad(u) - fd.outer(fd.grad(u)*n, n))
+        is_scalar = u.function_space().value_size == 1
+        if is_scalar:
+            def surf_grad(u):
+                return fd.grad(u) - fd.inner(fd.grad(u), n) * n
+        else:
+            def surf_grad(u):
+                return fd.sym(fd.grad(u) - fd.outer(fd.grad(u)*n, n))
         a = (fd.inner(surf_grad(u), surf_grad(v)) + fd.inner(u, v)) * fd.ds
         # petsc doesn't like matrices with zero rows
         a += 1e-10 * fd.inner(u, v) * fd.dx
@@ -297,8 +302,12 @@ class SurfaceInnerProduct(InnerProduct):
             return get_nodes_bc(fd.DirichletBC(V, fd.Constant(tdim * (0,)), bid))
 
         free_nodes = np.concatenate([get_nodes_bid(bid) for bid in self.free_bids])
-        free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
-        free_dofs = np.unique(np.sort(free_dofs))
+        if is_scalar:
+            free_dofs = free_nodes
+        else:
+            free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
+            free_dofs = np.unique(np.sort(free_dofs))
+
         self.free_is = PETSc.IS().createGeneral(free_dofs)
         lgr, lgc = A.getLGMap()
         self.global_free_is_row = lgr.applyIS(self.free_is)
