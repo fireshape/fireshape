@@ -194,5 +194,5 @@ class NormalExtension(object):
             for i in range(self.tdim):
                 temp.vector()[self.boundary_nodes, i] = x[num_dofs+i::self.tdim]
             n = fd.FacetNormal(self.mesh)
-            out.assign(fd.assemble(fd.inner(temp, n * fd.TestFunction(out.function_space())) * fd.ds))
+            out.assign(fd.assemble(fd.inner(temp, n*fd.TestFunction(out.function_space())) * fd.ds))
             # raise NotImplementedError

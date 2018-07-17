@@ -20,3 +20,7 @@ class LevelsetFunctional(ShapeObjective):
 
     def derivative_form(self, v):
         return fd.div(self.f*v) * fd.dx
+
+    def second_derivative_form(self, v, w):
+        X = fd.SpatialCoordinate(v.ufl_domain())
+        return fd.derivative(fd.derivative(self.value_form(), X, v), X, w)

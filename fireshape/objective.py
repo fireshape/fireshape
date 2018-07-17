@@ -59,6 +59,9 @@ class Objective(ROL.Objective):
         self.derivative(g)
         g.apply_riesz_map()
 
+    def hessVec(self, hv, v, x, tol):
+        raise NotImplementedError
+
     def update(self, x, flag, iteration):
         """Update physical domain and possibly store current iterate."""
         self.Q.update_domain(x)
@@ -107,6 +110,16 @@ class ShapeObjective(Objective):
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
         # return self.deriv_control
+
+    def hessVec(self, hv, v, x, tol):
+        Tv = fd.Function(self.V_r)
+        v.controlspace.interpolate(v, Tv)
+        Tvm = fd.Function(self.V_r, val=Tv)
+        test = fd.TestFunction(self.V_m)
+        hessVecDualFe = fd.assemble(self.second_derivative_form(Tvm, test), tensor=self.deriv_m)
+        v.controlspace.restrict(hessVecDualFe, hv)
+        hv.apply_riesz_map()
+        hv.scale(self.scale)
 
 
 class DeformationObjective(Objective):
