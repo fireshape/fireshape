@@ -201,6 +201,60 @@ class ReducedObjective(ShapeObjective):
         return (self.J.scale * self.J.derivative_form(v)
                 + self.e.derivative_form(v))
 
+    def hessVec(self, hv, v, x, tol):
+        Tv = fd.Function(self.V_r)
+        v.controlspace.interpolate(v, Tv)
+        Tvm = fd.Function(self.V_m, val=Tv)
+        test = fd.TestFunction(self.V_m)
+
+        u = self.e.solution
+        u_adj = self.e.solution_adj
+        J = self.J.value_form()
+        F = self.e.F
+        X = fd.SpatialCoordinate(u.ufl_domain())
+        s = Tvm
+        
+        L = J + fd.replace(F, {F.arguments()[0]: u_adj})
+        params = self.e.params
+
+        y_s = fd.Function(self.e.V)
+        # follow p 65 of Hinze, Pinnau, Ulbrich, Ulbrich
+        # Step 1:
+        fd.solve(
+            fd.assemble(fd.derivative(F, u), mat_type="aij"),
+            y_s,
+            fd.assemble(fd.derivative(-F, X, s)),
+            solver_parameters=params,
+            bcs=fd.homogenize(self.e.bcs)
+        )
+        # Step 2:
+        # from IPython import embed; embed()
+        Lyy_y_s = fd.assemble(fd.derivative(fd.derivative(L, u), u, y_s))
+        Lyu_s = fd.assemble(fd.derivative(fd.derivative(L, u), X, s))
+
+        h1 = Lyy_y_s
+        h1 += Lyu_s
+
+        Luy_y_s = fd.assemble(fd.derivative(fd.derivative(L, X), u, y_s))
+        Luu_s = fd.assemble(fd.derivative(fd.derivative(L, X), X, s))
+        h2 = Luy_y_s
+        h2 += Luu_s
+
+        h3_temp = fd.Function(self.e.V)
+        # Step 3:
+        bil_form = fd.adjoint(fd.derivative(F, u))
+        fd.solve(fd.assemble(bil_form, mat_type="aij"), h3_temp, h1, solver_parameters=params,
+            bcs=fd.homogenize(self.e.bcs)
+                 )
+        F_h3_temp = fd.replace(F, {F.arguments()[0]: h3_temp})
+        h3 = fd.assemble(fd.derivative(-F_h3_temp, X))
+        # from IPython import embed; embed()
+        res = h2
+        res += h3
+        v.controlspace.restrict(res, hv)
+        hv.apply_riesz_map()
+        hv.scale(self.scale)
+
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
         self.Q.update_domain(x)
@@ -241,6 +295,12 @@ class ObjectiveSum(Objective):
         self.a.update(*args)
         self.b.update(*args)
 
+    def hessVec(self, hv, v, x, tol):
+        temp = hv.clone()
+        self.a.hessVec(hv, v, x, tol)
+        self.b.hessVec(temp, v, x, tol)
+        hv.plus(temp)
+
 
 class ScaledObjective(Objective):
 
@@ -264,3 +324,7 @@ class ScaledObjective(Objective):
 
     def update(self, *args):
         self.J.update(*args)
+
+    def hessVec(self, hv, v, x, tol):
+        self.J.hessVec(hv, v, x, tol)
+        hv.scale(self.alpha)

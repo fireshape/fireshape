@@ -5,11 +5,11 @@ import fireshape.zoo as fsz
 import ROL
 from params import get_params
 
-mesh = fs.DiskMesh(0.1)
+mesh = fs.DiskMesh(0.025)
 gradient_norms = []
 out = fd.File("domain.pvd")
 for i in range(20):
-    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=True, extension_tangential=True)
+    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=False, extension_tangential=True)
     inner = fs.SurfaceInnerProduct(Q)
 
     mesh_m = Q.mesh_m

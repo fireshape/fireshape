@@ -17,6 +17,12 @@ def get_params(step_type, max_iter, ksp_type="GMRES"):
         'Step': {
             'Type': 'Line Search',
             'Line Search': {
+                "Sufficient Decrease Tolerance": 1e-10,
+                "Null Curvature Condition"
+                "Curvature Condition": {
+                    "Type": "Null Curvature Condition",
+                    "General Parameter": 2.0
+                },
                 'Descent Method': {
                     "Type": step_type,
                     # 'Type': 'Newton-Krylov'

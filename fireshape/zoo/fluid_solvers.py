@@ -98,14 +98,16 @@ class StokesSolver(FluidSolver):
 
     def solve(self):
         super().solve()
-        fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
+        # fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
               nullspace=self.nsp, transpose_nullspace=self.nsp,
               solver_parameters=self.params)
         return self.solution
 
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
-        (u, p) = fd.TrialFunctions(self.V)
+        u, p = fd.split(self.solution)
+        # (u, p) = fd.TrialFunctions(self.V)
         F = (
             self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
             - p * fd.div(v) * fd.dx
