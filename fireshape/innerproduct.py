@@ -322,8 +322,8 @@ class SurfaceInnerProduct(InnerProduct):
         opts = PETSc.Options()
         opts["A_ksp_type"] = "cg"
         opts["A_pc_type"] = "hypre"
-        opts["A_ksp_atol"] = 1e-10
-        opts["A_ksp_rtol"] = 1e-10
+        opts["A_ksp_atol"] = 1e-12
+        opts["A_ksp_rtol"] = 1e-12
         Aksp.setUp()
         Aksp.setFromOptions()
         self.Aksp = Aksp

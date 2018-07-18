@@ -127,7 +127,7 @@ class FeControlSpace(ControlSpace):
 
 class FeScalarControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
-    def __init__(self, mesh_r, allow_tangential=True):
+    def __init__(self, mesh_r, hessian_tangential=False, extension_tangential=True):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
         # element = self.mesh_r.coordinates.function_space().ufl_element()
@@ -141,13 +141,14 @@ class FeScalarControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
-        self.extension = NormalExtension(self.V_r, allow_tangential=allow_tangential)
+        self.extension_hessian = NormalExtension(self.V_r, allow_tangential=hessian_tangential)
+        self.extension_mesh = NormalExtension(self.V_r, allow_tangential=extension_tangential)
 
     def restrict(self, residual, out):
-        self.extension.adjoint(residual, out.fun)
+        self.extension_hessian.adjoint(residual, out.fun)
 
     def interpolate(self, vector, out):
-        self.extension.extend(vector.fun, out)
+        self.extension_hessian.extend(vector.fun, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_scalar)
@@ -156,6 +157,14 @@ class FeScalarControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r_scalar, None)
+
+    def update_domain(self, q: 'ControlVector'):
+        """
+        Update the interpolant self.T with q
+        """
+
+        self.extension_mesh.extend(q.fun, self.T)
+        self.T += self.id
 
 class FeMultiGridControlSpace(ControlSpace):
     """

@@ -50,8 +50,8 @@ class ElasticityExtension(object):
     def get_params(self):
         """PETSc parameters to solve linear system."""
         params = {
-            'ksp_rtol': 1e-11,
-            'ksp_atol': 1e-11,
+            'ksp_rtol': 1e-13,
+            'ksp_atol': 1e-13,
             'ksp_stol': 1e-16,
             'ksp_type': 'cg',
         }
@@ -138,7 +138,6 @@ class NormalExtension(object):
 
 
         M.assemble()
-        print(M.size)
 
 
         Mksp = PETSc.KSP().create()
@@ -149,6 +148,8 @@ class NormalExtension(object):
         opts["M_ksp_maxit"] = 100
         opts["M_ksp_type"] = "preonly"
         opts["M_pc_type"] = "cholesky"
+        opts["M_atol"] = 1e-13
+        opts["M_rtol"] = 1e-13
         Mksp.setUp()
         Mksp.setFromOptions()
 

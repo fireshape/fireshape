@@ -114,7 +114,7 @@ class ShapeObjective(Objective):
     def hessVec(self, hv, v, x, tol):
         Tv = fd.Function(self.V_r)
         v.controlspace.interpolate(v, Tv)
-        Tvm = fd.Function(self.V_r, val=Tv)
+        Tvm = fd.Function(self.V_m, val=Tv)
         test = fd.TestFunction(self.V_m)
         hessVecDualFe = fd.assemble(self.second_derivative_form(Tvm, test), tensor=self.deriv_m)
         v.controlspace.restrict(hessVecDualFe, hv)

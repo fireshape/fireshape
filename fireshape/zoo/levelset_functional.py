@@ -23,4 +23,7 @@ class LevelsetFunctional(ShapeObjective):
 
     def second_derivative_form(self, v, w):
         X = fd.SpatialCoordinate(v.ufl_domain())
+        n = fd.FacetNormal(v.ufl_domain())
+        from firedrake import inner, grad, ds
+        # return inner(grad(self.f), n) * inner(v, n) * inner(w,n) * ds
         return fd.derivative(fd.derivative(self.value_form(), X, v), X, w)
