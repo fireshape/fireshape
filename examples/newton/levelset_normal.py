@@ -5,22 +5,24 @@ import fireshape.zoo as fsz
 import ROL
 from params import get_params
 
-mesh = fs.DiskMesh(0.025)
+mesh = fs.DiskMesh(0.05, radius=1.5)
 gradient_norms = []
 out = fd.File("domain.pvd")
-for i in range(20):
+for i in range(2):
     Q = fs.FeScalarControlSpace(mesh, hessian_tangential=False, extension_tangential=True)
     inner = fs.SurfaceInnerProduct(Q)
 
     mesh_m = Q.mesh_m
 
     (x, y) = SpatialCoordinate(mesh_m)
-    a = 0.8
-    b = 2.0
-    f = (sqrt((x - a)**2 + b * y**2) - 1) \
-    * (sqrt((x + a)**2 + b * y**2) - 1) \
-    * (sqrt(b * x**2 + (y - a)**2) - 1) \
-    * (sqrt(b * x**2 + (y + a)**2) - 1) - 0.01
+    # a = 0.8
+    # b = 2.0
+    # f = (sqrt((x - a)**2 + b * y**2) - 1) \
+    # * (sqrt((x + a)**2 + b * y**2) - 1) \
+    # * (sqrt(b * x**2 + (y - a)**2) - 1) \
+    # * (sqrt(b * x**2 + (y + a)**2) - 1) - 0.01
+
+    f = (x**2 + y**2 - 1) * (x**2 + (y-1)**2 - 0.5) - 1e-6
 
     q = fs.ControlVector(Q, inner)
 
@@ -39,14 +41,15 @@ for i in range(20):
         out.write(mesh_m.coordinates)
     J.cb = cb
     if i==0:
-        params = get_params("Quasi-Newton Method", 10)
+        params = get_params("Quasi-Newton Method", 100)
         problem = ROL.OptimizationProblem(J, q)
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
-    params = get_params("Newton-Krylov", 1)
-    problem = ROL.OptimizationProblem(J, q)
-    solver = ROL.OptimizationSolver(problem, params)
-    solver.solve()
+    else:
+        params = get_params("Newton-Krylov", 10)
+        problem = ROL.OptimizationProblem(J, q)
+        solver = ROL.OptimizationSolver(problem, params)
+        solver.solve()
     # J.gradient(g, q, None)
     # J.checkGradient(q, g, 9, 1)
     mesh = mesh_m

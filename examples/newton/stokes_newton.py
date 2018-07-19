@@ -10,24 +10,14 @@ mesh = fd.Mesh("Sphere2D.msh")
 gradient_norms = []
 out = fd.File("domain.pvd")
 for i in range(2):
-    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=False, extension_tangential=True)
+    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=True, extension_tangential=True)
     inner = fs.SurfaceInnerProduct(Q, free_bids=[4])
     # Q = fs.FeControlSpace(mesh)
     # inner = fs.ElasticityInnerProduct(Q, fixed_bids=[1, 2, 3])
 
     mesh_m = Q.mesh_m
-
-    (x, y) = SpatialCoordinate(mesh_m)
-    a = 0.8
-    b = 2.0
-    f = (sqrt((x - a)**2 + b * y**2) - 1) \
-    * (sqrt((x + a)**2 + b * y**2) - 1) \
-    * (sqrt(b * x**2 + (y - a)**2) - 1) \
-    * (sqrt(b * x**2 + (y + a)**2) - 1) - 0.01
-
     q = fs.ControlVector(Q, inner)
 
-    (x, y) = fd.SpatialCoordinate(mesh_m)
     inflow_expr = fd.Constant((1.0, 0.0))
     e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                          inflow_expr=inflow_expr, noslip_bids=[4])
@@ -51,13 +41,13 @@ for i in range(2):
         out.write(mesh_m.coordinates)
     Jr.cb = cb
     if i==0:
-        params = get_params("Quasi-Newton Method", 20)
+        params = get_params("Quasi-Newton Method", 1)
         problem = ROL.OptimizationProblem(J, q)
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
         # import sys; sys.exit(1)
     else:
-        params = get_params("Newton-Krylov", 10)
+        params = get_params("Newton-Krylov", 12, ksp_type="GMRES")
         problem = ROL.OptimizationProblem(J, q)
         solver = ROL.OptimizationSolver(problem, params)
         solver.solve()
@@ -65,10 +55,11 @@ for i in range(2):
     # J.checkGradient(q, g, 9, 1)
     mesh = mesh_m
 
-# import matplotlib.pyplot as plt
-# plt.figure()
-# plt.semilogy([gradient_norms[i+1]/gradient_norms[i] for i in range(len(gradient_norms)-1)])
-# plt.show()
+import matplotlib.pyplot as plt
+plt.figure()
+plt.semilogy([gradient_norms[i+1]/gradient_norms[i] for i in range(len(gradient_norms)-1)])
+# plt.semilogy(gradient_norms)
+plt.show()
 VV = fd.VectorFunctionSpace(mesh, "CG", 1)
 V = fd.FunctionSpace(mesh, "CG", 1)
 
