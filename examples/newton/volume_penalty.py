@@ -23,7 +23,7 @@ class DomainVolumePenalty(fs.ShapeObjective):
         return self.current_volume() - self.target_volume
 
     def value(self, x, tol):
-        return self.non_squared_value()**2
+        return self.scale * self.non_squared_value()**2
 
     def non_squared_derivative_form(self, wfun):
         return div(wfun) * dx
@@ -57,4 +57,21 @@ class DomainVolumePenalty(fs.ShapeObjective):
 
         v.controlspace.restrict(self.deriv_m, hv)
         hv.apply_riesz_map()
+        hv.scale(self.scale)
+
+    def hessVec2(self, hv, v, x, tol):
+        Tv = fd.Function(self.V_r)
+        v.controlspace.interpolate(v, Tv)
+        Tvm = fd.Function(self.V_m, val=Tv)
+        test = fd.TestFunction(self.V_m)
+
+        term1 = fd.assemble(self.non_squared_derivative_form(test))
+        term1 *= 2 * fd.assemble(self.non_squared_derivative_form(Tvm))
+        term2 = fd.assemble(self.non_squared_second_derivative_exp(Tvm, test))
+        term2 *= 2 * self.non_squared_value()
+        term1 += term2
+        self.deriv_m.assign(term1)
+
+        v.controlspace.restrict(self.deriv_m, hv)
+        # hv.apply_riesz_map()
         hv.scale(self.scale)

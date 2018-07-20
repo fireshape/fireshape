@@ -26,7 +26,8 @@ for i in range(2):
     Jr = fs.ReducedObjective(Je, e)
     # vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q)
     vol = DomainVolumePenalty(Q, target_volume=47.21586287736358)
-    J = 1e-2 * Jr + 1 * vol
+    # J = 1e-2 * Jr + 1 * vol
+    J =  Jr + 1 * vol
     g = q.clone()
     J.update(q, None, 1)
     J.gradient(g, q, None)
