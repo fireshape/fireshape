@@ -4,7 +4,7 @@ import ROL
 from levelsetfunctional import LevelsetFunctional
 
 #setup problem
-mesh = fs.DiskMesh(0.1)
+mesh = fs.DiskMesh(0.1, radius=1.)
 Q = fs.FeControlSpace(mesh)
 inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)

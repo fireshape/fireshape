@@ -2,18 +2,13 @@ import firedrake as fd
 import fireshape as fs
 
 class LevelsetFunctional(fs.ShapeObjective):
-    """
-    Implementation of level-set shape functional.
-
-    Optima are zero-levels of ufl function f.
-    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         #physical mesh
         mesh_m = self.Q.mesh_m
 
-        #global function defined in terms of coordinates
-        #from the physical space
+        #global function defined in terms of physical coordinates
         x,y = fd.SpatialCoordinate(mesh_m)
         self.f = (x*x-1)*(y*y-1)
 
@@ -22,4 +17,6 @@ class LevelsetFunctional(fs.ShapeObjective):
         return self.f * fd.dx
 
     def derivative_form(self, v):
-        return fd.div(self.f*v) * fd.dx
+        #shape differentiate J in the direction v
+        X = SpatialCoordinate(self.mesh)
+        return derivative(value_form, X, v)
