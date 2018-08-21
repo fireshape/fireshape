@@ -1,4 +1,7 @@
-# fireshape - Shape Optimization with firedrake
+# Fireshape - Shape Optimization with Firedrake
+
+## Documentation
+The documentation is available [here](https://fireshape.readthedocs.io/en/latest/index.html#).
 
 ## Requirements
 
