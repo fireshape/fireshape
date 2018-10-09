@@ -8,8 +8,8 @@ class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
     def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
-                 noslip_bids=[], symmetry_bids=[], nu=1.0, 
-                 velocity_degree=2):
+                 noslip_bids=[], symmetry_bids=[], nu=1.0,
+                 velocity_degree=2, char_len=1., char_vel=1.):
         """
         Instantiate a FluidSolver.
 
@@ -22,6 +22,8 @@ class FluidSolver(PdeConstraint):
             noslip_bids: typ list (of ints), list of bdries with homogeneous
                          Dirichlet bdry condition for velocity
             nu: type float, viscosity
+            char_len: type float, characteristic length scale
+            char_vel: type float, characteristic velocity scale
         """
         super().__init__()
         self.mesh_m = mesh_m
@@ -33,6 +35,8 @@ class FluidSolver(PdeConstraint):
         self.symmetry_bids = symmetry_bids
         self.nu = fd.Constant(nu)
         self.velocity_degree = velocity_degree
+        self.char_len = char_len
+        self.char_vel = char_vel
 
         # Setup problem
         self.V = self.get_functionspace()
@@ -76,7 +80,7 @@ class FluidSolver(PdeConstraint):
             zerovector = fd.Constant((0.0, 0.0, 0.0))
 
         bcs = []
-        if len(self.inflow_bids) is not None:
+        if len(self.inflow_bids)>0:
             bcs.append(fd.DirichletBC(self.V.sub(0), self.inflow_expr,
                                    self.inflow_bids))
         if len(self.noslip_bids)>0:
