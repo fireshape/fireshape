@@ -19,6 +19,7 @@ class PdeConstraint(object):
         """Set counters of state/adjoint solves to 0."""
         self.num_solves = 0
         self.num_adjoint_solves = 0
+        self.form_compiler_params = None
 
     def solve(self):
         """Abstract method that solves state equation."""
@@ -36,9 +37,11 @@ class PdeConstraint(object):
                                      fd.TrialFunction(self.V))
         a = fd.adjoint(bil_form)
         rhs = -fd.derivative(J, self.solution, fd.TestFunction(self.V))
-        fd.solve(fd.assemble(a, mat_type="aij"), self.solution_adj, fd.assemble(rhs), bcs=fd.homogenize(self.bcs),
+        A = fd.assemble(a, mat_type="aij", form_compiler_parameters=self.form_compiler_params)
+        b = fd.assemble(rhs, form_compiler_parameters=self.form_compiler_params)
+        fd.solve(A, self.solution_adj, b, bcs=fd.homogenize(self.bcs),
                  nullspace=self.nsp, transpose_nullspace=self.nsp,
-                 solver_parameters=self.params)
+                 solver_parameters=self.params, options_prefix=self.solver.options_prefix + "_adjoint")
         return self.solution_adj
 
     def derivative_form(self, v):

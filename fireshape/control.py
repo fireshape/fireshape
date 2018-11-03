@@ -195,7 +195,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None, fe_control_degree=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -209,6 +209,7 @@ class BsplineControlSpace(ControlSpace):
                 geometric dimension) used to construct the knots of
                 univariate B-splines
         fixed_dims: dimensions in which the deformation should be zero
+        fe_control_degree: degree for the fe interpolation space to use, if none, then uses the degree of the splines
 
         boundary_regularities: how fast the splines go to zero on the boundary for each dimension
                                [0,..,0] means that they don't go to zero
@@ -256,6 +257,8 @@ class BsplineControlSpace(ControlSpace):
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders)-1
+        if fe_control_degree is not None:
+            fe_control_degree = maxdegree
         # self.V_r =
         # self.inner_product = inner_product
         # self.inner_product.get_impl(self.V_r, self.FullIFW)
