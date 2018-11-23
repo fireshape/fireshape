@@ -4,3 +4,4 @@
 *.pyc
 .cache/
 .pytest_cache/
+fireshape.egg-info/

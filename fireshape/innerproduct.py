@@ -32,11 +32,12 @@ class UflInnerProduct(InnerProduct):
     firedrake.FunctionSpace, then an interpolation matrix between the two is
     necessary.
     """
-    def __init__(self, Q, fixed_bids=[], extra_bcs=[]):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
         self.extra_bcs = extra_bcs
 
+        self.direct_solve = direct_solve
         self.fixed_bids = fixed_bids  # fixed parts of bdry
         self.params = self.get_params()  # solver parameters
         self.Q = Q
@@ -96,9 +97,14 @@ class UflInnerProduct(InnerProduct):
             import numpy as np
             zero_rows = []
 
+            global_num_bsplines = ITAI.size[0]
+            comm = V.comm
+            local_size_if_perfectly_divisible = global_num_bsplines//comm.size
+            index_offset = comm.rank * local_size_if_perfectly_divisible + min(comm.rank, global_num_bsplines % comm.size)
             # if there are zero-rows, replace them with rows that
             # have 1 on the diagonal entry
-            for row in range(ITAI.size[0]):
+            for row in range(ITAI.sizes[0][0]):
+                row = row + index_offset
                 (cols, vals) = ITAI.getRow(row)
                 valnorm = np.linalg.norm(vals)
                 if valnorm < 1e-13:
@@ -122,14 +128,19 @@ class UflInnerProduct(InnerProduct):
 
     def get_params(self):
         """PETSc parameters to solve linear system."""
-        return {
+        params = {
             'ksp_rtol': 1e-11,
             'ksp_atol': 1e-11,
             'ksp_stol': 1e-16,
             'ksp_type': 'cg',
-            'pc_type': 'hypre',
-            'pc_hypre_type': 'boomeramg'
         }
+        if self.direct_solve:
+            params["pc_type"] = "cholesky"
+            params["pc_factor_mat_solver_type"] = "mumps"
+        else:
+            params["pc_type"] = "hypre"
+            params["pc_hypre_type"] = "boomeramg"
+        return params
 
     def get_weak_form(self, V):
         """ Weak formulation of inner product (in UFL)."""
@@ -211,14 +222,19 @@ class ElasticityInnerProduct(UflInnerProduct):
 
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
-        bc_fix = fd.DirichletBC(W, 1./100, self.fixed_bids)
-        bc_free = fd.DirichletBC(W, 1., self.free_bids)
+        bcs = []
+        if len(self.fixed_bids):
+            bcs.append(fd.DirichletBC(W, 1, self.fixed_bids))
+        if len(self.free_bids):
+            bcs.append(fd.DirichletBC(W, 10, self.free_bids))
+        if len(bcs) == 0:
+            bcs = None
         u = fd.TrialFunction(W)
         v = fd.TestFunction(W)
         a = fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
         b = fd.inner(fd.Constant(0.), v) * fd.dx
         mu = fd.Function(W)
-        fd.solve(a == b, mu, bcs=[bc_fix, bc_free])
+        fd.solve(a == b, mu, bcs=bcs)
         return mu
 
     def get_weak_form(self, V):

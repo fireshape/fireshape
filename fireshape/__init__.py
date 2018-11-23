@@ -3,3 +3,4 @@ from .innerproduct import *
 from .objective import *
 from .constraint import *
 from .boundary_extension import *
+from .gmsh_helpers import *
