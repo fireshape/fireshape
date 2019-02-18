@@ -30,9 +30,10 @@ In the code, we highlight the lines
 which characterize :math:`\mathcal{J}`.
 
 
-.. literalinclude:: levelsetfunctional.py
+.. literalinclude:: ../../examples/levelset/levelsetfunctional.py
     :emphasize-lines: 13,17
     :linenos:
+
 
 Setting up and solving the problem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -53,7 +54,7 @@ Finally, we initialize the shape functional (*Line 17*),
 create a ROL optimization prolem (*Lines 20-36*),
 and solve it (*Line 37*).
 
-.. literalinclude:: levelset.py
+.. literalinclude:: ../../examples/levelset/levelset.py
     :linenos:
 
 Result
