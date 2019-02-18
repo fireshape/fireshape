@@ -31,7 +31,7 @@ Setting up and solving the problem
 To set up the problem, we need to:
 
 * construct the mesh of the initial guess
-  (*Line 7*, a disk of radius 1 centered at the origin)
+  (*Line 7*, a square with lower left corner in the origin and edge lenght 1)
 * choose the discretization of the control
   (*Line 8*, Lagrangian finite elements of degree 1)
 * choose the metric of the control space
@@ -53,7 +53,3 @@ Result
 
 We can inspect the result by opening the file :bash:`domain.pvd`
 with `ParaView <https://www.paraview.org/>`_.
-
-.. todo::
-
-    Add Level Set example

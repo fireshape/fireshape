@@ -6,11 +6,11 @@ class LevelsetFunctional(fs.ShapeObjective):
         super().__init__(*args, **kwargs)
 
         #physical mesh
-        mesh_m = self.Q.mesh_m
+        self.mesh_m = self.Q.mesh_m
 
         #global function defined in terms of physical coordinates
-        x,y = fd.SpatialCoordinate(mesh_m)
-        self.f = (x*x-1)*(y*y-1)
+        x,y = fd.SpatialCoordinate(self.mesh_m)
+        self.f = (x - 0.5)**2 + (y - 0.5)**2 - 0.5
 
     def value_form(self):
         #volume integral
@@ -18,5 +18,5 @@ class LevelsetFunctional(fs.ShapeObjective):
 
     def derivative_form(self, v):
         #shape differentiate J in the direction v
-        X = SpatialCoordinate(self.mesh)
-        return derivative(value_form, X, v)
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.value_form(), X, v)

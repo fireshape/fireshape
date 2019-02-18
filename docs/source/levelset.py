@@ -4,12 +4,12 @@ import ROL
 from levelsetfunctional import LevelsetFunctional
 
 #setup problem
-mesh = fs.DiskMesh(0.1, radius=1.)
+mesh = fd.UnitSquareMesh(30, 30)
 Q = fs.FeControlSpace(mesh)
 inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
-# save shape evolution in file domain.pvd
+#save shape evolution in file domain.pvd
 out = fd.File("domain.pvd")
 cb = lambda: out.write(Q.mesh_m.coordinates)
 
