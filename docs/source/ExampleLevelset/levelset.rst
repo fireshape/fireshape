@@ -19,7 +19,8 @@ In particular, we consider
     f(x,y) = (x - 0.5)^2 + (y - 0.5)^2 - 0.5\,.
 
 The domain that minimizes this shape functional is a
-disc of radius :math:`1/\sqrt{2}` centered at the origin.
+disc of radius :math:`1/\sqrt{2}` centered at :math:`(0.5,0.5)`.
+
 
 Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
