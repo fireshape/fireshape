@@ -16,5 +16,5 @@ Welcome to the documentation for Fireshape.
 
    introduction.rst
    installation.rst
-   levelset.rst
+   ExampleLevelset/levelset.rst
    stokes.rst
