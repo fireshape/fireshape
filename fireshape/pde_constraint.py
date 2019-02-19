@@ -12,6 +12,7 @@ class PdeConstraint(object):
         nsp: null-space of the state operator.
         params: parameters used by fd.solve to solve F(x) = 0.
         solution: container for solution to state equation.
+        testfunction: the testfunction used in the weak formulation.
         solution_adj: containter for solution to adjoint equation.
     """
 
@@ -42,4 +43,6 @@ class PdeConstraint(object):
         return self.solution_adj
 
     def derivative_form(self, v):
-        raise NotImplementedError
+        X = fd.SpatialCoordinate(self.mesh)
+        L = replace(Self.F, {self.testfunction: self.solution_adj})
+        raise derivative(L, X)

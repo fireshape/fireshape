@@ -29,4 +29,5 @@ class L2trackingObjective(Objective):
         w = deformation
         deriv = ((u - u_t)**2 * fd.div(w) * fd.dx
                 - 2*(u - u_t) * fd.inner(fd.grad(u_t), w) * fd.dx)
-        return deriv
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivvative(self.valueform(), X, v)

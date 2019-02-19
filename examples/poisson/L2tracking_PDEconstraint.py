@@ -18,6 +18,7 @@ class PoissonSolver(PdeConstraint):
         # Weak form of Poisson problem
         u = self.solution
         v = fd.TestFunction(self.V)
+        self.testfunction = v
         self.f = fd.Constant(4.)
         self.F = (fd.inner(fd.grad(u), fd.grad(v)) - self.f * v) * fd.dx
         self.bcs = fd.DirichletBC(self.V, 0., "on_boundary")
