@@ -103,7 +103,7 @@ def test_fe(pytestconfig):
     for inner in [fs.ElasticityInnerProduct,
                   fs.LaplaceInnerProduct,
                   fs.H1InnerProduct]:
-        
+
         run_fe_test(inner)
 
 def run_fe_test(inner, verbose=False):
