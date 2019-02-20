@@ -6,6 +6,7 @@ class PdeConstraint(object):
     Base class for PdeConstrain.
 
     An instance of this class need to declare the following variables:
+        mesh_m: the physical mesh.
         F: UFL form the represent state equation as zero search.
         V: trial and test space of state equation.
         bcs: boundary conditions of state/adjoint equation.
@@ -43,6 +44,7 @@ class PdeConstraint(object):
         return self.solution_adj
 
     def derivative_form(self, v):
-        X = fd.SpatialCoordinate(self.mesh)
-        L = replace(Self.F, {self.testfunction: self.solution_adj})
-        raise derivative(L, X)
+        """Shape directional derivative of self.F."""
+        X = fd.SpatialCoordinate(self.mesh_m)
+        L = fd.replace(self.F, {self.testfunction: self.solution_adj})
+        return fd.derivative(L, X, v)
