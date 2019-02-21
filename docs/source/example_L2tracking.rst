@@ -60,7 +60,7 @@ which characterize :math:`\mathcal{J}`.
 
 Setting up and solving the problem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-We set up and solve the problem in the script
+We set up the problem in the script
 :bash:`L2tracking_main.py`.
 
 To set up the problem, we
