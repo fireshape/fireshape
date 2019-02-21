@@ -37,6 +37,8 @@ which characterize :math:`\mathcal{J}`.
 
 Setting up and solving the problem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+We set up the problem in the script :bash:`levelset.py`.
+
 To set up the problem, we need to:
 
 * construct the mesh of the initial guess
