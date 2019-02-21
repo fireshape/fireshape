@@ -15,8 +15,3 @@ class LevelsetFunctional(fs.ShapeObjective):
     def value_form(self):
         #volume integral
         return self.f * fd.dx
-
-    def derivative_form(self, v):
-        #shape differentiate J in the direction v
-        X = fd.SpatialCoordinate(self.mesh_m)
-        return fd.derivative(self.value_form(), X, v)
