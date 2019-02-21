@@ -17,4 +17,5 @@ Welcome to the documentation for Fireshape.
    introduction.rst
    installation.rst
    example_levelset.rst
+   example_L2tracking.rst
    stokes.rst
