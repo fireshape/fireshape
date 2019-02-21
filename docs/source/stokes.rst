@@ -1,4 +1,6 @@
 .. _stokes:
+.. role:: bash(code)
+   :language: bash
 
 Stokes
 ======

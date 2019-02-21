@@ -14,8 +14,8 @@ Welcome to the documentation for Fireshape.
    :maxdepth: 2
    :hidden:
 
-   introduction.rst
-   installation.rst
-   example_levelset.rst
-   example_L2tracking.rst
-   stokes.rst
+   introduction
+   installation
+   example_levelset
+   example_L2tracking
+   stokes

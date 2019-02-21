@@ -1,4 +1,4 @@
-.. _L2tracking:
+.. _example_L2tracking:
 .. role:: bash(code)
    :language: bash
 
@@ -9,24 +9,25 @@ In this example, we show how to minimize the shape functional
 
 .. math::
 
-    \mathcal{J}(\Omega) = \int_\Omega (u(\mathbf{x}) - u_t(\mathbf{x})) \,\mathrm{d}\mathbf{x}\,.
+    \mathcal{J}(\Omega) = \int_\Omega \big(u(\mathbf{x}) - u_t(\mathbf{x})\big)^2 \,\mathrm{d}\mathbf{x}\,.
 
 where :math:`u:\mathbb{R}^2\to\mathbb{R}` is the solution to the scalar boundary value problem
 
 .. math::
 
-    -\delta u = 4 \quad \text{in }\Omega\,, \qquad u = 0 \quad \text{on } \partial\Omega
+    -\Delta u = 4 \quad \text{in }\Omega\,, \qquad u = 0 \quad \text{on } \partial\Omega
 
 
-and :math:`u:\mathbb{R}^2\to\mathbb{R}` is a target function.
+and :math:`u_t:\mathbb{R}^2\to\mathbb{R}` is a target function.
 In particular, we consider
 
 .. math::
 
     u_t(x,y) = 0.36 - (x - 0.5)^2 + (y - 0.5)^2 - 0.5\,.
 
-The domain that minimizes this shape functional is a
+Beside the empty set, the domain that minimizes this shape functional is a
 disc of radius :math:`0.6` centered at :math:`(0.5,0.5)`.
+
 
 Implementing the PDE constraint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -35,67 +36,75 @@ constraint in a python module named :bash:`L2tracking_PDEconstraint.py`.
 In the code, we highlight the lines which characterize
 the weak formulation of this boundary value problem.
 
-.. literalinclude:: ../../examples/poisson/L2tracking_PDEconstraint.py
+.. literalinclude:: ../../examples/L2tracking/L2tracking_PDEconstraint.py
     :emphasize-lines: 22,23
     :linenos:
 
-.. Note:: To solve this variational problem efficiently, we use **CG** with a multigrid preconditioner (see :bash:`self.params` in *lines 27-35*).
+.. Note:: 
+
+    To solve the discretized variational problem,
+    we use **CG** with a multigrid preconditioner
+    (see :bash:`self.params` in *Lines 27-35*).
+    For 2D problems, one can also use direct solvers.
 
 Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
-in a python module named :bash:`levelsetfunctional.py`.
-In the code, we highlight the lines
+in a python module named :bash:`L2tracking_objective.py`.lines
 which characterize :math:`\mathcal{J}`.
 
 
-.. literalinclude:: ../../examples/levelset/levelsetfunctional.py
-    :emphasize-lines: 13,17
+.. literalinclude:: ../../examples/L2tracking/L2tracking_objective.py
+    :emphasize-lines: 3,13,18
     :linenos:
 
 Setting up and solving the problem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To set up the problem, we need to:
+We set up and solve the problem in the script
+:bash:`L2tracking_main.py`.
+
+To set up the problem, we
 
 * construct the mesh of the initial guess
-  (*Line 7*, a unit square with lower left corner in the origin)
+  (*Line 8*, a unit square with lower left corner in the origin)
 * choose the discretization of the control
-  (*Line 8*, Lagrangian finite elements of degree 1)
+  (*Line 9*, Lagrangian finite elements of degree 1)
 * choose the metric of the control space
-  (*Line 9*, :math:`H^1`-seminorm)
+  (*Line 10*, based on linear elasticity energy norm)
+* initialize the PDE contraint on the physical mesh :bash:`mesh_m` (*Line 15*)
+* specify to save the function :math:`u` after each iteration
+  in the file :bash:`u.pvd` by setting the function ``cb``
+  appropriately (*Lines 18-21*).
+* initialize the shape functional (*Line 24*),
+  and the reduce shape functional (*Line 25*),
+* create a ROL optimization prolem (*Lines 28-50*),
+  and solve it (*Line 51*).
 
-Then, we specify to save the mesh after each iteration
-in the file :bash:`domain.pvd`
-by setting the function ``cb`` appropriately (*Lines 13-14*).
-
-Finally, we initialize the shape functional (*Line 17*),
-create a ROL optimization prolem (*Lines 20-36*),
-and solve it (*Line 37*).
-
-.. literalinclude:: ../../examples/levelset/levelset.py
+.. literalinclude:: ../../examples/L2tracking/L2tracking_main.py
     :linenos:
 
 Result
 ^^^^^^
-Typing :bash:`python3 levelset.py` in the terminal returns:
+Typing :bash:`python3 L2tracking_main.py` in the terminal returns:
 
 .. code-block:: none
 
-    Quasi-Newton Method with Limited-Memory BFGS
-    Line Search: Cubic Interpolation satisfying Strong Wolfe Conditions
-      iter  value          gnorm          snorm          #fval     #grad     ls_#fval  ls_#grad
-      0     -3.333333e-01  2.426719e-01
-      1     -3.765250e-01  1.121533e-01   2.426719e-01   2         2         1         0
-      2     -3.886767e-01  8.040797e-02   2.525978e-01   3         3         1         0
-      3     -3.919733e-01  2.331695e-02   6.622577e-02   4         4         1         0
-      4     -3.926208e-01  4.331993e-03   5.628606e-02   5         5         1         0
-      5     -3.926603e-01  2.906313e-03   1.239420e-02   6         6         1         0
-      6     -3.926945e-01  9.456530e-04   2.100085e-02   7         7         1         0
-      7     -3.926980e-01  3.102278e-04   6.952015e-03   8         8         1         0
-      8     -3.926987e-01  1.778454e-04   3.840828e-03   9         9         1         0
-      9     -3.926989e-01  9.001788e-05   2.672387e-03   10        10        1         0
+    Dogleg Trust-Region Solver with Limited-Memory BFGS Hessian Approximation
+      iter  value          gnorm          snorm          delta          #fval     #grad     tr_flag
+      0     3.984416e-03   4.253880e-02                  4.253880e-02
+      1     2.380406e-03   3.243635e-02   4.253880e-02   1.063470e-01   3         2         0
+      2     8.449408e-04   1.731817e-02   1.063470e-01   1.063470e-01   4         3         0
+      3     4.944712e-04   8.530990e-03   2.919058e-02   2.658675e-01   5         4         0
+      4     1.783406e-04   5.042658e-03   5.182347e-02   6.646687e-01   6         5         0
+      5     2.395524e-05   1.342447e-03   5.472223e-02   1.661672e+00   7         6         0
+      6     6.994156e-06   4.090116e-04   2.218345e-02   4.154180e+00   8         7         0
+      7     4.011765e-06   2.961338e-04   1.009231e-02   1.038545e+01   9         8         0
+      8     1.170509e-06   2.423493e-04   1.715142e-02   2.596362e+01   10        9         0
+      9     1.170509e-06   2.423493e-04   1.372960e-02   3.432399e-03   11        9         2
+      10    1.085373e-06   4.112702e-04   3.432399e-03   3.432399e-03   12        10        0
+      11    7.428449e-07   1.090433e-04   3.432399e-03   8.580998e-03   13        11        0
+      12    6.755854e-07   8.358801e-05   2.034473e-03   2.145249e-02   14        12        0
     Optimization Terminated with Status: Converged
 
-
-We can inspect the result by opening the file :bash:`domain.pvd`
+We can inspect the result by opening the file :bash:`u.pvd`
 with `ParaView <https://www.paraview.org/>`_.
