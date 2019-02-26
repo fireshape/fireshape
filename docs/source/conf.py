@@ -20,7 +20,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Fireshape'
-copyright = '2018, Alberto Paganini and Florian Wechsung'
+copyright = '2019, Alberto Paganini and Florian Wechsung'
 author = 'Alberto Paganini and Florian Wechsung'
 
 # The short X.Y version
