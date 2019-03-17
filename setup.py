@@ -12,5 +12,5 @@ setup(
     long_description='',
     packages=['fireshape'],
     zip_safe=False,
-    install_requires=["roltrilinos", "rol"]
+    install_requires=["roltrilinos", "rol", "scipy"]
 )

@@ -1,4 +1,5 @@
 from .innerproduct import InnerProduct
+from .boundary_extension import ElasticityExtension
 import ROL
 import firedrake as fd
 
@@ -63,7 +64,7 @@ class ControlSpace(object):
         Update the interpolant self.T with q
         """
 
-        self.interpolate(q, self.T)
+        q.to_coordinatefield(self.T)
         self.T += self.id
 
     def get_zero_vec(self):
@@ -484,10 +485,11 @@ class ControlVector(ROL.Vector):
     plus, scale, clone, dot, axpy, set.
     """
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None):
+                 data=None, boundary_extension=None):
         super().__init__()
         self.controlspace = controlspace
         self.inner_product = inner_product
+        self.boundary_extension = boundary_extension
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -497,6 +499,32 @@ class ControlVector(ROL.Vector):
             self.fun = data
         else:
             self.fun = None
+
+
+    def from_first_derivative(self, fe_deriv):
+        if self.boundary_extension is not None:
+            residual_smoothed = fe_deriv.copy(deepcopy=True)
+            p1 = fe_deriv
+            p1 *= -1
+            self.boundary_extension.solve_homogeneous_adjoint(p1, residual_smoothed)
+            self.boundary_extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+            residual_smoothed -= p1
+            self.controlspace.restrict(residual_smoothed, self)
+        else:
+            self.controlspace.restrict(fe_deriv, self)
+
+
+    def to_coordinatefield(self, out):
+        self.controlspace.interpolate(self, out)
+        if self.boundary_extension is not None:
+            self.boundary_extension.extend(out, out)
+
+    def apply_riesz_map(self):
+        """
+        Maps this vector into the dual space.
+        Overwrites the content.
+        """
+        self.inner_product.riesz_map(self, self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
@@ -526,16 +554,10 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product)
+        res = ControlVector(self.controlspace, self.inner_product, \
+                            boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
-
-    def apply_riesz_map(self):
-        """
-        Maps this vector into the dual space.
-        Overwrites the content.
-        """
-        self.inner_product.riesz_map(self, self)
 
     def dot(self, v):
         """Inner product between self and v."""
