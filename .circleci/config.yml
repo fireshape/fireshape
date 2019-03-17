@@ -8,9 +8,9 @@ jobs:
 
     steps:
       - checkout
-      - run: . /firedrake/bin/activate; pip3 install wheel --upgrade
-      - run: . /firedrake/bin/activate; pip3 install scipy
-      - run: . /firedrake/bin/activate; pip3 install roltrilinos
-      - run: . /firedrake/bin/activate; pip3 install ROL
-      - run: . /firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; pytest
+      - run: . /home/firedrake/firedrake/bin/activate; pip3 install wheel --upgrade
+      - run: . /home/firedrake/firedrake/bin/activate; pip3 install scipy
+      - run: . /home/firedrake/firedrake/bin/activate; pip3 install roltrilinos
+      - run: . /home/firedrake/firedrake/bin/activate; pip3 install ROL
+      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; pytest
             

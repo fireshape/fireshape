@@ -8,18 +8,17 @@ Point(3) = {1, 1, 0, 1.0};
 //+
 Point(4) = {-0, 1, 0, 1.0};
 //+
-Line(1) = {1, 1};
+Line(1) = {1, 2};
 //+
-Line(2) = {1, 2};
+Line(2) = {2, 3};
 //+
-Line(3) = {2, 3};
+Line(3) = {3, 4};
 //+
-Line(4) = {3, 4};
+Line(4) = {4, 1};
 //+
-Line(5) = {4, 1};
-//+
-Line Loop(6) = {4, 5, 2, 3};
+Line Loop(6) = {3, 4, 1, 2};
 //+
 Plane Surface(7) = {6};
 //+
+Physical Line("Boundary") = {1, 2, 3, 4};
 Physical Surface("Interior") = {7};
