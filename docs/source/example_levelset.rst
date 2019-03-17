@@ -1,4 +1,4 @@
-.. _levelset:
+.. _example_levelset:
 .. role:: bash(code)
    :language: bash
 
