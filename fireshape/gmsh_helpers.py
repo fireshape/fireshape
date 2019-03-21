@@ -31,7 +31,7 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
     if platform == "linux" or platform == "linux2":
         if comm.size == 1:
             call(["gmsh", inputFile, "-o", outputFile, "-%i" % dimension,
-                  "-clscale", "%f" % scale, "-smooth", "%i" % smooth])
+                  "-clscale", "%f" % scale, "-smooth", "%i" % smooth, "-format", "msh2"])
         else:
             if comm.rank == 0:
                 """
@@ -41,7 +41,7 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
                 COMM_SELF.Spawn('gmsh', args=[
                     inputFile, "-o", outputFile,
                     "-%i" % dimension, "-clscale", "%f" % scale, "-smooth",
-                    "%i" % smooth
+                    "%i" % smooth, "-format", "msh2"
                     ])
                 oldsize = 0
                 time.sleep(2)
@@ -62,7 +62,7 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
             comm.Barrier()
     elif platform == "darwin":
         if comm.rank == 0:
-            os.system("gmsh %s -o %s -%i -clscale %f -smooth %i" % (
+            os.system("gmsh %s -o %s -%i -clscale %f -smooth %i -format msh2" % (
                 inputFile, outputFile, dimension, scale, smooth
                 ))
         comm.Barrier()
