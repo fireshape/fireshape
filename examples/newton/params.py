@@ -1,5 +1,6 @@
 import ROL
 
+
 def get_params(step_type, max_iter, ksp_type="GMRES"):
     params_dict = {
         'General': {
@@ -31,8 +32,8 @@ def get_params(step_type, max_iter, ksp_type="GMRES"):
             }
         },
         'Status Test': {
-            'Gradient Tolerance': 1e-11,
-            'Step Tolerance': 1e-10,
+            'Gradient Tolerance': 1e-13,
+            'Step Tolerance': 1e-13,
             'Iteration Limit': max_iter
         }
     }
