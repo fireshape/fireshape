@@ -9,7 +9,7 @@ import argparse
 
 """
 call with:
-    python3 stokes_newton.py --bfgs_iter 6 --newton_iter 10 #######
+    python3 levelset_newton.py --bfgs_iter 6 --newton_iter 10 #######
 """
 
 parser = argparse.ArgumentParser(add_help=False)
