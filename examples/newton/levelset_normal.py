@@ -1,15 +1,17 @@
-from firedrake import SpatialCoordinate, sqrt
+from firedrake import SpatialCoordinate, sqrt # noqa
 import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
 import ROL
 from params import get_params
+import matplotlib.pyplot as plt
 
-mesh = fs.DiskMesh(0.05, radius=1.5)
+mesh = fs.DiskMesh(0.1, radius=1.5)
 gradient_norms = []
 out = fd.File("domain.pvd")
 for i in range(2):
-    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=False, extension_tangential=True)
+    Q = fs.FeScalarControlSpace(mesh, hessian_tangential=True,
+                                extension_tangential=True)
     inner = fs.SurfaceInnerProduct(Q)
 
     mesh_m = Q.mesh_m
@@ -22,7 +24,7 @@ for i in range(2):
     # * (sqrt(b * x**2 + (y - a)**2) - 1) \
     # * (sqrt(b * x**2 + (y + a)**2) - 1) - 0.01
 
-    f = (x**2 + y**2 - 1) * (x**2 + (y-1)**2 - 0.5) - 1e-6
+    f = (x**2 + y**2 - 1) * (x**2 + (y-1)**2 - 0.5) - 1e-2
 
     q = fs.ControlVector(Q, inner)
 
@@ -32,8 +34,8 @@ for i in range(2):
     J.gradient(g, q, None)
     g.scale(-0.3)
     J.update(g, None, 1)
-    # J.checkGradient(q, g, 9, 1)
-    # J.checkHessVec(q, g, 7, 1)
+    J.checkGradient(q, g, 9, 1)
+    J.checkHessVec(q, g, 7, 1)
 
     def cb():
         J.gradient(g, None, None)
@@ -54,17 +56,16 @@ for i in range(2):
     # J.checkGradient(q, g, 9, 1)
     mesh = mesh_m
 
-import matplotlib.pyplot as plt
 plt.figure()
-plt.semilogy([gradient_norms[i+1]/gradient_norms[i] for i in range(len(gradient_norms)-1)])
-plt.show()
-VV = fd.VectorFunctionSpace(mesh, "CG", 1)
-V = fd.FunctionSpace(mesh, "CG", 1)
+plt.semilogy(gradient_norms)
+plt.savefig("convergence.pdf")
+# VV = fd.VectorFunctionSpace(mesh, "CG", 1)
+# V = fd.FunctionSpace(mesh, "CG", 1)
 
-extension = fs.NormalExtension(VV, allow_tangential=False)
+# extension = fs.NormalExtension(VV, allow_tangential=False)
 
-u = fd.Function(V)
-out = fd.Function(VV)
-u.interpolate(fd.Constant(1.0))
-extension.extend(u, out)
-fd.File("ext.pvd").write(out)
+# u = fd.Function(V)
+# out = fd.Function(VV)
+# u.interpolate(fd.Constant(1.0))
+# extension.extend(u, out)
+# fd.File("ext.pvd").write(out)
