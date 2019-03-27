@@ -20,14 +20,15 @@ class NavierStokesSolver(PdeConstraint):
         self.viscosity = 1./400.
         nu = self.viscosity
 
-        # Weak form of Poisson problem
+        # Weak form of incompressible Navier-Stokes equations
         z = self.solution
         u, p = fd.split(z)
         test = self.testfunction
         v, q = fd.split(test)
-
         self.F = nu*fd.inner(fd.grad(u), fd.grad(v))*fd.dx - p*fd.div(v)*fd.dx \
                  + fd.inner(fd.dot(fd.grad(u), u), v)*fd.dx + fd.div(u)*q*fd.dx
+
+        # Dirichlet Boundary conditions
         X = fd.SpatialCoordinate(self.mesh_m)
         uin = 6 * fd.as_vector([(1-X[1])*X[1], 0])
         self.bcs = [fd.DirichletBC(self.V.sub(0), 0., [3, 4]),

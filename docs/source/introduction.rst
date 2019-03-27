@@ -43,6 +43,9 @@ You can find information on how to install Fireshape on the page :ref:`installat
 On the page :ref:`example_levelset`, we show how to solve a toy shape optimization problem.
 
 On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
-constrained to a boundary value problem.
+constrained to a linear boundary value problem.
 
-On the page :ref:`stokes`, we show how to solve a more challenging problem.
+On the page :ref:`example_pipe`, we show how to solve a shape optimization problem
+constrained to a nonlinear boundary value problem and a volume constraint.
+
+.. On the page :ref:`stokes`, we show how to solve a more challenging problem.
