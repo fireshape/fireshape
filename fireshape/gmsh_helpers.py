@@ -69,18 +69,18 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
     else:
         raise SystemError("What are you using if not linux or macOS?!")
 
-def DiskMesh(clscale, radius=1.):
+def DiskMesh(clscale, radius=1., shiftx=0, shifty=0):
     geo_code = """
-Point(1) = {-0, 0, 0, 1.0};
-Point(2) = {%f, 0, 0, 1.0};
-Point(3) = {-%f, 0, 0, 1.0};
+Point(1) = {%f, %f, 0, 1.0};
+Point(2) = {%f, %f, 0, 1.0};
+Point(3) = {%f, %f, 0, 1.0};
 Circle(4) = {2, 1, 3};
 Circle(5) = {3, 1, 2};
 Line Loop(6) = {4, 5};
 Plane Surface(7) = {6};
 Physical Line("Boundary") = {6};
 Physical Surface("Disk") = {7};
-    """ % ((radius,)*2)
+    """ % ((shiftx, shifty, radius+shiftx, shifty, -radius+shiftx, shifty))
     return mesh_from_gmsh_code(geo_code, clscale=clscale, dim=2)
 
 
