@@ -37,7 +37,7 @@ class NavierStokesSolver(PdeConstraint):
         # PDE-solver parameters
         self.nsp = None
         self.params = {"mat_type": "aij", "pc_type": "lu",
-                "pc_factor_mat_solver_package": "mumps"}
+                "pc_factor_mat_solver_type": "mumps"}
 
         stateproblem = fd.NonlinearVariationalProblem(self.F, self.solution, bcs=self.bcs)
         self.stateproblem = fd.NonlinearVariationalSolver(stateproblem, solver_parameters=self.params)
