@@ -6,6 +6,7 @@ from pipe_objective import PipeObjective
 
 #setup problem
 mesh = fd.Mesh("pipe.msh")
+
 Q = fs.FeControlSpace(mesh)
 inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
 q = fs.ControlVector(Q, inner)
@@ -43,7 +44,7 @@ emul = ROL.StdVector(1)
 params_dict = {
     'General': {
         'Secant': {'Type': 'Limited-Memory BFGS',
-                   'Maximum Storage': 10}},
+                   'Maximum Storage': 5}},
     'Step': {
         'Type': 'Augmented Lagrangian',
         'Line Search': {'Descent Method': {
@@ -51,14 +52,14 @@ params_dict = {
         },
         'Augmented Lagrangian': {
             'Subproblem Step Type': 'Line Search',
-            'Penalty Parameter Growth Factor': 2.,
+            'Penalty Parameter Growth Factor': 1.05,
             'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 20
+            'Subproblem Iteration Limit': 5
         }},
     'Status Test': {
         'Gradient Tolerance': 1e-4,
-        'Step Tolerance': 1e-5,
-        'Iteration Limit': 15}
+        'Step Tolerance': 1e-3,
+        'Iteration Limit': 6}
 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
