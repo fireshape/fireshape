@@ -1,2 +1,2 @@
 all:
-	gmsh -2 -clscale 0.05 pipe.geo
+	gmsh -2 -clscale 0.1 pipe.geo
