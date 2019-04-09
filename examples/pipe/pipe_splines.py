@@ -6,8 +6,11 @@ from pipe_objective import PipeObjective
 
 #setup problem
 mesh = fd.Mesh("pipe.msh")
-Q = fs.FeControlSpace(mesh)
-inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
+bbox = [(1.5, 12.), (0, 6.)]
+orders = [4, 4]
+levels = [4, 3]
+Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, boundary_regularities=[2, 0])
+inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 #setup PDE constraint
