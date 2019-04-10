@@ -64,9 +64,9 @@ params_dict = {
             'Subproblem Iteration Limit': 5
         }},
     'Status Test': {
-        'Gradient Tolerance': 1e-4,
-        'Step Tolerance': 1e-3,
-        'Iteration Limit': 6}
+        'Gradient Tolerance': 1e-2,
+        'Step Tolerance': 1e-1,
+        'Iteration Limit': 20}
 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
