@@ -21,9 +21,9 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
         clscale *= 4
 
     if dim == 2:
-        mesh = fs.DiskMesh(0.1)
+        mesh = fs.DiskMesh(clscale)
     elif dim == 3:
-        mesh = fs.SphereMesh(0.2)
+        mesh = fs.SphereMesh(clscale)
     else:
         raise NotImplementedError
 
