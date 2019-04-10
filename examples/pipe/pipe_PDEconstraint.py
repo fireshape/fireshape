@@ -1,15 +1,17 @@
 import firedrake as fd
 from fireshape import PdeConstraint
 
+
 class NavierStokesSolver(PdeConstraint):
     """Incompressible Navier-Stokes as PDE constraint."""
+
     def __init__(self, mesh_m):
         super().__init__()
         self.mesh_m = mesh_m
 
         # Setup problem
         self.V = fd.VectorFunctionSpace(self.mesh_m, "CG", 2) \
-                 * fd.FunctionSpace(self.mesh_m, "CG", 1)
+            * fd.FunctionSpace(self.mesh_m, "CG", 1)
 
         # Preallocate solution variables for state and adjoint equations
         self.solution = fd.Function(self.V, name="State")
@@ -26,7 +28,7 @@ class NavierStokesSolver(PdeConstraint):
         test = self.testfunction
         v, q = fd.split(test)
         self.F = nu*fd.inner(fd.grad(u), fd.grad(v))*fd.dx - p*fd.div(v)*fd.dx \
-                 + fd.inner(fd.dot(fd.grad(u), u), v)*fd.dx + fd.div(u)*q*fd.dx
+            + fd.inner(fd.dot(fd.grad(u), u), v)*fd.dx + fd.div(u)*q*fd.dx
 
         # Dirichlet Boundary conditions
         X = fd.SpatialCoordinate(self.mesh_m)
@@ -37,7 +39,9 @@ class NavierStokesSolver(PdeConstraint):
         # PDE-solver parameters
         self.nsp = None
         self.params = {"mat_type": "aij", "pc_type": "lu",
-                "pc_factor_mat_solver_type": "mumps"}
+                       "pc_factor_mat_solver_type": "mumps"}
 
-        stateproblem_ = fd.NonlinearVariationalProblem(self.F, self.solution, bcs=self.bcs)
-        self.stateproblem = fd.NonlinearVariationalSolver(stateproblem_, solver_parameters=self.params)
+        stateproblem_ = fd.NonlinearVariationalProblem(
+            self.F, self.solution, bcs=self.bcs)
+        self.stateproblem = fd.NonlinearVariationalSolver(
+            stateproblem_, solver_parameters=self.params)
