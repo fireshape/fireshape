@@ -40,7 +40,7 @@ The geometry of the initial domain is described in the following
 .. literalinclude:: ../../examples/pipe/pipe.geo
     :linenos:
 
-The mesh can be generated typing :bash:`gmsh -2 -clscale 0.1 pipe.geo`
+The mesh can be generated typing :bash:`gmsh -2 -clscale 0.1 -format msh2 pipe.geo`
 in the terminal.
 
 
