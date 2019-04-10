@@ -4,42 +4,50 @@ import ROL
 from pipe_PDEconstraint import NavierStokesSolver
 from pipe_objective import PipeObjective
 
-#setup problem
+# setup problem
 mesh = fd.Mesh("pipe.msh")
 Q = fs.FeControlSpace(mesh)
 inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
 q = fs.ControlVector(Q, inner)
 
-#setup PDE constraint
+# setup PDE constraint
 e = NavierStokesSolver(Q.mesh_m)
 
-#save state variable evolution in file u.pvd
+# save state variable evolution in file u.pvd
 e.solve()
 out = fd.File("u.pvd")
-cb = lambda: out.write(e.solution.split()[0])
+
+
+def cb(): return out.write(e.solution.split()[0])
+
+
 cb()
 
-#create PDEconstrained objective functional
+# create PDEconstrained objective functional
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
-#volume constraint
+# volume constraint
+
+
 class VolumeFunctional(fs.ShapeObjective):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        #physical mesh
+        # physical mesh
         self.mesh_m = self.Q.mesh_m
 
     def value_form(self):
-        #volume integral
+        # volume integral
         return fd.Constant(1.0) * fd.dx(domain=self.mesh_m)
+
+
 vol = VolumeFunctional(Q)
 initial_vol = vol.value(q, None)
 econ = fs.EqualityConstraint([vol], target_value=[initial_vol])
 emul = ROL.StdVector(1)
 
-#ROL parameters
+# ROL parameters
 params_dict = {
     'General': {
         'Secant': {'Type': 'Limited-Memory BFGS',
