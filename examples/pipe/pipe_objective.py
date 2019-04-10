@@ -2,8 +2,10 @@ import firedrake as fd
 from fireshape import ShapeObjective
 from pipe_PDEconstraint import NavierStokesSolver
 
+
 class PipeObjective(ShapeObjective):
     """L2 tracking functional for Poisson problem."""
+
     def __init__(self, pde_solver: NavierStokesSolver, *args,  **kwargs):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
