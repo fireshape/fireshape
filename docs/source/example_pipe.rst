@@ -129,10 +129,10 @@ Typing :bash:`python3 pipe_main.py` in the terminal returns:
 
 .. code-block:: none
 
-    Augmented Lagrangian Solver
+     Augmented Lagrangian Solver
     Subproblem Solver: Line Search
       iter  fval           cnorm          gLnorm         snorm          penalty   feasTol   optTol    #fval   #grad   #cval   subIter
-      0     6.122697e-01   0.000000e+00   4.803481e-01                  1.00e+01  1.26e-01  4.80e-03
+      0     6.122697e-01   0.000000e+00   4.803481e-01                  1.00e+01  1.26e-01  1.00e-02
 
     Quasi-Newton Method with Limited-Memory BFGS
     Line Search: Cubic Interpolation satisfying Strong Wolfe Conditions
@@ -176,36 +176,11 @@ Typing :bash:`python3 pipe_main.py` in the terminal returns:
       4     4.170337e-01   1.800966e-03   6.031019e-03   6         5         1         0
       5     4.170109e-01   2.404397e-03   2.167103e-02   7         6         1         0
     Optimization Terminated with Status: Iteration Limit Exceeded
-      4     4.169879e-01   4.340375e-04   9.207352e-03   4.088152e-02   1.05e+01  6.22e-02  8.64e-05  29      22      41      5
-
-    Quasi-Newton Method with Limited-Memory BFGS
-    Line Search: Cubic Interpolation satisfying Strong Wolfe Conditions
-      iter  value          gnorm          snorm          #fval     #grad     ls_#fval  ls_#grad
-      0     4.170110e-01   2.778616e-03
-      1     4.170097e-01   4.301760e-03   9.921214e-04   3         2         2         0
-      2     4.170078e-01   3.938541e-03   8.334239e-04   4         3         1         0
-      3     4.169930e-01   2.105004e-03   1.183851e-02   5         4         1         0
-      4     4.169876e-01   2.289890e-03   5.421771e-03   6         5         1         0
-      5     4.169613e-01   4.067340e-03   2.904419e-02   7         6         1         0
-    Optimization Terminated with Status: Iteration Limit Exceeded
-      5     4.169267e-01   6.476467e-04   1.557539e-02   4.814567e-02   1.05e+01  4.92e-02  8.23e-06  37      28      53      5
-
-    Quasi-Newton Method with Limited-Memory BFGS
-    Line Search: Cubic Interpolation satisfying Strong Wolfe Conditions
-      iter  value          gnorm          snorm          #fval     #grad     ls_#fval  ls_#grad
-      0     4.169616e-01   5.250610e-03
-      1     4.169594e-01   4.103997e-03   8.471029e-04   3         2         2         0
-      2     4.169577e-01   3.953634e-03   5.215962e-04   4         3         1         0
-      3     4.169292e-01   1.663547e-03   1.651461e-02   5         4         1         0
-      4     4.169212e-01   2.091883e-03   7.624444e-03   6         5         1         0
-      5     4.168917e-01   3.977605e-03   3.308807e-02   7         6         1         0
-    Optimization Terminated with Status: Iteration Limit Exceeded
-      6     4.169006e-01   1.657174e-04   1.523176e-02   5.589063e-02   1.05e+01  3.89e-02  1.00e-06  45      34      65      5
-    Optimization Terminated with Status: Iteration Limit Exceeded
-    -0.00016571737260306918
-
+      4     4.169879e-01   4.340375e-04   9.207352e-03   4.088152e-02   1.05e+01  6.22e-02  1.00e-04  29      22      41      5
+    Optimization Terminated with Status: Step Tolerance Met
+    0.00043403754929016714
 
 We can inspect the result by opening the file :bash:`u.pvd`
 with `ParaView <https://www.paraview.org/>`_. We see that the
 difference between the volume of the initial guess and of the
-retrieved optimized design is less than :math:`1.7\cdot 10^{-4}`.
+retrieved optimized design is less than :math:`5\cdot 10^{-4}`.
