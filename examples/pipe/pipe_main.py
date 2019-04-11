@@ -11,16 +11,13 @@ inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
 q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
-e = NavierStokesSolver(Q.mesh_m)
+viscosity = fd.Constant(1./400.)
+e = NavierStokesSolver(Q.mesh_m, viscosity)
 
-# save state variable evolution in file u.pvd
+    # save state variable evolution in file u.pvd
 e.solve()
 out = fd.File("u.pvd")
-
-
 def cb(): return out.write(e.solution.split()[0])
-
-
 cb()
 
 # create PDEconstrained objective functional
@@ -28,8 +25,6 @@ J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
 # volume constraint
-
-
 class VolumeFunctional(fs.ShapeObjective):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -66,6 +61,7 @@ params_dict = {
     'Status Test': {
         'Gradient Tolerance': 1e-2,
         'Step Tolerance': 1e-1,
+        'Constraint Tolerance': 1e-3,
         'Iteration Limit': 20}
 }
 params = ROL.ParameterList(params_dict, "Parameters")
