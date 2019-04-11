@@ -35,4 +35,4 @@ class PoissonSolver(PdeConstraint):
                       }
 
         stateproblem = fd.NonlinearVariationalProblem(self.F, self.solution, bcs=self.bcs)
-        self.stateproblem = fd.NonlinearVariationalSolver(stateproblem, solver_parameters=self.params)
+        self.statesolver = fd.NonlinearVariationalSolver(stateproblem, solver_parameters=self.params)

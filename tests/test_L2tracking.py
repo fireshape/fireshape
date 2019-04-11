@@ -40,8 +40,8 @@ class PoissonSolver(PdeConstraint):
                 "ksp_stol": 1e-15,
                       }   
 
-        stateproblem_ = fd.NonlinearVariationalProblem(self.F, self.solution, bcs=self.bcs)
-        self.stateproblem = fd.NonlinearVariationalSolver(stateproblem_, solver_parameters=self.params)
+        stateproblem = fd.NonlinearVariationalProblem(self.F, self.solution, bcs=self.bcs)
+        self.statesolver = fd.NonlinearVariationalSolver(stateproblem, solver_parameters=self.params)
 
 class L2trackingObjective(ShapeObjective):
     """L2 tracking functional for Poisson problem."""

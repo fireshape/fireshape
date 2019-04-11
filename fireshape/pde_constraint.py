@@ -25,7 +25,7 @@ class PdeConstraint(object):
     def solve(self):
         """Abstract method that solves state equation."""
         self.num_solves += 1
-        self.stateproblem.solve()
+        self.statesolver.solve()
         return self.solution
 
     def solve_adjoint(self, J):
