@@ -5,7 +5,7 @@ from fireshape import PdeConstraint
 class NavierStokesSolver(PdeConstraint):
     """Incompressible Navier-Stokes as PDE constraint."""
 
-    def __init__(self, mesh_m):
+    def __init__(self, mesh_m, viscosity):
         super().__init__()
         self.mesh_m = mesh_m
 
@@ -19,7 +19,7 @@ class NavierStokesSolver(PdeConstraint):
         self.solution_adj = fd.Function(self.V, name="Adjoint")
 
         # Define viscosity parameter
-        self.viscosity = 1./400.
+        self.viscosity = viscosity
         nu = self.viscosity
 
         # Weak form of incompressible Navier-Stokes equations
@@ -32,7 +32,14 @@ class NavierStokesSolver(PdeConstraint):
 
         # Dirichlet Boundary conditions
         X = fd.SpatialCoordinate(self.mesh_m)
-        uin = 6 * fd.as_vector([(1-X[1])*X[1], 0])
+        dim = self.mesh_m.topological_dimension()
+        if dim == 2:
+            uin = 6 * fd.as_vector([(1-X[1])*X[1], 0])
+        elif dim == 3:
+            r = fd.sqrt(X[0]**2+X[1]**2)
+            uin = fd.as_vector([0, 0, 1-(2*r)**2])
+        else:
+            raise NotImplementedError
         self.bcs = [fd.DirichletBC(self.V.sub(0), 0., [3, 4]),
                     fd.DirichletBC(self.V.sub(0), uin, 1)]
 
