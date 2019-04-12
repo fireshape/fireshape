@@ -96,14 +96,9 @@ class UflInnerProduct(InnerProduct):
             import numpy as np
             zero_rows = []
 
-            global_num_bsplines = ITAI.size[0]
-            comm = V.comm
-            local_size_if_perfectly_divisible = global_num_bsplines//comm.size
-            index_offset = comm.rank * local_size_if_perfectly_divisible + min(comm.rank, global_num_bsplines % comm.size)
             # if there are zero-rows, replace them with rows that
             # have 1 on the diagonal entry
-            for row in range(ITAI.sizes[0][0]):
-                row = row + index_offset
+            for row in range(*ITAI.getOwnershipRange()):
                 (cols, vals) = ITAI.getRow(row)
                 valnorm = np.linalg.norm(vals)
                 if valnorm < 1e-13:
