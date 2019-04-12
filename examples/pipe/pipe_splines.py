@@ -33,11 +33,7 @@ e = NavierStokesSolver(Q.mesh_m, viscosity)
 # save state variable evolution in file u.pvd
 e.solve()
 out = fd.File("u.pvd")
-
-
 def cb(): return out.write(e.solution.split()[0])
-
-
 cb()
 
 # create PDEconstrained objective functional
@@ -45,8 +41,6 @@ J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
 # volume constraint
-
-
 class VolumeFunctional(fs.ShapeObjective):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -76,7 +70,7 @@ params_dict = {
         },
         'Augmented Lagrangian': {
             'Subproblem Step Type': 'Line Search',
-            'Penalty Parameter Growth Factor': 1.5,
+            'Penalty Parameter Growth Factor': 1.2,
             'Print Intermediate Optimization History': True,
             'Subproblem Iteration Limit': 10
         }},

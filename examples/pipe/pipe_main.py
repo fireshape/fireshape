@@ -11,10 +11,16 @@ inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
 q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
-viscosity = fd.Constant(1./400.)
+dim = mesh.topological_dimension()
+if dim == 2:
+    viscosity = fd.Constant(1./400.)
+elif dim ==3:
+    viscosity = fd.Constant(1/10.)
+else:
+    raise NotImplementedError
 e = NavierStokesSolver(Q.mesh_m, viscosity)
 
-    # save state variable evolution in file u.pvd
+# save state variable evolution in file u.pvd
 e.solve()
 out = fd.File("u.pvd")
 def cb(): return out.write(e.solution.split()[0])
@@ -54,7 +60,7 @@ params_dict = {
         },
         'Augmented Lagrangian': {
             'Subproblem Step Type': 'Line Search',
-            'Penalty Parameter Growth Factor': 1.05,
+            'Penalty Parameter Growth Factor': 1.04,
             'Print Intermediate Optimization History': True,
             'Subproblem Iteration Limit': 5
         }},
