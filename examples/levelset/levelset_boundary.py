@@ -4,27 +4,24 @@ import fireshape.zoo as fsz
 import ROL
 
 dim = 2
-n = 4
-# mesh = fd.UnitSquareMesh(n, n)
-mesh = fd.Mesh("UnitSquareCrossed.msh")
-mesh = fd.MeshHierarchy(mesh, 5)[-1]
-
-Q = fs.FeBoundaryControlSpace(mesh)
-inner = fs.SurfaceInnerProduct(Q)
-
+mesh = fs.DiskMesh(0.4)
+Q = fs.FeMultiGridControlSpace(mesh, refinements=4, order=2)
 # Q = fs.FeControlSpace(mesh)
-# inner = fs.LaplaceInnerProduct(Q)
+# inner = fs.SurfaceInnerProduct(Q)
+inner = fs.ElasticityInnerProduct(Q)
+extension = fs.ElasticityExtension(Q.V_r, direct_solve=True)
+
 
 mesh_m = Q.mesh_m
 
 if dim == 2:
     (x, y) = fd.SpatialCoordinate(mesh_m)
-    f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+    f = (pow(x, 2))+pow(0.5*y, 2) - 1.
 else:
     (x, y, z) = fd.SpatialCoordinate(mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
 
-q = fs.ControlVector(Q, inner)
+q = fs.ControlVector(Q, inner, boundary_extension=extension)
 out = fd.File("domain.pvd")
 J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 J.cb()
@@ -45,10 +42,9 @@ params_dict = {
         'Line Search': {'Descent Method': {
             'Type': 'Quasi-Newton Step'}}},
     'Status Test': {
-        'Gradient Tolerance': 1e-4,
-        'Relative Gradient Tolerance': 1e-3,
-        'Step Tolerance': 1e-10, 'Relative Step Tolerance': 1e-10,
-        'Iteration Limit': 35}}
+        'Gradient Tolerance': 1e-5,
+        'Step Tolerance': 1e-10,
+        'Iteration Limit': 100}}
 
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)

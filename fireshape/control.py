@@ -4,7 +4,7 @@ import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "FeBoundaryControlSpace"]
+           "BsplineControlSpace", "ControlVector"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -64,7 +64,7 @@ class ControlSpace(object):
         Update the interpolant self.T with q
         """
 
-        self.interpolate(q, self.T)
+        q.to_coordinatefield(self.T)
         self.T += self.id
 
     def get_zero_vec(self):
@@ -115,42 +115,6 @@ class FeControlSpace(ControlSpace):
 
     def interpolate(self, vector, out):
         out.assign(vector.fun)
-
-    def get_zero_vec(self):
-        fun = fd.Function(self.V_r)
-        fun *= 0.
-        return fun
-
-    def get_space_for_inner(self):
-        return (self.V_r, None)
-
-
-class FeBoundaryControlSpace(ControlSpace):
-
-    def __init__(self, mesh_r):
-        # Create mesh_r, V_r and assemble inner product.
-        self.mesh_r = mesh_r
-        element = self.mesh_r.coordinates.function_space().ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-
-        # Create self.id and self.T, self.mesh_m, and self.V_m.
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.interpolate(X, self.V_r)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
-        self.extension = ElasticityExtension(self.V_r)
-
-    def restrict(self, residual, out):
-        p1 = residual
-        p1 *= -1
-        self.extension.solve_homogeneous_adjoint(p1, out.fun)
-        self.extension.apply_adjoint_action(out.fun, out.fun)
-        out.fun -= p1
-
-    def interpolate(self, vector, out):
-        self.extension.extend(vector.fun, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r)
@@ -521,10 +485,11 @@ class ControlVector(ROL.Vector):
     plus, scale, clone, dot, axpy, set.
     """
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None):
+                 data=None, boundary_extension=None):
         super().__init__()
         self.controlspace = controlspace
         self.inner_product = inner_product
+        self.boundary_extension = boundary_extension
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -534,6 +499,32 @@ class ControlVector(ROL.Vector):
             self.fun = data
         else:
             self.fun = None
+
+
+    def from_first_derivative(self, fe_deriv):
+        if self.boundary_extension is not None:
+            residual_smoothed = fe_deriv.copy(deepcopy=True)
+            p1 = fe_deriv
+            p1 *= -1
+            self.boundary_extension.solve_homogeneous_adjoint(p1, residual_smoothed)
+            self.boundary_extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+            residual_smoothed -= p1
+            self.controlspace.restrict(residual_smoothed, self)
+        else:
+            self.controlspace.restrict(fe_deriv, self)
+
+
+    def to_coordinatefield(self, out):
+        self.controlspace.interpolate(self, out)
+        if self.boundary_extension is not None:
+            self.boundary_extension.extend(out, out)
+
+    def apply_riesz_map(self):
+        """
+        Maps this vector into the dual space.
+        Overwrites the content.
+        """
+        self.inner_product.riesz_map(self, self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
@@ -563,16 +554,10 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product)
+        res = ControlVector(self.controlspace, self.inner_product, \
+                            boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
-
-    def apply_riesz_map(self):
-        """
-        Maps this vector into the dual space.
-        Overwrites the content.
-        """
-        self.inner_product.riesz_map(self, self)
 
     def dot(self, v):
         """Inner product between self and v."""

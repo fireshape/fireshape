@@ -97,14 +97,9 @@ class UflInnerProduct(InnerProduct):
             import numpy as np
             zero_rows = []
 
-            global_num_bsplines = ITAI.size[0]
-            comm = V.comm
-            local_size_if_perfectly_divisible = global_num_bsplines//comm.size
-            index_offset = comm.rank * local_size_if_perfectly_divisible + min(comm.rank, global_num_bsplines % comm.size)
             # if there are zero-rows, replace them with rows that
             # have 1 on the diagonal entry
-            for row in range(ITAI.sizes[0][0]):
-                row = row + index_offset
+            for row in range(*ITAI.getOwnershipRange()):
                 (cols, vals) = ITAI.getRow(row)
                 valnorm = np.linalg.norm(vals)
                 if valnorm < 1e-13:
@@ -132,7 +127,7 @@ class UflInnerProduct(InnerProduct):
             'ksp_rtol': 1e-11,
             'ksp_atol': 1e-11,
             'ksp_stol': 1e-16,
-            'ksp_type': 'cg',
+            'ksp_type': 'bcgs',
         }
         if self.direct_solve:
             params["pc_type"] = "cholesky"
@@ -272,7 +267,7 @@ class ElasticityInnerProduct(UflInnerProduct):
             n3 = fd.Function(V).interpolate(fd.Constant((0.0, 0.0, 1.0)))
             n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
-            n6 = fd.Function(V).interpolate(fd.as_vector([0, X[2], X[1]]))
+            n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
             res = [n1, n2, n3, n4, n5, n6]
         else:
             raise NotImplementedError
@@ -281,17 +276,10 @@ class ElasticityInnerProduct(UflInnerProduct):
 
 class SurfaceInnerProduct(InnerProduct):
 
-    def __init__(self, Q, fixed_bids=[]):
-
-        self.fixed_bids = fixed_bids
-
+    def __init__(self, Q, free_bids=["on_boundary"]):
         (V, I_interp) = Q.get_space_for_inner()
 
-        self.free_bids = list(
-                           V.mesh().topology.exterior_facets.unique_markers)
-        for bid in self.fixed_bids:
-            self.free_bids.remove(bid)
-        print("free_bids %s" % (self.free_bids))
+        self.free_bids = free_bids
 
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -308,14 +296,17 @@ class SurfaceInnerProduct(InnerProduct):
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
 
-        def get_nodes(bid):
-            lsize = V.mesh().coordinates.vector().local_size()
-            nodes = fd.DirichletBC(V, fd.Constant(tdim * (0,)), int(bid)).nodes
+        lsize = fd.Function(V).vector().local_size()
+        def get_nodes_bc(bc):
+            nodes = bc.nodes
             return nodes[nodes < lsize]
 
-        free_nodes = np.concatenate([get_nodes(bid) for bid in self.free_bids])
+        def get_nodes_bid(bid):
+            return get_nodes_bc(fd.DirichletBC(V, fd.Constant(tdim * (0,)), bid))
+
+        free_nodes = np.concatenate([get_nodes_bid(bid) for bid in self.free_bids])
         free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
-        free_dofs = np.unique(np.sort())
+        free_dofs = np.unique(np.sort(free_dofs))
         self.free_is = PETSc.IS().createGeneral(free_dofs)
         lgr, lgc = A.getLGMap()
         self.global_free_is_row = lgr.applyIS(self.free_is)

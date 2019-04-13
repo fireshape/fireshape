@@ -21,6 +21,7 @@ class Objective(ROL.Objective):
         self.Q = Q  # ControlSpace
         self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
         self.V_m = Q.V_m  # clone of V_r of physical mesh
+        self.mesh_m = self.V_m.mesh() #physical mesh
         self.cb = cb
         self.scale = scale
         self.deriv_r = fd.Function(self.V_r)
@@ -42,7 +43,8 @@ class Objective(ROL.Objective):
         """
         UFL formula of partial shape directional derivative
         """
-        raise NotImplementedError
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.value_form(), X, v)
 
     def derivative(self, out):
         """
@@ -104,7 +106,7 @@ class ShapeObjective(Objective):
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.deriv_r, out)
+        out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
         # return self.deriv_control
 
@@ -127,7 +129,7 @@ class DeformationObjective(Objective):
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
-        self.Q.restrict(self.deriv_r, out)
+        out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
 
 

@@ -40,6 +40,9 @@ or `here <https://www.maths.ox.ac.uk/people/florian.wechsung/contact>`__.
 
 You can find information on how to install Fireshape on the page :ref:`installation`.
 
-On the page :ref:`levelset`, we show how to solve a toy shape optimization problem.
+On the page :ref:`example_levelset`, we show how to solve a toy shape optimization problem.
+
+On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
+constrained to a boundary value problem.
 
 On the page :ref:`stokes`, we show how to solve a more challenging problem.
