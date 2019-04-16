@@ -48,6 +48,10 @@ class FluidSolver(PdeConstraint):
         self.bcs = self.get_boundary_conditions()
         self.nsp = self.get_nullspace()
         self.params = self.get_parameters()
+        self.problem = fd.NonlinearVariationalProblem(self.F, self.solution,
+                                                      bcs=self.bcs)
+        self.solver = fd.NonlinearVariationalSolver(
+            self.problem, solver_parameters=self.params, nullspace=self.nsp)
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -96,16 +100,17 @@ class StokesSolver(FluidSolver):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def solve(self):
-        super().solve()
-        fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
-              nullspace=self.nsp, transpose_nullspace=self.nsp,
-              solver_parameters=self.params)
-        return self.solution
+    # def solve(self):
+    #     super().solve()
+    #     fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
+    #           nullspace=self.nsp, transpose_nullspace=self.nsp,
+    #           solver_parameters=self.params)
+    #     return self.solution
 
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
-        (u, p) = fd.TrialFunctions(self.V)
+        # (u, p) = fd.TrialFunctions(self.V)
+        (u, p) = fd.split(self.solution)
         F = (
             self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
             - p * fd.div(v) * fd.dx
@@ -118,11 +123,13 @@ class StokesSolver(FluidSolver):
         if self.direct:
             ksp_params = {
                 # "ksp_monitor": shopt_parameters['verbose_state_solver'],
+                "snes_monitor": None,
+                "ksp_monitor": None,
                 "ksp_type": "fgmres",
                 "mat_type": "aij",
                 "pc_type": "lu",
                 "pc_factor_mat_solver_type": "mumps",
-                "ksp_atol": 1e-15,
+                # "ksp_atol": 1e-15,
             }
         else:
             # reuse initial guess!
