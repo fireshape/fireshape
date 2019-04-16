@@ -1,5 +1,6 @@
 import ROL
 import firedrake as fd
+import firedrake_adjoint as fda
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
 
@@ -174,6 +175,7 @@ class ReducedObjective(ShapeObjective):
         super().__init__(J.Q, J.cb)
         self.J = J
         self.e = e
+        fda.pause_annotation()
 
     def value(self, x, tol):
         """
@@ -181,6 +183,13 @@ class ReducedObjective(ShapeObjective):
         Function signature imposed by ROL.
         """
         return self.J.value(x, tol)
+
+    def derivative(self, out):
+        """
+        Get the derivative from pyadjoint.
+        """
+
+        out.from_first_derivative(self.Jred.derivative())
 
     def derivative_form(self, v):
         """
@@ -194,8 +203,18 @@ class ReducedObjective(ShapeObjective):
         """Update domain and solution to state and adjoint equation."""
         self.Q.update_domain(x)
         try:
+            tape = fda.get_working_tape()
+            tape.clear_tape()
+            fda.continue_annotation()
+            mesh_m = self.J.Q.mesh_m
+            s = fda.Function(self.J.V_m)
+            mesh_m.coordinates.assign(mesh_m.coordinates + s)
+            self.s = s
+            self.c = fda.Control(s)
             self.e.solve()
-            self.e.solve_adjoint(self.J.scale * self.J.value_form())
+            Jpyadj = fda.assemble(self.J.value_form())
+            self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+            fda.pause_annotation()
         except fd.ConvergenceError:
             if self.cb is not None:
                 self.cb()
