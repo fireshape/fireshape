@@ -1,5 +1,6 @@
 import firedrake as fd
 import fireshape as fs
+import fireshape.zoo as fsz
 import ROL
 from pipe_PDEconstraint import NavierStokesSolver
 from pipe_objective import PipeObjective
@@ -29,6 +30,9 @@ cb()
 # create PDEconstrained objective functional
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
+
+Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
+J = J + Jq
 
 # volume constraint
 class VolumeFunctional(fs.ShapeObjective):
