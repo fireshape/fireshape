@@ -4,6 +4,7 @@ from ..pde_constraint import PdeConstraint
 
 __all__ = ["StokesSolver"]
 
+
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
     def __init__(self, mesh_m, mini=False, direct=True,
@@ -65,7 +66,7 @@ class FluidSolver(PdeConstraint):
                 + fd.FiniteElement("B", fd.triangle, 3)
             Vvel = fd.VectorFunctionSpace(self.mesh_m, mini)
         else:
-            #P2/P1 Taylor-Hood elements
+            # P2/P1 Taylor-Hood elements
             Vvel = fd.VectorFunctionSpace(self.mesh_m, "Lagrange", 2)
         Vpres = fd.FunctionSpace(self.mesh_m, "CG", 1)
         return Vvel * Vpres
@@ -91,7 +92,7 @@ class FluidSolver(PdeConstraint):
         """Specify nullspace of state/adjoint equation."""
 
         if len(self.outflow_bids) > 0:
-            #If the pressure is fixed (anywhere) by a Dirichlet bc, nsp = None
+            # If the pressure is fixed (anywhere) by a Dirichlet bc, nsp = None
             nsp = None
         else:
             nsp = fd.MixedVectorSpaceBasis(

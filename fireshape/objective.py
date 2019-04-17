@@ -22,7 +22,7 @@ class Objective(ROL.Objective):
         self.Q = Q  # ControlSpace
         self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
         self.V_m = Q.V_m  # clone of V_r of physical mesh
-        self.mesh_m = self.V_m.mesh() #physical mesh
+        self.mesh_m = self.V_m.mesh()  # physical mesh
         self.cb = cb
         self.scale = scale
         self.deriv_r = fd.Function(self.V_r)

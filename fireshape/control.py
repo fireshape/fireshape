@@ -555,7 +555,7 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product, \
+        res = ControlVector(self.controlspace, self.inner_product,
                             boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
