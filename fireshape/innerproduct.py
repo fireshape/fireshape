@@ -47,8 +47,8 @@ class UflInnerProduct(InnerProduct):
         I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
         """
         (V, I_interp) = Q.get_space_for_inner()
-        self.free_bids = list(
-                           V.mesh().topology.exterior_facets.unique_markers)
+        free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        self.free_bids = [int(i) for i in free_bids]  # np.int->int
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
 

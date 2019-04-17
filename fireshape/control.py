@@ -2,6 +2,7 @@ from .innerproduct import InnerProduct
 from .boundary_extension import ElasticityExtension
 import ROL
 import firedrake as fd
+import firedrake_adjoint as fda
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
@@ -103,9 +104,9 @@ class FeControlSpace(ControlSpace):
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
-        self.T = fd.Function(self.V_r, name="T")
+        self.T = fda.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
@@ -167,7 +168,7 @@ class FeMultiGridControlSpace(ControlSpace):
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
@@ -272,7 +273,7 @@ class BsplineControlSpace(ControlSpace):
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
         assert self.dim == self.mesh_r.geometric_dimension()
@@ -554,7 +555,7 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product, \
+        res = ControlVector(self.controlspace, self.inner_product,
                             boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
