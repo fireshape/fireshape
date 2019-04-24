@@ -2,7 +2,7 @@ import firedrake as fd
 import firedrake_adjoint as fda
 from ..pde_constraint import PdeConstraint
 
-__all__ = ["StokesSolver"]
+__all__ = ["StokesSolver", "MassInv"]
 
 
 class FluidSolver(PdeConstraint):
@@ -44,19 +44,25 @@ class FluidSolver(PdeConstraint):
 
         # Preallocate solution variables for state and adjoint equations
         self.solution = fda.Function(self.V, name="State")
+        self.solution_adj = fda.Function(self.V, name="Adjoint")
 
         self.F = self.get_weak_form()
         self.bcs = self.get_boundary_conditions()
         self.nsp = self.get_nullspace()
         self.params = self.get_parameters()
+        self.Jp = self.get_Jp()
         problem = fda.NonlinearVariationalProblem(self.F, self.solution,
-                                                  bcs=self.bcs,)
+                                                  bcs=self.bcs, Jp=self.Jp)
+
         self.solver = fda.NonlinearVariationalSolver(
-            problem, solver_parameters=self.params, nullspace=self.nsp)
+            problem, solver_parameters=self.params, nullspace=self.nsp, adj_cb=lambda x: self.solution_adj.assign(x))
 
     def solve(self):
         super().solve()
-        self.solver.solve()
+        # self.solver.solve()
+        fda.solve(self.F==0, self.solution, bcs=self.bcs, nullspace=self.nsp, adj_cb=lambda x: self.solution_adj.assign(x),
+                  solver_parameters=self.params)
+
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -100,10 +106,37 @@ class FluidSolver(PdeConstraint):
         return nsp
 
 
+class MassInv(fd.AuxiliaryOperatorPC):
+
+    def form(self, pc, test, trial):
+        a = fd.inner(test, trial) * fd.dx
+        bcs = None
+        return (a, bcs)
+
+
 class StokesSolver(FluidSolver):
     """Implementation of Stokes' problem as PdeConstraint."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+
+    def get_Jp(self):
+        if self.direct:
+            return None
+        else:
+            return None
+            (v, q) = fd.TestFunctions(self.V)
+            (u, p) = fd.TrialFunctions(self.V)
+            Jp = (1./self.nu) * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
+                - fd.inner(p, q) * fd.dx
+            return Jp
+
+    def solve(self):
+    #     # super().solve()
+        # fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+        #       nullspace=self.nsp, transpose_nullspace=self.nsp,
+        #       solver_parameters=self.params)
+        self.solver.solve()
+    #     return self.solution
 
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
@@ -111,7 +144,7 @@ class StokesSolver(FluidSolver):
         F = (
             self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
             - p * fd.div(v) * fd.dx
-            + fd.div(u) * q * fd.dx
+            - fd.div(u) * q * fd.dx
             + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
         )
         return F
@@ -119,7 +152,7 @@ class StokesSolver(FluidSolver):
     def get_parameters(self):
         if self.direct:
             ksp_params = {
-                # "ksp_monitor": shopt_parameters['verbose_state_solver'],
+                # "ksp_monitor": True,
                 "ksp_type": "fgmres",
                 "mat_type": "aij",
                 "pc_type": "lu",
@@ -127,7 +160,24 @@ class StokesSolver(FluidSolver):
                 "ksp_atol": 1e-15,
             }
         else:
-            # reuse initial guess!
-            raise NotImplementedError("Iterative solver has not been "
-                                      "implemented.")
+            ksp_params = {
+                # "ksp_monitor": None,
+                "snes_type": "ksponly",
+                "ksp_type": "gmres",
+                "mat_type": "aij",
+                "pc_type": "fieldsplit",
+                "pc_fieldsplit_type": "schur",
+                "pc_fieldsplit_schur_fact_type": "diag",
+                "fieldsplit_0_ksp_type": "preonly",
+                "fieldsplit_0_pc_type": "hypre",
+                "fieldsplit_1_ksp_type": "preonly",
+                "fieldsplit_1_pc_type": "python",
+                "fieldsplit_1_pc_python_type": "fireshape.zoo.MassInv",
+                "fieldsplit_1_Mp_ksp_type": "preonly",
+                "fieldsplit_1_Mp_pc_type": "ilu",
+                'ksp_rtol': 1e-9,
+                'ksp_atol': 1e-10,
+                'ksp_stol': 1e-16,
+                "ksp_converged_reason": None,
+            }
         return ksp_params

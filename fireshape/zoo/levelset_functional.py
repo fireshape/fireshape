@@ -19,4 +19,5 @@ class LevelsetFunctional(ShapeObjective):
         return self.f * fd.dx(domain=self.Q.mesh_m)
 
     def derivative_form(self, v):
-        return fd.div(self.f*v) * fd.dx
+        X = fd.SpatialCoordinate(self.Q.mesh_m)
+        return fd.derivative(self.value_form(), X, v)
