@@ -91,6 +91,18 @@ class ControlSpace(object):
         """
         raise NotImplementedError
 
+    def store(self, vec, filename):
+        """
+        Store the vector to a file to be reused in a later computation
+        """
+        raise NotImplementedError
+
+    def load(self, vec, filename):
+        """
+        Load a vector from a file
+        """
+        raise NotImplementedError
+
 
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
@@ -123,6 +135,25 @@ class FeControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r, None)
+
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
 
 
 class FeMultiGridControlSpace(ControlSpace):
@@ -192,10 +223,30 @@ class FeMultiGridControlSpace(ControlSpace):
     def get_space_for_inner(self):
         return (self.V_r_coarse, None)
 
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
+
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
-    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[], boundary_regularities=None):
+    def __init__(self, mesh, bbox, orders, levels, fixed_dims=[],
+                 boundary_regularities=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -467,10 +518,29 @@ class BsplineControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_control, self.I_control)
-    
+
     def visualize_control(self, q, out):
         with out.dat.vec_wo as outp:
                 self.I_control.mult(q.vec_wo(), outp)
+
+    def store(self, vec, filename="control.dat"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        viewer = PETSc.Viewer().createBinary(filename, mode="w")
+        viewer.view(vec.vec_ro())
+
+    def load(self, vec, filename="control.dat"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        viewer = PETSc.Viewer().createBinary(filename, mode="r")
+        vec.vec_wo().load(viewer)
 
 
 class ControlVector(ROL.Vector):
