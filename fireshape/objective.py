@@ -192,14 +192,14 @@ class ReducedObjective(ShapeObjective):
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
-        self.Q.update_domain(x)
-        try:
-            self.e.solve()
-            self.e.solve_adjoint(self.J.scale * self.J.value_form())
-        except fd.ConvergenceError:
-            if self.cb is not None:
-                self.cb()
-            raise
+        if self.Q.update_domain(x):
+            try:
+                self.e.solve()
+                self.e.solve_adjoint(self.J.scale * self.J.value_form())
+            except fd.ConvergenceError:
+                if self.cb is not None:
+                    self.cb()
+                raise
         if iteration >= 0 and self.cb is not None:
             self.cb()
 

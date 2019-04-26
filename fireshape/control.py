@@ -64,8 +64,26 @@ class ControlSpace(object):
         Update the interpolant self.T with q
         """
 
+        # Check if the new control is different from the last one.  ROL is
+        # sometimes a bit strange in that it calls update on the same value
+        # more than once, in that case we don't want to solve the PDE over
+        # again.
+
+        if not hasattr(self, 'lastq') or self.lastq is None:
+            self.lastq = q.clone()
+            self.lastq.set(q)
+        else:
+            self.lastq.axpy(-1., q)
+            # calculate l2 norm (faster)
+            diff = self.lastq.vec_ro().norm()
+            self.lastq.axpy(+1., q)
+            if diff < 1e-20:
+                return False
+            else:
+                self.lastq.set(q)
         q.to_coordinatefield(self.T)
         self.T += self.id
+        return True
 
     def get_zero_vec(self):
         """
