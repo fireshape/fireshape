@@ -29,5 +29,6 @@ USER firedrake
 WORKDIR /home/firedrake
 
 # Now install firedrake
+RUN echo "2019-04-25"
 RUN curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-RUN bash -c "python3 firedrake-install --no-package-manager --disable-ssh --venv-name=firedrake"
+RUN bash -c "python3 firedrake-install --no-package-manager --disable-ssh --venv-name=firedrake --install pyadjoint --mpicc mpicc.mpich --mpicxx mpicxx.mpich --mpif90 mpif90.mpich --mpiexec mpiexec.mpich"
