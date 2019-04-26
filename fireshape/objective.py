@@ -201,24 +201,24 @@ class ReducedObjective(ShapeObjective):
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
-        self.Q.update_domain(x)
-        try:
-            tape = fda.get_working_tape()
-            tape.clear_tape()
-            fda.continue_annotation()
-            mesh_m = self.J.Q.mesh_m
-            s = fda.Function(self.J.V_m)
-            mesh_m.coordinates.assign(mesh_m.coordinates + s)
-            self.s = s
-            self.c = fda.Control(s)
-            self.e.solve()
-            Jpyadj = fda.assemble(self.J.value_form())
-            self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-            fda.pause_annotation()
-        except fd.ConvergenceError:
-            if self.cb is not None:
-                self.cb()
-            raise
+        if self.Q.update_domain(x):
+            try:
+                tape = fda.get_working_tape()
+                tape.clear_tape()
+                fda.continue_annotation()
+                mesh_m = self.J.Q.mesh_m
+                s = fda.Function(self.J.V_m)
+                mesh_m.coordinates.assign(mesh_m.coordinates + s)
+                self.s = s
+                self.c = fda.Control(s)
+                self.e.solve()
+                Jpyadj = fda.assemble(self.J.value_form())
+                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+                fda.pause_annotation()
+            except fd.ConvergenceError:
+                if self.cb is not None:
+                    self.cb()
+                raise
         if iteration >= 0 and self.cb is not None:
             self.cb()
 
