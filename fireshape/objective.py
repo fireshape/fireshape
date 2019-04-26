@@ -260,15 +260,9 @@ class ScaledObjective(Objective):
     def value(self, *args):
         return self.alpha * self.J.value(*args)
 
-    # def value_form(self):
-    #     return self.alpha * self.J.value_form()
-
     def derivative(self, out):
         self.J.derivative(out)
         out.scale(self.alpha)
-
-    # def derivative_form(self, v):
-    #     return self.alpha * self.derivative_form(v)
 
     def update(self, *args):
         self.J.update(*args)

@@ -18,17 +18,15 @@ class PoissonSolver(PdeConstraint):
 
         # Preallocate solution variables for state and adjoint equations
         self.solution = fda.Function(self.V, name="State")
-        self.testfunction = fd.TestFunction(self.V)
 
         # Weak form of Poisson problem
         u = self.solution
-        v = self.testfunction
+        v = fd.TestFunction(self.V)
         self.f = fda.Constant(4.)
         self.F = (fd.inner(fd.grad(u), fd.grad(v)) - self.f * v) * fd.dx
         self.bcs = fda.DirichletBC(self.V, 0., "on_boundary")
 
         # PDE-solver parameters
-        self.nsp = None
         self.params = {
             "ksp_type": "cg",
             "mat_type": "aij",
@@ -97,23 +95,24 @@ def run_L2tracking_optimization(write_output=False):
     # ROL parameters
     params_dict = {
         'General': {
-            'Secant': {'Type': 'Limited-Memory BFGS',
-                       'Maximum Storage': 10}},
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 10
+            }
+        },
         'Step': {
-            'Type': 'Augmented Lagrangian',
-            'Line Search': {'Descent Method': {
-                'Type': 'Quasi-Newton Step'}
+            'Type': 'Line Search',
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
             },
-            'Augmented Lagrangian': {
-                'Subproblem Step Type': 'Line Search',
-                'Penalty Parameter Growth Factor': 2.,
-                #'Print Intermediate Optimization History': False,
-                'Subproblem Iteration Limit': 20
-            }},
+        },
         'Status Test': {
             'Gradient Tolerance': 1e-4,
             'Step Tolerance': 1e-5,
-            'Iteration Limit': 15}
+            'Iteration Limit': 15
+        }
     }
 
     # assemble and solve ROL optimization problem
