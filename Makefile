@@ -9,5 +9,3 @@ examples:
 
 lint:
 	flake8
-
-
