@@ -12,5 +12,6 @@ jobs:
       - run: . /home/firedrake/firedrake/bin/activate; pip3 install scipy
       - run: . /home/firedrake/firedrake/bin/activate; pip3 install roltrilinos
       - run: . /home/firedrake/firedrake/bin/activate; pip3 install ROL
-      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; pytest
-            
+      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; make test
+      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; make examples
+      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; make lint
