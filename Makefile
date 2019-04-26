@@ -1,7 +1,7 @@
 .PHONY: test, examples, lint
 
 test:
-	pytest test/
+	pytest
 
 examples:
 	cd examples/L2tracking/; python3 L2tracking_main.py; cd -
