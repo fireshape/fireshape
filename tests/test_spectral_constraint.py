@@ -20,9 +20,11 @@ def test_spectral_constraint(pytestconfig):
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 
-        def cb(): out.write(mesh_m.coordinates)
+        def cb():
+            out.write(mesh_m.coordinates)
     else:
-        def cb(): pass
+        def cb():
+            pass
 
     J = fsz.MoYoSpectralConstraint(0.5, fd.Constant(0.1), Q,
                                    cb=cb)

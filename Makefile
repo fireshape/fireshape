@@ -8,6 +8,6 @@ examples:
 	cd examples/levelset/; python3 levelset.py; python3 levelset_boundary.py; python3 levelset_multigrid.py; python3 levelset_spline.py
 
 lint:
-	echo "Not setup yet"
+	flake8
 
 

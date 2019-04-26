@@ -7,6 +7,7 @@ __all__ = ["StokesSolver"]
 
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
+
     def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
                  noslip_bids=[], nu=1.0):
@@ -102,18 +103,17 @@ class FluidSolver(PdeConstraint):
 
 class StokesSolver(FluidSolver):
     """Implementation of Stokes' problem as PdeConstraint."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
         (u, p) = fd.split(self.solution)
-        F = (
-            self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
-            - p * fd.div(v) * fd.dx
-            + fd.div(u) * q * fd.dx
+        F = self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
+            - p * fd.div(v) * fd.dx \
+            + fd.div(u) * q * fd.dx \
             + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
-        )
         return F
 
     def get_parameters(self):
