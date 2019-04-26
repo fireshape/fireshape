@@ -5,10 +5,12 @@ import fireshape as fs
 __all__ = ["MoYoBoxConstraint"]
 
 
-def Min(a, b): return (a+b-abs(a-b))/fd.Constant(2)
+def Min(a, b):
+    return (a+b-abs(a-b))/fd.Constant(2)
 
 
-def Max(a, b): return (a+b+abs(a-b))/fd.Constant(2)
+def Max(a, b):
+    return (a+b+abs(a-b))/fd.Constant(2)
 
 
 class MoYoBoxConstraint(fs.DeformationObjective):
@@ -36,8 +38,8 @@ class MoYoBoxConstraint(fs.DeformationObjective):
             + Min(lam[0] + c*(T[0]-phi[0]), fd.Constant(0.0))
         temp1 = Max(lam[1] + c*(T[1]-psi[1]), fd.Constant(0.0)) \
             + Min(lam[1] + c*(T[1]-phi[1]), fd.Constant(0.0))
-        val = (1.0/(2.0*c)) * (self.dot(temp0, temp0)+self.dot(temp1, temp1)
-                               - self.dot(lam, lam))
+        val = (1.0/(2.0*c)) * (
+            self.dot(temp0, temp0)+self.dot(temp1, temp1) - self.dot(lam, lam))
         return val
 
     def derivative_form(self, test):

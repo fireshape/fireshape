@@ -16,7 +16,7 @@ class EqualityConstraint(ROL.Constraint):
 
     def value(self, c, x, tol):
         for i in range(len(self.c)):
-            c[i] = self.c[i].value(None, None)-self.target_value[i]
+            c[i] = self.c[i].value(None, None) - self.target_value[i]
 
     def applyJacobian(self, jv, v, x, tol):
         g = v.clone()

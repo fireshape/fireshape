@@ -23,9 +23,11 @@ def test_box_constraint(pytestconfig):
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 
-        def cb(): out.write(mesh_m.coordinates)
+        def cb():
+            out.write(mesh_m.coordinates)
     else:
-        def cb(): pass
+        def cb():
+            pass
 
     lower_bound = Q.T.copy(deepcopy=True)
     lower_bound.interpolate(fd.Constant((-0.0, -0.0)))
@@ -45,17 +47,26 @@ def test_box_constraint(pytestconfig):
             assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.11
 
     params_dict = {
-        'General': {
-            'Secant': {'Type': 'Limited-Memory BFGS',
-                       'Maximum Storage': 2}},
         'Step': {
             'Type': 'Line Search',
-            'Line Search': {'Descent Method': {
-                'Type': 'Quasi-Newton Step'}}},
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
+            }
+        },
+        'General': {
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 2
+            }
+        },
         'Status Test': {
             'Gradient Tolerance': 1e-10,
             'Step Tolerance': 1e-10,
-            'Iteration Limit': 150}}
+            'Iteration Limit': 150
+        }
+    }
 
     params = ROL.ParameterList(params_dict, "Parameters")
     problem = ROL.OptimizationProblem(J, q)
@@ -83,9 +94,11 @@ def test_objective_plus_box_constraint(pytestconfig):
     if pytestconfig.getoption("verbose"):
         out = fd.File("domain.pvd")
 
-        def cb(): out.write(mesh_m.coordinates)
+        def cb():
+            out.write(mesh_m.coordinates)
     else:
-        def cb(): pass
+        def cb():
+            pass
 
     lower_bound = Q.T.copy(deepcopy=True)
     lower_bound.interpolate(fd.Constant((-0.2, -0.2)))
@@ -113,17 +126,26 @@ def test_objective_plus_box_constraint(pytestconfig):
             assert taylor_result[i+1][3] <= taylor_result[i][3] * 0.15
 
     params_dict = {
-        'General': {
-            'Secant': {'Type': 'Limited-Memory BFGS',
-                       'Maximum Storage': 2}},
         'Step': {
             'Type': 'Line Search',
-            'Line Search': {'Descent Method': {
-                'Type': 'Quasi-Newton Step'}}},
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
+            }
+        },
+        'General': {
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 2
+            }
+        },
         'Status Test': {
             'Gradient Tolerance': 1e-10,
             'Step Tolerance': 1e-10,
-            'Iteration Limit': 10}}
+            'Iteration Limit': 10
+        }
+    }
 
     params = ROL.ParameterList(params_dict, "Parameters")
     problem = ROL.OptimizationProblem(J, q)
