@@ -201,24 +201,27 @@ class ReducedObjective(ShapeObjective):
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
-        self.Q.update_domain(x)
-        try:
-            tape = fda.get_working_tape()
-            tape.clear_tape()
-            fda.continue_annotation()
-            mesh_m = self.J.Q.mesh_m
-            s = fda.Function(self.J.V_m)
-            mesh_m.coordinates.assign(mesh_m.coordinates + s)
-            self.s = s
-            self.c = fda.Control(s)
-            self.e.solve()
-            Jpyadj = fda.assemble(self.J.value_form())
-            self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-            fda.pause_annotation()
-        except fd.ConvergenceError:
-            if self.cb is not None:
-                self.cb()
-            raise
+        if self.Q.update_domain(x):
+            try:
+                # We use pyadjoint to calculate adjoint and shape derivatives,
+                # in order to do this we need to "record a tape of the forward
+                # solve", pyadjoint will then figure out all necesary adjoints.
+                tape = fda.get_working_tape()
+                tape.clear_tape()
+                fda.continue_annotation()
+                mesh_m = self.J.Q.mesh_m
+                s = fda.Function(self.J.V_m)
+                mesh_m.coordinates.assign(mesh_m.coordinates + s)
+                self.s = s
+                self.c = fda.Control(s)
+                self.e.solve()
+                Jpyadj = fda.assemble(self.J.value_form())
+                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+                fda.pause_annotation()
+            except fd.ConvergenceError:
+                if self.cb is not None:
+                    self.cb()
+                raise
         if iteration >= 0 and self.cb is not None:
             self.cb()
 
@@ -260,15 +263,9 @@ class ScaledObjective(Objective):
     def value(self, *args):
         return self.alpha * self.J.value(*args)
 
-    # def value_form(self):
-    #     return self.alpha * self.J.value_form()
-
     def derivative(self, out):
         self.J.derivative(out)
         out.scale(self.alpha)
-
-    # def derivative_form(self, v):
-    #     return self.alpha * self.derivative_form(v)
 
     def update(self, *args):
         self.J.update(*args)

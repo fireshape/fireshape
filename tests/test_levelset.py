@@ -5,10 +5,16 @@ import fireshape.zoo as fsz
 import ROL
 
 
-@pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("inner_t", [fs.H1InnerProduct, fs.ElasticityInnerProduct, fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace, fs.FeMultiGridControlSpace, fs.BsplineControlSpace])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext", "w_ext_fixed_fim"])
+@pytest.mark.parametrize("dim",
+                         [2, 3])
+@pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
+                                     fs.ElasticityInnerProduct,
+                                     fs.LaplaceInnerProduct])
+@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
+                                            fs.FeMultiGridControlSpace,
+                                            fs.BsplineControlSpace])
+@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
+                                           "w_ext_fixed_fim"])
 def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
@@ -31,11 +37,11 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
         if dim == 2:
             bbox = [(-2, 2), (-2, 2)]
             orders = [2, 2]
-            levels =  [4, 4]
+            levels = [4, 4]
         else:
-            bbox = [(-3, 3), (-3, 3), (-3,3)]
+            bbox = [(-3, 3), (-3, 3), (-3, 3)]
             orders = [2, 2, 2]
-            levels =  [3, 3, 3]
+            levels = [3, 3, 3]
         Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
     elif controlspace_t == fs.FeMultiGridControlSpace:
         Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=2)
@@ -93,20 +99,29 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     q.scale(0)
     """ End taylor test """
 
-    grad_tol = 1e-6 if dim==2 else 1e-4
+    grad_tol = 1e-6 if dim == 2 else 1e-4
     # ROL parameters
     params_dict = {
         'General': {
-            'Secant': {'Type': 'Limited-Memory BFGS',
-                       'Maximum Storage': 50}},
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 50
+            }
+        },
         'Step': {
             'Type': 'Line Search',
-            'Line Search': {'Descent Method': {
-                'Type': 'Quasi-Newton Step'}}},
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
+            }
+        },
         'Status Test': {
             'Gradient Tolerance': grad_tol,
             'Step Tolerance': 1e-10,
-            'Iteration Limit': 150}}
+            'Iteration Limit': 150
+        }
+    }
 
     # assemble and solve ROL optimization problem
     params = ROL.ParameterList(params_dict, "Parameters")
@@ -117,6 +132,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     # verify that the norm of the gradient at optimum is small enough
     state = solver.getAlgorithmState()
     assert (state.gnorm < grad_tol)
+
 
 if __name__ == '__main__':
     pytest.main()

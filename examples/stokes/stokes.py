@@ -41,22 +41,29 @@ emul = ROL.StdVector(3)
 
 params_dict = {
     'General': {
-        'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 5}},
+        'Secant': {
+            'Type': 'Limited-Memory BFGS', 'Maximum Storage': 5
+        }
+    },
     'Step': {
         'Type': 'Augmented Lagrangian',
-        'Line Search': {'Descent Method': {
-            'Type': 'Quasi-Newton Step'}
+        'Line Search': {
+            'Descent Method': {
+                'Type': 'Quasi-Newton Step'
+            }
         },
         'Augmented Lagrangian': {
             'Subproblem Step Type': 'Line Search',
             'Penalty Parameter Growth Factor': 2.,
             'Print Intermediate Optimization History': True,
             'Subproblem Iteration Limit': 20
-        }},
+        }
+    },
     'Status Test': {
         'Gradient Tolerance': 1e-4,
         'Step Tolerance': 1e-5,
-        'Iteration Limit': 4}
+        'Iteration Limit': 4
+    }
 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
