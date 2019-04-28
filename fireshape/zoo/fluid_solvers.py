@@ -1,15 +1,31 @@
 import firedrake as fd
 import firedrake_adjoint as fda
+import numpy as np
 from ..pde_constraint import PdeConstraint
 
 __all__ = ["StokesSolver", "MassInv"]
+
+
+class PressurePinBC(fda.DirichletBC):
+
+    def __init__(self, V, *args, **kwargs):
+        super().__init__(V, fd.Constant(0), None, **kwargs)
+        if V.mesh().comm.rank == 0:
+            self.nodes = np.asarray([0])
+        else:
+            self.nodes = np.asarray([], dtype=np.int64)
+
+    def reconstruct(self, *args, **kwargs):
+        bc = super().reconstruct(*args, **kwargs)
+        bc.nodes = self.nodes
+        return bc
 
 
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
     def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
-                 noslip_bids=[], nu=1.0):
+                 noslip_bids=[], nu=1.0, pin_pressure=False):
         """
         Instantiate a FluidSolver.
 
@@ -48,21 +64,22 @@ class FluidSolver(PdeConstraint):
 
         self.F = self.get_weak_form()
         self.bcs = self.get_boundary_conditions()
-        self.nsp = self.get_nullspace()
+        nsp = self.get_nullspace()
+        if nsp is not None and pin_pressure:
+            self.bcs.append(PressurePinBC(self.V.sub(1)))
+            nsp = None
+        self.nsp = nsp
         self.params = self.get_parameters()
         self.Jp = self.get_Jp()
         problem = fda.NonlinearVariationalProblem(self.F, self.solution,
                                                   bcs=self.bcs, Jp=self.Jp)
 
         self.solver = fda.NonlinearVariationalSolver(
-            problem, solver_parameters=self.params, nullspace=self.nsp, adj_cb=lambda x: self.solution_adj.assign(x))
+            problem, solver_parameters=self.params, nullspace=self.nsp)
 
     def solve(self):
         super().solve()
-        # self.solver.solve()
-        fda.solve(self.F==0, self.solution, bcs=self.bcs, nullspace=self.nsp, adj_cb=lambda x: self.solution_adj.assign(x),
-                  solver_parameters=self.params)
-
+        self.solver.solve()
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -126,23 +143,15 @@ class StokesSolver(FluidSolver):
             return None
             (v, q) = fd.TestFunctions(self.V)
             (u, p) = fd.TrialFunctions(self.V)
-            Jp = (1./self.nu) * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
+            Jp = (1./self.nu) * fd.inner(2*fd.sym(fd.grad(u)), fd.grad(v)) * fd.dx \
                 - fd.inner(p, q) * fd.dx
             return Jp
-
-    def solve(self):
-    #     # super().solve()
-        # fd.solve(self.F == 0, self.solution, bcs=self.bcs,
-        #       nullspace=self.nsp, transpose_nullspace=self.nsp,
-        #       solver_parameters=self.params)
-        self.solver.solve()
-    #     return self.solution
 
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
         (u, p) = fd.split(self.solution)
         F = (
-            self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
+            self.nu * fd.inner(2*fd.sym(fd.grad(u)), fd.grad(v)) * fd.dx
             - p * fd.div(v) * fd.dx
             - fd.div(u) * q * fd.dx
             + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
@@ -152,8 +161,8 @@ class StokesSolver(FluidSolver):
     def get_parameters(self):
         if self.direct:
             ksp_params = {
-                # "ksp_monitor": True,
-                "ksp_type": "fgmres",
+                "ksp_type": "gmres",
+                "ksp_gmres_restart": 1,
                 "mat_type": "aij",
                 "pc_type": "lu",
                 "pc_factor_mat_solver_type": "mumps",

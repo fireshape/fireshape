@@ -33,11 +33,11 @@ class EnergyObjective(ShapeObjective):
         nu = self.pde_solver.nu
         return 0.5 * nu * fd.inner(fd.grad(u), fd.grad(u)) * fd.dx
 
-    def derivative_form(self, deformation):
-        """Shape directional derivative of misfit functional wrt deformation."""
-        u = self.pde_solver.solution.split()[0]
-        w = deformation
-        nu = self.pde_solver.nu
-        deriv = 0.5 * nu * fd.inner(fd.grad(u), fd.grad(u)) * fd.div(w) * fd.dx
-        deriv -= nu * fd.inner(fd.grad(u)*fd.grad(w), fd.grad(u)) * fd.dx
-        return deriv
+    # def derivative_form(self, deformation):
+    #     """Shape directional derivative of misfit functional wrt deformation."""
+    #     u = self.pde_solver.solution.split()[0]
+    #     w = deformation
+    #     nu = self.pde_solver.nu
+    #     deriv = 0.5 * nu * fd.inner(fd.grad(u), fd.grad(u)) * fd.div(w) * fd.dx
+    #     deriv -= nu * fd.inner(fd.grad(u)*fd.grad(w), fd.grad(u)) * fd.dx
+    #     return deriv
