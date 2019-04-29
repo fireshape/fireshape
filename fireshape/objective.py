@@ -3,6 +3,7 @@ import firedrake as fd
 import firedrake_adjoint as fda
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
+from .errors import MeshDeformationError
 
 
 class Objective(ROL.Objective):
@@ -31,21 +32,11 @@ class Objective(ROL.Objective):
         else:
             self.params = None
 
-    def value_form(self):
-        """UFL formula of misfit functional."""
-        raise NotImplementedError
-
     def value(self, x, tol):
-        """Evaluate misfit functional. Function signature imposed by ROL."""
-        return self.scale * fd.assemble(self.value_form(),
-                                        form_compiler_parameters=self.params)
-
-    def derivative_form(self, v):
         """
-        UFL formula of partial shape directional derivative
+        Value of the objective
         """
-        X = fd.SpatialCoordinate(self.mesh_m)
-        return fd.derivative(self.value_form(), X, v)
+        raise NotImplementedError
 
     def derivative(self, out):
         """
@@ -64,9 +55,10 @@ class Objective(ROL.Objective):
 
     def update(self, x, flag, iteration):
         """Update physical domain and possibly store current iterate."""
-        self.Q.update_domain(x)
+        updated = self.Q.update_domain(x)
         if iteration >= 0 and self.cb is not None:
             self.cb()
+        return updated
 
     def __add__(self, other):
         if isinstance(other, Objective):
@@ -95,6 +87,21 @@ class ShapeObjective(Objective):
 
         self.deriv_m = fd.Function(self.V_m, val=self.deriv_r)
 
+    def value(self, x, tol):
+        if not hasattr(self, "value_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.value(x, tol), you need to "
+                "provide a function `obj.value_form()`")
+        return fd.assemble(self.value_form())
+
+    def derivative_form(self, v):
+        if not hasattr(self, "value_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.derivative_form(v), you need to "
+                "provide a function `obj.value_form()`")
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.value_form(), X, v)
+
     def derivative(self, out):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
@@ -104,12 +111,14 @@ class ShapeObjective(Objective):
         which is then converted to the directional derivative wrt
         ControSpace perturbations restrict.
         """
+        if not hasattr(self, "derivative_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.derivative(out), you need to "
+                "provide a function `obj.derivative_form(v)`")
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
-        out.scale(self.scale)
-        # return self.deriv_control
 
 
 class DeformationObjective(Objective):
@@ -168,8 +177,8 @@ class ReducedObjective(ShapeObjective):
     """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
         if not isinstance(J, ShapeObjective):
-            msg = "PDE constraints are currently only supported"
-            + " for shape objectives."
+            msg = "PDE constraints are currently only supported" \
+                + " for shape objectives."
             raise NotImplementedError(msg)
 
         super().__init__(J.Q, J.cb)
@@ -191,17 +200,9 @@ class ReducedObjective(ShapeObjective):
 
         out.from_first_derivative(self.Jred.derivative())
 
-    def derivative_form(self, v):
-        """
-        The derivative of the reduced objective is given by the derivative of
-        the Lagrangian.
-        """
-        return self.J.scale * self.J.derivative_form(v) \
-            + self.e.derivative_form(v)
-
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
-        if self.Q.update_domain(x):
+        if super().update(x, flag, iteration):
             try:
                 # We use pyadjoint to calculate adjoint and shape derivatives,
                 # in order to do this we need to "record a tape of the forward
@@ -222,8 +223,6 @@ class ReducedObjective(ShapeObjective):
                 if self.cb is not None:
                     self.cb()
                 raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
 
 
 class ObjectiveSum(Objective):
@@ -269,3 +268,110 @@ class ScaledObjective(Objective):
 
     def update(self, *args):
         self.J.update(*args)
+
+
+class DeformationCheckObjective(Objective):
+    """
+
+Wrapping this around an objective will prevent deformations that are larger
+than a given threshold.  If strict=False, then we do not raise an exception,
+but instead we return the same value as at the previous iteration and the same
+gradient but with a flipped sign.  The idea behind that is to make the
+optimization think that we have stepped over the minimizer (as in the picture
+below) which makes it half its stepsize and try again.
+
+^
+|  X               X
+|  XX             XX
+|   XX           XX
+|    XX         XX
+|     XX       XX
+|      XXX   XXX
+|       XXXXXXX
+|
++------------------->
+  x_k          x_{k+1}
+
+    """
+
+    def __init__(self, J, threshold=None, delta_threshold=None, strict=True,
+                 cb=None):
+        super().__init__(J.Q)
+        self.J = J
+        self.threshold = threshold
+        self.strict = strict
+        self.delta_threshold = delta_threshold
+        self.cb = cb
+        self.last_value = None
+        self.last_derivative = None
+        self.return_last = False
+        self.X = J.Q.T.copy(deepcopy=True)
+        self.gradX = fd.Function(fd.TensorFunctionSpace(
+            self.X.ufl_domain(), "DG", self.X.ufl_element().degree()))
+        self.lastX = self.X.copy(deepcopy=True)
+        self.lastX *= 0
+        self.diff = self.lastX.copy(deepcopy=True)
+
+    def value(self, *args):
+        if not self.return_last:
+            self.last_value = self.J.value(*args)
+        if self.return_last is None:
+            raise RuntimeError("This shouldn't happen.")
+        return self.last_value
+
+    def derivative(self, out):
+        if self.return_last:
+            out.set(self.last_derivative)
+            out.scale(-1.)
+        else:
+            if self.last_derivative is None:
+                self.last_derivative = out.clone()
+            self.J.derivative(self.last_derivative)
+            out.set(self.last_derivative)
+
+    def check_singular_values(self, X, eps):
+        """
+        The singular values of the deformation are a good way of checking
+        that it is not `too large`.  One can show that on convex domains,
+        sigma(grad(X)) < 1 is a sufficient condition for T = Id + X being a
+        diffeomorphism.
+        """
+
+        from numpy.linalg import svd
+        self.gradX.project(fd.grad(X))
+        gradXv = self.gradX.vector()
+        dim = X.ufl_shape[0]
+        for i, M in enumerate(gradXv):
+            W, Sigma, V = svd(M, full_matrices=False)
+            for j in range(dim):
+                if Sigma[j] > eps:
+                    print(Sigma[j])
+                    return False
+        return True
+
+    def update(self, q, *args):
+        q.to_coordinatefield(self.X)
+        if self.delta_threshold is not None:
+            self.diff.assign(self.X-self.lastX)
+            if not self.check_singular_values(self.diff, self.delta_threshold):
+                self.return_last = True
+                if self.cb is not None:
+                    self.cb()
+                if self.strict:
+                    raise MeshDeformationError(
+                        "Mesh deformation of this step too large.")
+                return
+            else:
+                self.lastX.assign(self.X)
+        if self.threshold is not None:
+            if not self.check_singular_values(self.X, self.threshold):
+                self.return_last = True
+                if self.cb is not None:
+                    self.cb()
+                if self.strict:
+                    raise MeshDeformationError(
+                        "Total mesh deformation too large.")
+                return
+
+        self.return_last = False
+        self.J.update(q, *args)
