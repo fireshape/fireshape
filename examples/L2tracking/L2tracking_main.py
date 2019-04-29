@@ -5,7 +5,7 @@ from L2tracking_PDEconstraint import PoissonSolver
 from L2tracking_objective import L2trackingObjective
 
 # setup problem
-mesh = fd.UnitSquareMesh(100, 100)
+mesh = fd.UnitSquareMesh(50, 50, diagonal="crossed")
 Q = fs.FeControlSpace(mesh)
 inner = fs.ElasticityInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
@@ -21,6 +21,11 @@ out = fd.File("u.pvd")
 # create PDEconstrained objective functional
 J_ = L2trackingObjective(e, Q, cb=lambda: out.write(e.solution))
 J = fs.ReducedObjective(J_, e)
+# add a check that makes sure each deformation is reasonably small this is
+# useful when the pde is non-linear and we want the domain to only change a
+# little between iterations so that the previous solution of the state
+# constraint is a good initial guess on the new domain.
+J = fs.DeformationCheckObjective(J, delta_threshold=0.1, strict=False)
 
 # ROL parameters
 params_dict = {
