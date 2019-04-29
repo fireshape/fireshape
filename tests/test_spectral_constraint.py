@@ -10,8 +10,8 @@ import ROL
 def test_spectral_constraint(pytestconfig):
     n = 5
     mesh = fd.UnitSquareMesh(n, n)
-    T = mesh.coordinates.copy(deepcopy=True)
-    T.interpolate(T - fd.Constant((0.5, 0.5)))
+    T = fd.Function(fd.VectorFunctionSpace(mesh, "CG", 1)).interpolate(
+        fd.SpatialCoordinate(mesh)-fd.Constant((0.5, 0.5)))
     mesh = fd.Mesh(T)
     Q = fs.FeControlSpace(mesh)
     inner = fs.LaplaceInnerProduct(Q)
