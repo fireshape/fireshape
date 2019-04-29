@@ -175,6 +175,8 @@ class ReducedObjective(ShapeObjective):
         super().__init__(J.Q, J.cb)
         self.J = J
         self.e = e
+        # stop any annotation that might be ongoing as we only want to record
+        # what's happening in e.solve()
         fda.pause_annotation()
 
     def value(self, x, tol):
