@@ -513,9 +513,10 @@ class BsplineControlSpace(ControlSpace):
         d = self.dim
         free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         dfree = len(free_dims)
-        ((ls, gs), (ls_spline, gs_spline)) = IFW.getSizes()
-        FullIFW.setSizes(((d * ls, d * gs),
-                          (dfree * ls_spline, dfree * gs_spline)))
+        ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
+
+        FullIFW.setSizes(((d * lsize, d * gsize),
+                          (dfree * lsize_spline, dfree * gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
@@ -523,7 +524,7 @@ class BsplineControlSpace(ControlSpace):
         # on vector fields. It's not just a block matrix,
         # but the values are interleaved as this is how
         # firedrake handles vector fields
-        for row in range(ls):
+        for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
             (cols, vals) = IFW.getRow(row)
             for j, dim in enumerate(free_dims):
