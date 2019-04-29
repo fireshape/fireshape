@@ -1,6 +1,7 @@
 from setuptools import setup
 try:
     import firedrake # noqa
+    import firedrake_adjoint # noqa
 except ImportError:
     raise Exception("Firedrake needs to be installed and activated. "
                     "Please visit firedrakeproject.org")
