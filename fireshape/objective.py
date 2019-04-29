@@ -207,7 +207,8 @@ class ReducedObjective(ShapeObjective):
             try:
                 # We use pyadjoint to calculate adjoint and shape derivatives,
                 # in order to do this we need to "record a tape of the forward
-                # solve", pyadjoint will then figure out all necesary adjoints.
+                # solve", pyadjoint will then figure out all necessary
+                # adjoints.
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 fda.continue_annotation()
