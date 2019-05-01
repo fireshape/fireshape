@@ -35,9 +35,14 @@ class Objective(ROL.Objective):
 
     def value(self, x, tol):
         """
-        Value of the objective
+        Value of the objective.
+        Function signature imposed by ROL.
         """
-        raise NotImplementedError
+        if not hasattr(self, "value_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.value(x, tol), you need to "
+                "provide a function `obj.value_form()`")
+        return fd.assemble(self.value_form())
 
     def derivative(self, out):
         """
@@ -88,18 +93,11 @@ class ShapeObjective(Objective):
 
         self.deriv_m = fd.Function(self.V_m, val=self.deriv_r)
 
-    def value(self, x, tol):
-        if not hasattr(self, "value_form"):
-            raise NotImplementedError(
-                "If you don't provide obj.value(x, tol), you need to "
-                "provide a function `obj.value_form()`")
-        return fd.assemble(self.value_form())
-
     def derivative_form(self, v):
         if not hasattr(self, "value_form"):
             raise NotImplementedError(
-                "If you don't provide obj.derivative_form(v), you need to "
-                "provide a function `obj.value_form()`")
+                "If you don't provide obj.value_form(), you need to "
+                "provide a function `obj.derivative_form(v)`")
         X = fd.SpatialCoordinate(self.mesh_m)
         return fd.derivative(self.value_form(), X, v)
 
@@ -114,8 +112,8 @@ class ShapeObjective(Objective):
         """
         if not hasattr(self, "derivative_form"):
             raise NotImplementedError(
-                "If you don't provide obj.derivative(out), you need to "
-                "provide a function `obj.derivative_form(v)`")
+                "If you don't provide obj.derivative_form(v), you need to "
+                "provide a function `obj.derivative(out)`")
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
@@ -137,6 +135,10 @@ class DeformationObjective(Objective):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
         """
+        if not hasattr(self, "derivative_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.derivative_form(v), you need to "
+                "provide a function `obj.derivative(out)`")
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
@@ -163,6 +165,10 @@ class ControlObjective(Objective):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
         """
+        if not hasattr(self, "derivative_form"):
+            raise NotImplementedError(
+                "If you don't provide obj.derivative_form(v), you need to "
+                "provide a function `obj.derivative(out)`")
         v = fd.TestFunction(self.V_control)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
