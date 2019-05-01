@@ -4,6 +4,7 @@ import firedrake_adjoint as fda
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
 from .errors import MeshDeformationError
+from mpi4py import MPI
 
 
 class Objective(ROL.Objective):
@@ -354,9 +355,12 @@ below) which makes it half its stepsize and try again.
 
     def update(self, q, *args):
         q.to_coordinatefield(self.X)
+        comm = self.X.ufl_domain().comm
         if self.delta_threshold is not None:
             self.diff.assign(self.X-self.lastX)
-            if not self.check_singular_values(self.diff, self.delta_threshold):
+            check = self.check_singular_values(self.diff, self.delta_threshold)
+            check = comm.allreduce(check, MPI.LAND)
+            if not check:
                 self.return_last = True
                 if self.cb is not None:
                     self.cb()
@@ -367,7 +371,9 @@ below) which makes it half its stepsize and try again.
             else:
                 self.lastX.assign(self.X)
         if self.threshold is not None:
-            if not self.check_singular_values(self.X, self.threshold):
+            check = self.check_singular_values(self.X, self.threshold)
+            check = comm.allreduce(check, MPI.LAND)
+            if not check:
                 self.return_last = True
                 if self.cb is not None:
                     self.cb()
@@ -375,6 +381,5 @@ below) which makes it half its stepsize and try again.
                     raise MeshDeformationError(
                         "Total mesh deformation too large.")
                 return
-
         self.return_last = False
         self.J.update(q, *args)
