@@ -9,14 +9,12 @@ from mpi4py import MPI
 
 class Objective(ROL.Objective):
 
-    def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
+    def __init__(self, Q: ControlSpace, cb=None,
                  quadrature_degree: int = None):
 
         """
         Inputs: Q: ControlSpace
                 cb: method to store current shape iterate at self.udpate
-                scale: scaling factor that multiplies shape
-                       functional and directional derivative
                 quadrature_degree: quadrature degree to use. If None, then
                 ufl will guesstimate the degree
         """
@@ -26,7 +24,6 @@ class Objective(ROL.Objective):
         self.V_m = Q.V_m  # clone of V_r of physical mesh
         self.mesh_m = self.V_m.mesh()  # physical mesh
         self.cb = cb
-        self.scale = scale
         self.deriv_r = fd.Function(self.V_r)
         if quadrature_degree is not None:
             self.params = {"quadrature_degree": quadrature_degree}
@@ -143,7 +140,6 @@ class DeformationObjective(Objective):
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
-        out.scale(self.scale)
 
 
 class ControlObjective(Objective):
@@ -173,7 +169,6 @@ class ControlObjective(Objective):
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
         out.fun.assign(self.deriv_r)
-        out.scale(self.scale)
 
     def update(self, x, flag, iteration):
         self.f.assign(x.fun)
