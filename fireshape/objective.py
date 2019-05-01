@@ -39,7 +39,8 @@ class Objective(ROL.Objective):
             raise NotImplementedError(
                 "If you don't provide obj.value(x, tol), you need to "
                 "provide a function `obj.value_form()`")
-        return fd.assemble(self.value_form())
+        return fd.assemble(self.value_form(),
+                           form_compiler_parameters=self.params)
 
     def derivative(self, out):
         """
@@ -221,7 +222,8 @@ class ReducedObjective(ShapeObjective):
                 self.s = s
                 self.c = fda.Control(s)
                 self.e.solve()
-                Jpyadj = fda.assemble(self.J.value_form())
+                Jpyadj = fda.assemble(self.J.value_form(),
+                                      form_compiler_parameters=self.params)
                 self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
                 fda.pause_annotation()
             except fd.ConvergenceError:
