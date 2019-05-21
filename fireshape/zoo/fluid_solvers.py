@@ -1,7 +1,9 @@
 import firedrake as fd
+import firedrake_adjoint as fda
 from ..pde_constraint import PdeConstraint
 
 __all__ = ["StokesSolver"]
+
 
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
@@ -28,7 +30,7 @@ class FluidSolver(PdeConstraint):
         self.inflow_bids = inflow_bids
         self.inflow_expr = inflow_expr
         self.noslip_bids = noslip_bids
-        self.nu = fd.Constant(nu)
+        self.nu = fda.Constant(nu)
 
         # Setup problem
         self.V = self.get_functionspace()
@@ -41,13 +43,20 @@ class FluidSolver(PdeConstraint):
         self.outflow_bids = all_bids
 
         # Preallocate solution variables for state and adjoint equations
-        self.solution = fd.Function(self.V, name="State")
-        self.solution_adj = fd.Function(self.V, name="Adjoint")
+        self.solution = fda.Function(self.V, name="State")
 
         self.F = self.get_weak_form()
         self.bcs = self.get_boundary_conditions()
         self.nsp = self.get_nullspace()
         self.params = self.get_parameters()
+        problem = fda.NonlinearVariationalProblem(self.F, self.solution,
+                                                  bcs=self.bcs,)
+        self.solver = fda.NonlinearVariationalSolver(
+            problem, solver_parameters=self.params, nullspace=self.nsp)
+
+    def solve(self):
+        super().solve()
+        self.solver.solve()
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -57,7 +66,7 @@ class FluidSolver(PdeConstraint):
                 + fd.FiniteElement("B", fd.triangle, 3)
             Vvel = fd.VectorFunctionSpace(self.mesh_m, mini)
         else:
-            #P2/P1 Taylor-Hood elements
+            # P2/P1 Taylor-Hood elements
             Vvel = fd.VectorFunctionSpace(self.mesh_m, "Lagrange", 2)
         Vpres = fd.FunctionSpace(self.mesh_m, "CG", 1)
         return Vvel * Vpres
@@ -72,18 +81,18 @@ class FluidSolver(PdeConstraint):
 
         bcs = []
         if len(self.inflow_bids) is not None:
-            bcs.append(fd.DirichletBC(self.V.sub(0), self.inflow_expr,
-                                   self.inflow_bids))
-        if len(self.noslip_bids)>0:
-            bcs.append(fd.DirichletBC(self.V.sub(0), zerovector,
-                                   self.noslip_bids))
+            bcs.append(fda.DirichletBC(self.V.sub(0), self.inflow_expr,
+                                       self.inflow_bids))
+        if len(self.noslip_bids) > 0:
+            bcs.append(fda.DirichletBC(self.V.sub(0), zerovector,
+                                       self.noslip_bids))
         return bcs
 
     def get_nullspace(self):
         """Specify nullspace of state/adjoint equation."""
 
         if len(self.outflow_bids) > 0:
-            #If the pressure is fixed (anywhere) by a Dirichlet bc, nsp = None
+            # If the pressure is fixed (anywhere) by a Dirichlet bc, nsp = None
             nsp = None
         else:
             nsp = fd.MixedVectorSpaceBasis(
@@ -96,21 +105,14 @@ class StokesSolver(FluidSolver):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def solve(self):
-        super().solve()
-        fd.solve(fd.lhs(self.F) == fd.rhs(self.F), self.solution, bcs=self.bcs,
-              nullspace=self.nsp, transpose_nullspace=self.nsp,
-              solver_parameters=self.params)
-        return self.solution
-
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
-        (u, p) = fd.TrialFunctions(self.V)
+        (u, p) = fd.split(self.solution)
         F = (
             self.nu * fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
             - p * fd.div(v) * fd.dx
             + fd.div(u) * q * fd.dx
-            + fd.inner(fd.Constant((0., 0.)), v) * fd.dx
+            + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
         )
         return F
 
@@ -129,24 +131,3 @@ class StokesSolver(FluidSolver):
             raise NotImplementedError("Iterative solver has not been "
                                       "implemented.")
         return ksp_params
-
-    def derivative_form(self, deformation):
-        """Shape directional derivative of self.F wrt to w."""
-        w = deformation
-        u = self.solution.split()[0]
-        p = self.solution.split()[1]
-        v = self.solution_adj.split()[0]
-        q = self.solution_adj.split()[1]
-        nu = self.nu
-
-        deriv = -fd.inner(nu * fd.grad(u) * fd.grad(w),
-                       fd.grad(v)) * fd.dx
-        deriv -= fd.inner(nu * fd.grad(u),
-                       fd.grad(v) * fd.grad(w)) * fd.dx
-        deriv += fd.tr(fd.grad(v)*fd.grad(w)) * p * fd.dx
-        deriv -= fd.tr(fd.grad(u)*fd.grad(w)) * q * fd.dx
-
-        deriv += fd.div(w) * fd.inner(nu * fd.grad(u), fd.grad(v)) * fd.dx
-        deriv -= fd.div(w) * fd.inner(fd.div(v), p) * fd.dx
-        deriv += fd.div(w) * fd.inner(fd.div(u), q) * fd.dx
-        return deriv

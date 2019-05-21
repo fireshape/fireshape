@@ -2,6 +2,7 @@ from .innerproduct import InnerProduct
 from .boundary_extension import ElasticityExtension
 import ROL
 import firedrake as fd
+import firedrake_adjoint as fda
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
@@ -64,8 +65,26 @@ class ControlSpace(object):
         Update the interpolant self.T with q
         """
 
+        # Check if the new control is different from the last one.  ROL is
+        # sometimes a bit strange in that it calls update on the same value
+        # more than once, in that case we don't want to solve the PDE over
+        # again.
+
+        if not hasattr(self, 'lastq') or self.lastq is None:
+            self.lastq = q.clone()
+            self.lastq.set(q)
+        else:
+            self.lastq.axpy(-1., q)
+            # calculate l2 norm (faster)
+            diff = self.lastq.vec_ro().norm()
+            self.lastq.axpy(+1., q)
+            if diff < 1e-20:
+                return False
+            else:
+                self.lastq.set(q)
         q.to_coordinatefield(self.T)
         self.T += self.id
+        return True
 
     def get_zero_vec(self):
         """
@@ -115,9 +134,9 @@ class FeControlSpace(ControlSpace):
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
-        self.T = fd.Function(self.V_r, name="T")
+        self.T = fda.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
@@ -198,7 +217,7 @@ class FeMultiGridControlSpace(ControlSpace):
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
@@ -323,7 +342,7 @@ class BsplineControlSpace(ControlSpace):
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = fda.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
         assert self.dim == self.mesh_r.geometric_dimension()
@@ -624,7 +643,7 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product, \
+        res = ControlVector(self.controlspace, self.inner_product,
                             boundary_extension=self.boundary_extension)
         # res.set(self)
         return res
