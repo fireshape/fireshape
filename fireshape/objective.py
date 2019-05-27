@@ -198,8 +198,8 @@ class ReducedObjective(ShapeObjective):
         The derivative of the reduced objective is given by the derivative of
         the Lagrangian.
         """
-        return (self.J.scale * self.J.derivative_form(v)
-                + self.e.derivative_form(v))
+        return self.J.scale * self.J.derivative_form(v) \
+            + self.e.derivative_form(v)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
@@ -207,7 +207,8 @@ class ReducedObjective(ShapeObjective):
             try:
                 # We use pyadjoint to calculate adjoint and shape derivatives,
                 # in order to do this we need to "record a tape of the forward
-                # solve", pyadjoint will then figure out all necesary adjoints.
+                # solve", pyadjoint will then figure out all necessary
+                # adjoints.
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 fda.continue_annotation()

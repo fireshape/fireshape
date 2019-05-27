@@ -29,20 +29,17 @@ def mesh_from_gmsh_code(geo_code, clscale=1.0, dim=2, comm=COMM_WORLD,
 def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
                  smooth=0):
     if platform == "linux" or platform == "linux2":
+        args = [inputFile, "-o", outputFile, "-%i" % dimension,
+                "-clscale", "%f" % scale, "-smooth", "%i" % smooth]
         if comm.size == 1:
-            call(["gmsh", inputFile, "-o", outputFile, "-%i" % dimension,
-                  "-clscale", "%f" % scale, "-smooth", "%i" % smooth])
+            call(["gmsh"] + args)
         else:
             if comm.rank == 0:
                 """
                 Extreme ugly work-around (see https://code.launchpad.net/
                 ~fluidity-core/fluidity/firedrake-use-gmshpy/+merge/185785)
                 """
-                COMM_SELF.Spawn('gmsh', args=[
-                    inputFile, "-o", outputFile,
-                    "-%i" % dimension, "-clscale", "%f" % scale, "-smooth",
-                    "%i" % smooth
-                    ])
+                COMM_SELF.Spawn('gmsh', args=args)
                 oldsize = 0
                 time.sleep(2)
                 while True:
@@ -62,12 +59,12 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
             comm.Barrier()
     elif platform == "darwin":
         if comm.rank == 0:
-            os.system("gmsh %s -o %s -%i -clscale %f -smooth %i" % (
-                inputFile, outputFile, dimension, scale, smooth
-                ))
+            cmd = "gmsh" + " ".join(args)
+            os.system(cmd)
         comm.Barrier()
     else:
         raise SystemError("What are you using if not linux or macOS?!")
+
 
 def DiskMesh(clscale, radius=1.):
     geo_code = """
@@ -80,12 +77,12 @@ Line Loop(6) = {4, 5};
 Plane Surface(7) = {6};
 Physical Line("Boundary") = {6};
 Physical Surface("Disk") = {7};
-    """ % ((radius,)*2)
+    """ % ((radius,) * 2)
     return mesh_from_gmsh_code(geo_code, clscale=clscale, dim=2)
 
 
 def SphereMesh(clscale, radius=1.):
-    geo_code="""
+    geo_code = """
 Point(11) = {0, 0, 0, 1.0};
 Point(12) = {%f, 0, 0, 1.0};
 Point(13) = {-%f, 0, 0, 1.0};

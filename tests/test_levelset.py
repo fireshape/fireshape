@@ -5,8 +5,7 @@ import fireshape.zoo as fsz
 import ROL
 
 
-@pytest.mark.parametrize("dim",
-                         [2, 3])
+@pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])

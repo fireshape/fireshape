@@ -8,7 +8,8 @@ mesh = fs.DiskMesh(0.1)
 bbox = [(-1.01, 1.01), (-1.01, 1.01)]
 orders = [3, 3]
 levels = [4, 4]
-Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, boundary_regularities=[0, 0])
+Q = fs.BsplineControlSpace(mesh, bbox, orders, levels,
+                           boundary_regularities=[0, 0])
 inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
@@ -20,11 +21,12 @@ outdef = fd.File("deformation.pvd")
 out = fd.File("domain.pvd")
 V, I = Q.get_space_for_inner()
 T = fd.Function(V)
+
+
 def cb():
     out.write(mesh_m.coordinates)
     Q.visualize_control(q, T)
     outdef.write(T)
-
 
 
 J = fsz.LevelsetFunctional(f, Q, cb=cb)
@@ -36,17 +38,26 @@ J.checkGradient(q, g, 4, 1)
 
 
 params_dict = {
-    'General': {
-        'Secant': {'Type': 'Limited-Memory BFGS',
-                   'Maximum Storage': 2}},
     'Step': {
         'Type': 'Line Search',
-        'Line Search': {'Descent Method': {
-            'Type': 'Quasi-Newton Step'}}},
+        'Line Search': {
+            'Descent Method': {
+                'Type': 'Quasi-Newton Step'
+            }
+        }
+    },
+    'General': {
+        'Secant': {
+            'Type': 'Limited-Memory BFGS',
+            'Maximum Storage': 25
+        }
+    },
     'Status Test': {
-        'Gradient Tolerance': 1e-5,
-        'Step Tolerance': 1e-6,
-        'Iteration Limit': 50}}
+        'Gradient Tolerance': 1e-4,
+        'Step Tolerance': 1e-10,
+        'Iteration Limit': 30
+    }
+}
 
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)
