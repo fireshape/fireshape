@@ -44,5 +44,3 @@ On the page :ref:`example_levelset`, we show how to solve a toy shape optimizati
 
 On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
 constrained to a boundary value problem.
-
-On the page :ref:`stokes`, we show how to solve a more challenging problem.

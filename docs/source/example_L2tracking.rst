@@ -37,25 +37,26 @@ In the code, we highlight the lines which characterize
 the weak formulation of this boundary value problem.
 
 .. literalinclude:: ../../examples/L2tracking/L2tracking_PDEconstraint.py
-    :emphasize-lines: 22,23
+    :emphasize-lines: 12, 17,18,19
     :linenos:
 
 .. Note:: 
 
     To solve the discretized variational problem,
     we use **CG** with a multigrid preconditioner
-    (see :bash:`self.params` in *Lines 27-35*).
+    (see :bash:`self.params` in *Lines 22-30*).
     For 2D problems, one can also use direct solvers.
 
 Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
-in a python module named :bash:`L2tracking_objective.py`.lines
+in a python module named :bash:`L2tracking_objective.py`.
+In the code, we highlith the lines
 which characterize :math:`\mathcal{J}`.
 
 
 .. literalinclude:: ../../examples/L2tracking/L2tracking_objective.py
-    :emphasize-lines: 3,13,18
+    :emphasize-lines: 16, 21
     :linenos:
 
 Setting up and solving the problem
@@ -74,11 +75,11 @@ To set up the problem, we
 * initialize the PDE contraint on the physical mesh :bash:`mesh_m` (*Line 15*)
 * specify to save the function :math:`u` after each iteration
   in the file :bash:`u.pvd` by setting the function ``cb``
-  appropriately (*Lines 18-21*).
-* initialize the shape functional (*Line 24*),
-  and the reduce shape functional (*Line 25*),
-* create a ROL optimization prolem (*Lines 28-50*),
-  and solve it (*Line 51*).
+  appropriately (*Lines 19 and 22*).
+* initialize the shape functional (*Line 22*),
+  and the reduce shape functional (*Line 23*),
+* create a ROL optimization prolem (*Lines 26-49*),
+  and solve it (*Line 50*).
 
 .. literalinclude:: ../../examples/L2tracking/L2tracking_main.py
     :linenos:
