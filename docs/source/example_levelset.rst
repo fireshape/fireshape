@@ -31,7 +31,7 @@ which characterize :math:`\mathcal{J}`.
 
 
 .. literalinclude:: ../../examples/levelset/levelsetfunctional.py
-    :emphasize-lines: 13,17
+    :emphasize-lines: 13,18
     :linenos:
 
 
@@ -50,11 +50,11 @@ To set up the problem, we need to:
 
 Then, we specify to save the mesh after each iteration
 in the file :bash:`domain.pvd`
-by setting the function ``cb`` appropriately (*Lines 13-14*).
+by setting the function ``cb`` appropriately (*Lines 13 and 16*).
 
-Finally, we initialize the shape functional (*Line 17*),
-create a ROL optimization prolem (*Lines 20-36*),
-and solve it (*Line 37*).
+Finally, we initialize the shape functional (*Line 16*),
+create a ROL optimization prolem (*Lines 19-43*),
+and solve it (*Line 44*).
 
 .. literalinclude:: ../../examples/levelset/levelset.py
     :linenos:
