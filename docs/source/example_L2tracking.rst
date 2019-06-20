@@ -51,7 +51,7 @@ Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
 in a python module named :bash:`L2tracking_objective.py`.
-In the code, we highlith the lines
+In the code, we highligth the lines
 which characterize :math:`\mathcal{J}`.
 
 
