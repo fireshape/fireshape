@@ -4,9 +4,11 @@ import ROL
 from levelsetfunctional import LevelsetFunctional
 
 # setup problem
-mesh = fd.UnitSquareMesh(30, 30)
-Q = fs.FeControlSpace(mesh)
-inner = fs.LaplaceInnerProduct(Q)
+mesh = fd.UnitSquareMesh(2, 2, diagonal="crossed")
+mh = fd.MeshHierarchy(mesh, 4)
+# Q = fs.FeControlSpace(mesh)
+Q = fs.FeMultiGridControlSpace(mh, order=2)
+inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd

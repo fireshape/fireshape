@@ -178,63 +178,66 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
     """
-    FEControlSpace on given mesh and StateSpace on uniformly refined mesh.
+    FEControlSpace on the coarsest mesh of a MeshHierarchy.
 
-    Use the provided mesh to construct a Lagrangian finite element control
-    space. Then, refine the mesh `refinements`-times to construct
-    representatives of ControlVectors that are compatible with the state
-    space.
+    Use the provided mesh hierarchy to construct a new hierarchy with meshes of
+    order `order` that then gets deformed. The control lives on the coarse grid
+    and is prolonged onto the finer grids. We do this preserve nestedness
+    properties, instead of defining the deformation on the finest grid and then
+    injecting into coarser grids.
 
     Inputs:
-        refinements: type int, number of uniform refinements to perform
-                     to obtain the StateSpace mesh.
+        mh: type MeshHierarchy
         order: type int, order of Lagrange basis functions of ControlSpace.
 
-    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
 
-    def __init__(self, mesh_r, refinements=1, order=1):
-        mh = fd.MeshHierarchy(mesh_r, refinements)
-        self.mesh_hierarchy = mh
+    def __init__(self, mh, order=1):
+        self.mh_r = mh
+
+        def getV(mesh):
+            return fd.VectorFunctionSpace(mesh, "CG", order)
+        self.intermediate_Ts = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
+        # to store derivatives on the different levels
+        self.intermediate_Rs = [
+            T.copy(deepcopy=True) for T in self.intermediate_Ts
+        ]
+
+        meshes_transformed = [fd.Mesh(T) for T in self.intermediate_Ts]
+        self.mh_m = fd.HierarchyBase(
+            meshes_transformed, mh.coarse_to_fine_cells,
+            mh.fine_to_coarse_cells,
+            refinements_per_level=mh.refinements_per_level, nested=mh.nested
+        )
 
         # Control space on coarsest mesh
-        self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
-                                                 order)
+        self.mesh_r_coarse = self.mh_r[0]
+        self.V_r_coarse = getV(self.mesh_r_coarse)
 
-        # Create self.id and self.T on refined mesh.
-        element = self.V_r_coarse.ufl_element()
-
-        self.intermediate_Ts = []
-        for i in range(refinements - 1):
-            mesh = self.mesh_hierarchy[i + 1]
-            V = fd.FunctionSpace(mesh, element)
-            self.intermediate_Ts.append(fd.Function(V))
-
-        self.mesh_r = self.mesh_hierarchy[-1]
-        element = self.V_r_coarse.ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.Function(self.V_r).interpolate(X)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fda.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.mesh_r = self.mh_r[-1]
+        self.V_r = getV(self.mesh_r)
+        self.mesh_m = self.mh_m[-1]
+        self.T = self.intermediate_Ts[-1]
+        self.V_m = getV(self.mesh_m)
+        self.id = self.T.copy(deepcopy=True)
 
     def restrict(self, residual, out):
-        Tf = residual
-        for Tinter in reversed(self.intermediate_Ts):
-            fd.restrict(Tf, Tinter)
-            Tf = Tinter
-        fd.restrict(Tf, out.fun)
+        fd.restrict(residual, out.fun)
+        rf = residual
+        for i in reversed(range(0, len(self.intermediate_Rs)-1)):
+            fd.restrict(rf, self.intermediate_Rs[i])
+            rf = self.intermediate_Rs[i]
+        out.fun.assign(rf)
 
     def interpolate(self, vector, out):
         Tc = vector.fun
-        for Tinter in self.intermediate_Ts:
-            fd.prolong(Tc, Tinter)
-            Tc = Tinter
-        fd.prolong(Tc, out)
+        for i in range(1, len(self.intermediate_Ts)):
+            fd.prolong(Tc, self.intermediate_Ts[i])
+            Tc = self.intermediate_Ts[i]
+        out.assign(Tc)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
