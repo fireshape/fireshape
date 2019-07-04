@@ -28,9 +28,9 @@ def mesh_from_gmsh_code(geo_code, clscale=1.0, dim=2, comm=COMM_WORLD,
 
 def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
                  smooth=0):
+    args = [inputFile, "-o", outputFile, "-%i" % dimension,
+            "-clscale", "%f" % scale, "-smooth", "%i" % smooth]
     if platform == "linux" or platform == "linux2":
-        args = [inputFile, "-o", outputFile, "-%i" % dimension,
-                "-clscale", "%f" % scale, "-smooth", "%i" % smooth]
         if comm.size == 1:
             call(["gmsh"] + args)
         else:
@@ -59,7 +59,7 @@ def generateGmsh(inputFile, outputFile, dimension, scale, comm=COMM_WORLD,
             comm.Barrier()
     elif platform == "darwin":
         if comm.rank == 0:
-            cmd = "gmsh" + " ".join(args)
+            cmd = "gmsh " + " ".join(args)
             os.system(cmd)
         comm.Barrier()
     else:
