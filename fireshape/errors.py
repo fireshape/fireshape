@@ -1,0 +1,3 @@
+
+class MeshDeformationError(Exception):
+    pass

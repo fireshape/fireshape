@@ -71,7 +71,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     else:
         raise NotImplementedError
 
-    J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
+    J = 0.1 * fsz.LevelsetFunctional(f, Q, cb=cb)
 
     if use_extension == "w_ext":
         ext = fs.ElasticityExtension(Q.V_r)

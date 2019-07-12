@@ -29,7 +29,7 @@ USER firedrake
 WORKDIR /home/firedrake
 
 # Now install firedrake
-RUN echo "2019-04-25"
+RUN echo "2019-05-01"
 RUN curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
 RUN bash -c "python3 firedrake-install --no-package-manager --disable-ssh --venv-name=firedrake --install pyadjoint --mpicc mpicc.mpich --mpicxx mpicxx.mpich --mpif90 mpif90.mpich --mpiexec mpiexec.mpich"
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install wheel --upgrade

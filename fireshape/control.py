@@ -276,7 +276,7 @@ class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
 
     def __init__(self, mesh, bbox, orders, levels, fixed_dims=[],
-                 boundary_regularities=None):
+                 boundary_regularities=None, fe_control_degree=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -296,6 +296,9 @@ class BsplineControlSpace(ControlSpace):
                                [0,..,0] : they don't go to zero
                                [1,..,1] : they go to zero with C^0 regularity
                                [2,..,2] : they go to zero with C^1 regularity
+
+        fe_control_degree: degree for the fe interpolation space to use,
+                           if none, then uses the degree of the splines
         """
         self.boundary_regularities = [o - 1 for o in orders] \
             if boundary_regularities is None else boundary_regularities
@@ -339,17 +342,19 @@ class BsplineControlSpace(ControlSpace):
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders) - 1
+        if fe_control_degree is None:
+            fe_control_degree = maxdegree
         # self.V_r =
         # self.inner_product = inner_product
         # self.inner_product.get_impl(self.V_r, self.FullIFW)
 
         # is this the proper space?
-        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
+        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", fe_control_degree)
         self.I_control = self.build_interpolation_matrix(self.V_control)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
-        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
+        element = fd.VectorElement("CG", mesh.ufl_cell(), fe_control_degree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
