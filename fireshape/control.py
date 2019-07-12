@@ -201,12 +201,16 @@ class FeMultiGridControlSpace(ControlSpace):
             fd.Function(getV(mesh)).interpolate(mesh.coordinates)
             for mesh in mh
         ]
+        self.intermediate_Ids = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
         # to store derivatives on the different levels
         self.intermediate_Rs = [
             T.copy(deepcopy=True) for T in self.intermediate_Ts
         ]
 
-        meshes_transformed = [fd.Mesh(T) for T in self.intermediate_Ts]
+        meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
         self.mh_m = fd.HierarchyBase(
             meshes_transformed, mh.coarse_to_fine_cells,
             mh.fine_to_coarse_cells,
@@ -234,6 +238,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
     def interpolate(self, vector, out):
         Tc = vector.fun
+        self.intermediate_Ts[0].assign(self.intermediate_Ids[0] + vector.fun)
         for i in range(1, len(self.intermediate_Ts)):
             fd.prolong(Tc, self.intermediate_Ts[i])
             Tc = self.intermediate_Ts[i]
