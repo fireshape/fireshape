@@ -251,9 +251,11 @@ class ObjectiveSum(Objective):
     def derivative_form(self, v):
         return self.a.derivative_form(v) + self.b.derivative_form(v)
 
-    def update(self, *args):
-        self.a.update(*args)
-        self.b.update(*args)
+    def update(self, x, flag, iteration):
+        self.a.update(x, flag, iteration)
+        self.b.update(x, flag, iteration)
+        if iteration >= 0 and self.cb is not None:
+            self.cb()
 
 
 class ScaledObjective(Objective):
@@ -270,5 +272,7 @@ class ScaledObjective(Objective):
         self.J.derivative(out)
         out.scale(self.alpha)
 
-    def update(self, *args):
-        self.J.update(*args)
+    def update(self, x, flag, iteration):
+        self.J.update(x, flag, iteration)
+        if iteration >= 0 and self.cb is not None:
+            self.cb()
