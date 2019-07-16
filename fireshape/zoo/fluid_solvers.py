@@ -151,10 +151,9 @@ class StokesSolver(FluidSolver):
     def get_weak_form(self):
         (v, q) = fd.TestFunctions(self.V)
         (u, p) = fd.split(self.solution)
-        F = (
-            self.nu * fd.inner(2*fd.sym(fd.grad(u)), fd.grad(v)) * fd.dx
-            - p * fd.div(v) * fd.dx
-            - fd.div(u) * q * fd.dx
+        F = self.nu * fd.inner(2*fd.sym(fd.grad(u)), fd.grad(v)) * fd.dx \
+            - p * fd.div(v) * fd.dx \
+            - fd.div(u) * q * fd.dx \
             + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
         return F
 
