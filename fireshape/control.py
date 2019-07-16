@@ -201,6 +201,10 @@ class FeMultiGridControlSpace(ControlSpace):
             fd.Function(getV(mesh)).interpolate(mesh.coordinates)
             for mesh in mh
         ]
+        self.temp_intermediate_Ts = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
         self.intermediate_Ids = [
             fd.Function(getV(mesh)).interpolate(mesh.coordinates)
             for mesh in mh
@@ -211,6 +215,12 @@ class FeMultiGridControlSpace(ControlSpace):
         ]
 
         meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
+        from collections import defaultdict
+        for i, m in enumerate(meshes_transformed):
+            m._shared_data_cache = defaultdict(dict)
+            for k in mh[i]._shared_data_cache:
+                if k != "hierarchy_physical_node_locations":
+                    m._shared_data_cache[k] = mh[i]._shared_data_cache[k]
         self.mh_m = fd.HierarchyBase(
             meshes_transformed, mh.coarse_to_fine_cells,
             mh.fine_to_coarse_cells,
@@ -225,8 +235,8 @@ class FeMultiGridControlSpace(ControlSpace):
         self.V_r = getV(self.mesh_r)
         self.mesh_m = self.mh_m[-1]
         self.T = self.intermediate_Ts[-1]
-        self.V_m = getV(self.mesh_m)
         self.id = self.T.copy(deepcopy=True)
+        self.V_m = getV(self.mesh_m)
 
     def restrict(self, residual, out):
         fd.restrict(residual, out.fun)
@@ -237,11 +247,11 @@ class FeMultiGridControlSpace(ControlSpace):
         out.fun.assign(rf)
 
     def interpolate(self, vector, out):
-        Tc = vector.fun
-        self.intermediate_Ts[0].assign(self.intermediate_Ids[0] + vector.fun)
+        self.temp_intermediate_Ts[0].assign(vector.fun)
+        Tc = self.temp_intermediate_Ts[0]
         for i in range(1, len(self.intermediate_Ts)):
-            fd.prolong(Tc, self.intermediate_Ts[i])
-            Tc = self.intermediate_Ts[i]
+            fd.prolong(Tc, self.temp_intermediate_Ts[i])
+            Tc = self.temp_intermediate_Ts[i]
         out.assign(Tc)
 
     def get_zero_vec(self):
@@ -270,6 +280,20 @@ class FeMultiGridControlSpace(ControlSpace):
         """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
             chk.load(vec.fun, name=filename)
+
+    def update_domain(self, q: 'ControlVector'):
+        parentres = super().update_domain(q)
+        if not parentres:
+            return False
+
+        self.intermediate_Ts[0].assign(q.fun)
+        Tc = self.intermediate_Ts[0]
+        for i in range(1, len(self.intermediate_Ts)):
+            fd.prolong(Tc, self.intermediate_Ts[i])
+            Tc = self.intermediate_Ts[i]
+        for i in range(0, len(self.intermediate_Ts)):
+            self.intermediate_Ts[i] += self.intermediate_Ids[i]
+        return True
 
 
 class BsplineControlSpace(ControlSpace):
