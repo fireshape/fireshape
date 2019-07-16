@@ -5,9 +5,15 @@ import fireshape.zoo as fsz
 import ROL
 
 
-@pytest.mark.parametrize("inner_t", [fs.H1InnerProduct, fs.ElasticityInnerProduct, fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext", "w_ext_fixed_fim"])
-@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace, fs.FeMultiGridControlSpace, fs.BsplineControlSpace])
+@pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
+                                     fs.ElasticityInnerProduct,
+                                     fs.LaplaceInnerProduct])
+@pytest.mark.parametrize("use_extension", ["wo_ext",
+                                           "w_ext",
+                                           "w_ext_fixed_fim"])
+@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
+                                            fs.FeMultiGridControlSpace,
+                                            fs.BsplineControlSpace])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
@@ -31,14 +37,15 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
         if dim == 2:
             bbox = [(-2, 2), (-2, 2)]
             orders = [2, 2]
-            levels =  [4, 4]
+            levels = [4, 4]
         else:
-            bbox = [(-3, 3), (-3, 3), (-3,3)]
+            bbox = [(-3, 3), (-3, 3), (-3, 3)]
             orders = [2, 2, 2]
-            levels =  [3, 3, 3]
+            levels = [3, 3, 3]
         Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
     elif controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=2)
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh, order=2)
     else:
         Q = controlspace_t(mesh)
 
@@ -65,7 +72,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     else:
         raise NotImplementedError
 
-    J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
+    J = 0.1 * fsz.LevelsetFunctional(f, Q, cb=cb)
 
     if use_extension == "w_ext":
         ext = fs.ElasticityExtension(Q.V_r)
@@ -76,39 +83,47 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
 
     q = fs.ControlVector(Q, inner, boundary_extension=ext)
 
-    #these tolerances are not very stringent, but solutions are correct
-    #with tighter tolerances,  the combination FeMultiGridControlSpace-ElasticityInnerProduct
-    #fails because the mesh self-intersects (one should probably be more careful with the opt params)
+    # these tolerances are not very stringent, but solutions are correct with
+    # tighter tolerances,  the combination
+    # FeMultiGridControlSpace-ElasticityInnerProduct fails because the mesh
+    # self-intersects (one should probably be more careful with the opt params)
     grad_tol = 1e-1
     itlim = 15
     itlimsub = 15
 
-    #Volume constraint
-    vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q, scale=1)
+    # Volume constraint
+    vol = fsz.LevelsetFunctional(fd.Constant(1.0), Q)
     initial_vol = vol.value(q, None)
     econ = fs.EqualityConstraint([vol], target_value=[initial_vol])
     emul = ROL.StdVector(1)
 
-    #ROL parameters
+    # ROL parameters
     params_dict = {
-        'General': {
-            'Secant': {'Type': 'Limited-Memory BFGS',
-                       'Maximum Storage': 50}},
         'Step': {
             'Type': 'Augmented Lagrangian',
-            'Line Search': {'Descent Method': {
-                'Type': 'Quasi-Newton Step'}
-            },
             'Augmented Lagrangian': {
                 'Subproblem Step Type': 'Line Search',
                 'Penalty Parameter Growth Factor': 1.05,
                 'Print Intermediate Optimization History': True,
                 'Subproblem Iteration Limit': itlimsub
-            }},
+            },
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
+            },
+        },
+        'General': {
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 50
+            }
+        },
         'Status Test': {
             'Gradient Tolerance': grad_tol,
             'Step Tolerance': 1e-10,
-            'Iteration Limit': itlim}
+            'Iteration Limit': itlim
+        }
     }
     params = ROL.ParameterList(params_dict, "Parameters")
     problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
@@ -121,6 +136,6 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     assert (state.gnorm < grad_tol)
     assert abs(vol.value(q, None) - initial_vol) < 1e-2
 
+
 if __name__ == '__main__':
     pytest.main()
-    #test_levelset(3, fs.H1InnerProduct, fs.FeControlSpace, "w0_ext")

@@ -23,6 +23,7 @@ class PressurePinBC(fda.DirichletBC):
 
 class FluidSolver(PdeConstraint):
     """Abstract class for fluid problems as PdeContraint."""
+
     def __init__(self, mesh_m, mini=False, direct=True,
                  inflow_bids=[], inflow_expr=None,
                  noslip_bids=[], nu=1.0, pin_pressure=False):
@@ -155,7 +156,6 @@ class StokesSolver(FluidSolver):
             - p * fd.div(v) * fd.dx
             - fd.div(u) * q * fd.dx
             + fd.inner(fda.Constant((0., 0.)), v) * fd.dx
-        )
         return F
 
     def get_parameters(self):

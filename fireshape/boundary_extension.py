@@ -13,7 +13,9 @@ class ElasticityExtension(object):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         self.zero_fun = fd.Function(V)
-        self.a = 1e-2 * fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)), fd.sym(fd.grad(v))) * fd.dx
+        self.a = 1e-2 * \
+            fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)),
+                                              fd.sym(fd.grad(v))) * fd.dx
         self.bc_fun = fd.Function(V)
         if len(self.fixed_dims) == 0:
             bcs = [fd.DirichletBC(self.V, self.bc_fun, "on_boundary")]
@@ -23,12 +25,15 @@ class ElasticityExtension(object):
                 if i in self.fixed_dims:
                     bcs.append(fd.DirichletBC(self.V.sub(i), 0, "on_boundary"))
                 else:
-                    bcs.append(fd.DirichletBC(self.V.sub(i), self.bc_fun.sub(i), "on_boundary"))
-        self.A_ext= fd.assemble(self.a, bcs=bcs, mat_type="aij")
-        self.ls_ext= fd.LinearSolver(self.A_ext, solver_parameters=self.get_params())
-        self.A_adj = fd.assemble(self.a, bcs=fd.DirichletBC(self.V, self.zero, "on_boundary"), mat_type="aij")
-        self.ls_adj =  fd.LinearSolver(self.A_adj, \
-                                       solver_parameters=self.get_params())
+                    bcs.append(fd.DirichletBC(self.V.sub(
+                        i), self.bc_fun.sub(i), "on_boundary"))
+        self.A_ext = fd.assemble(self.a, bcs=bcs, mat_type="aij")
+        self.ls_ext = fd.LinearSolver(
+            self.A_ext, solver_parameters=self.get_params())
+        self.A_adj = fd.assemble(self.a, bcs=fd.DirichletBC(
+            self.V, self.zero, "on_boundary"), mat_type="aij")
+        self.ls_adj = fd.LinearSolver(self.A_adj,
+                                      solver_parameters=self.get_params())
 
     def extend(self, bc_val, out):
         self.bc_fun.assign(bc_val)

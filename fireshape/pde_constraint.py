@@ -1,9 +1,6 @@
-import firedrake as fd
-
-
 class PdeConstraint(object):
     """
-    Base class for PdeConstrain.
+    Base class for PdeConstraint.
     """
 
     def __init__(self):

@@ -1,5 +1,4 @@
 from .innerproduct import InnerProduct
-from .boundary_extension import ElasticityExtension
 import ROL
 import firedrake as fd
 import firedrake_adjoint as fda
@@ -36,6 +35,7 @@ class ControlSpace(object):
     Key idea: solve state and adjoint equations in V_m. Then, compute update
     of mesh_m in V_m, transplant it to V_r, and restrict it to ControlSpace.
     """
+
     def restrict(self, residual, out):
         """
         Restrict from self.V_r into ControlSpace
@@ -125,6 +125,7 @@ class ControlSpace(object):
 
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
+
     def __init__(self, mesh_r):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
@@ -177,62 +178,81 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
     """
-    FEControlSpace on given mesh and StateSpace on uniformly refined mesh.
+    FEControlSpace on the coarsest mesh of a MeshHierarchy.
 
-    Use the provided mesh to construct a Lagrangian finite element control
-    space. Then, refine the mesh `refinements`-times to construct
-    representatives of ControlVectors that are compatible with the state
-    space.
+    Use the provided mesh hierarchy to construct a new hierarchy with meshes of
+    order `order` that then gets deformed. The control lives on the coarse grid
+    and is prolonged onto the finer grids. We do this preserve nestedness
+    properties, instead of defining the deformation on the finest grid and then
+    injecting into coarser grids.
 
     Inputs:
-        refinements: type int, number of uniform refinements to perform
-                     to obtain the StateSpace mesh.
+        mh: type MeshHierarchy
         order: type int, order of Lagrange basis functions of ControlSpace.
 
-    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
-    def __init__(self, mesh_r, refinements=1, order=1):
-        mh = fd.MeshHierarchy(mesh_r, refinements)
-        self.mesh_hierarchy = mh
+
+    def __init__(self, mh, order=1):
+        self.mh_r = mh
+
+        def getV(mesh):
+            return fd.VectorFunctionSpace(mesh, "CG", order)
+        self.intermediate_Ts = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
+        self.temp_intermediate_Ts = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
+        self.intermediate_Ids = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
+        # to store derivatives on the different levels
+        self.intermediate_Rs = [
+            T.copy(deepcopy=True) for T in self.intermediate_Ts
+        ]
+
+        meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
+        from collections import defaultdict
+        for i, m in enumerate(meshes_transformed):
+            m._shared_data_cache = defaultdict(dict)
+            for k in mh[i]._shared_data_cache:
+                if k != "hierarchy_physical_node_locations":
+                    m._shared_data_cache[k] = mh[i]._shared_data_cache[k]
+        self.mh_m = fd.HierarchyBase(
+            meshes_transformed, mh.coarse_to_fine_cells,
+            mh.fine_to_coarse_cells,
+            refinements_per_level=mh.refinements_per_level, nested=mh.nested
+        )
 
         # Control space on coarsest mesh
-        self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
-                                                 order)
+        self.mesh_r_coarse = self.mh_r[0]
+        self.V_r_coarse = getV(self.mesh_r_coarse)
 
-        # Create self.id and self.T on refined mesh.
-        element = self.V_r_coarse.ufl_element()
-
-        self.intermediate_Ts = []
-        for i in range(refinements-1):
-            mesh = self.mesh_hierarchy[i+1]
-            V = fd.FunctionSpace(mesh, element)
-            self.intermediate_Ts.append(fd.Function(V))
-
-        self.mesh_r = self.mesh_hierarchy[-1]
-        element = self.V_r_coarse.ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.Function(self.V_r).interpolate(X)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fda.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.mesh_r = self.mh_r[-1]
+        self.V_r = getV(self.mesh_r)
+        self.mesh_m = self.mh_m[-1]
+        self.T = self.intermediate_Ts[-1]
+        self.id = self.T.copy(deepcopy=True)
+        self.V_m = getV(self.mesh_m)
 
     def restrict(self, residual, out):
-        Tf = residual
-        for Tinter in reversed(self.intermediate_Ts):
-            fd.restrict(Tf, Tinter)
-            Tf = Tinter
-        fd.restrict(Tf, out.fun)
+        fd.restrict(residual, out.fun)
+        rf = residual
+        for i in reversed(range(0, len(self.intermediate_Rs)-1)):
+            fd.restrict(rf, self.intermediate_Rs[i])
+            rf = self.intermediate_Rs[i]
+        out.fun.assign(rf)
 
     def interpolate(self, vector, out):
-        Tc = vector.fun
-        for Tinter in self.intermediate_Ts:
-            fd.prolong(Tc, Tinter)
-            Tc = Tinter
-        fd.prolong(Tc, out)
+        self.temp_intermediate_Ts[0].assign(vector.fun)
+        Tc = self.temp_intermediate_Ts[0]
+        for i in range(1, len(self.intermediate_Ts)):
+            fd.prolong(Tc, self.temp_intermediate_Ts[i])
+            Tc = self.temp_intermediate_Ts[i]
+        out.assign(Tc)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
@@ -261,11 +281,26 @@ class FeMultiGridControlSpace(ControlSpace):
         with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
             chk.load(vec.fun, name=filename)
 
+    def update_domain(self, q: 'ControlVector'):
+        parentres = super().update_domain(q)
+        if not parentres:
+            return False
+
+        self.intermediate_Ts[0].assign(q.fun)
+        Tc = self.intermediate_Ts[0]
+        for i in range(1, len(self.intermediate_Ts)):
+            fd.prolong(Tc, self.intermediate_Ts[i])
+            Tc = self.intermediate_Ts[i]
+        for i in range(0, len(self.intermediate_Ts)):
+            self.intermediate_Ts[i] += self.intermediate_Ids[i]
+        return True
+
 
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
+
     def __init__(self, mesh, bbox, orders, levels, fixed_dims=[],
-                 boundary_regularities=None):
+                 boundary_regularities=None, fe_control_degree=None):
         """
         bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
               of a Cartesian grid that extends around the shape to be
@@ -280,12 +315,17 @@ class BsplineControlSpace(ControlSpace):
                 univariate B-splines
         fixed_dims: dimensions in which the deformation should be zero
 
-        boundary_regularities: how fast the splines go to zero on the boundary for each dimension
-                               [0,..,0] means that they don't go to zero
-                               [1,..,1] means that they go to zero with C^0 regularity
-                               [2,..,2] means that they go to zero with C^1 regularity
+        boundary_regularities: how fast the splines go to zero on the boundary
+                               for each dimension
+                               [0,..,0] : they don't go to zero
+                               [1,..,1] : they go to zero with C^0 regularity
+                               [2,..,2] : they go to zero with C^1 regularity
+
+        fe_control_degree: degree for the fe interpolation space to use,
+                           if none, then uses the degree of the splines
         """
-        self.boundary_regularities = [o-1 for o in orders] if boundary_regularities is None else boundary_regularities 
+        self.boundary_regularities = [o - 1 for o in orders] \
+            if boundary_regularities is None else boundary_regularities
         # information on B-splines
         self.dim = len(bbox)  # geometric dimension
         self.bbox = bbox
@@ -325,18 +365,20 @@ class BsplineControlSpace(ControlSpace):
             # inner_product.fixed_bids = [1,2,3,4,5,6]
 
         self.mesh_r = meshloc
-        maxdegree = max(self.orders)-1
+        maxdegree = max(self.orders) - 1
+        if fe_control_degree is None:
+            fe_control_degree = maxdegree
         # self.V_r =
         # self.inner_product = inner_product
         # self.inner_product.get_impl(self.V_r, self.FullIFW)
 
         # is this the proper space?
-        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
+        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", fe_control_degree)
         self.I_control = self.build_interpolation_matrix(self.V_control)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
-        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
+        element = fd.VectorElement("CG", mesh.ufl_cell(), fe_control_degree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
@@ -372,21 +414,21 @@ class BsplineControlSpace(ControlSpace):
             # degree = order-1 # splev uses degree, not order
             assert level >= 1  # with level=1 only bdry Bsplines
 
-            knots_01 = np.concatenate((np.zeros((order-1,), dtype=float),
-                                       np.linspace(0., 1., 2**level+1),
-                                       np.ones((order-1,), dtype=float)))
+            knots_01 = np.concatenate((np.zeros((order - 1,), dtype=float),
+                                       np.linspace(0., 1., 2**level + 1),
+                                       np.ones((order - 1,), dtype=float)))
 
             (xmin, xmax) = self.bbox[dim]
-            knots = (xmax - xmin)*knots_01 + xmin
+            knots = (xmax - xmin) * knots_01 + xmin
             self.knots.append(knots)
             # dimension of univariate spline spaces
             # the "-2" is because we want homogeneous Dir bc
-            n = len(knots) - order - 2*self.boundary_regularities[dim]
+            n = len(knots) - order - 2 * self.boundary_regularities[dim]
             assert n > 0
             self.n.append(n)
 
         # dimension of multivariate spline space
-        N = reduce(lambda x, y: x*y, self.n)
+        N = reduce(lambda x, y: x * y, self.n)
         self.N = N
 
     def build_interpolation_matrix(self, V):
@@ -425,7 +467,8 @@ class BsplineControlSpace(ControlSpace):
 
         comm = self.comm
 
-        mass_temp = fd.assemble(fd.TrialFunction(V.sub(0)) * fd.TestFunction(V.sub(0)) * fd.dx)
+        u, v = fd.TrialFunction(V.sub(0)), fd.TestFunction(V.sub(0))
+        mass_temp = fd.assemble(u * v * fd.dx)
         self.lg_map_fe = mass_temp.petscmat.getLGMap()[0]
 
         for dim in range(self.dim):
@@ -434,20 +477,22 @@ class BsplineControlSpace(ControlSpace):
             knots = self.knots[dim]
             n = self.n[dim]
 
-            local_n = n // comm.size + int(comm.rank < (n % comm.size)) # owned part of global problem
+            # owned part of global problem
+            local_n = n // comm.size + int(comm.rank < (n % comm.size))
             I = PETSc.Mat().create(comm=self.comm)
             I.setType(PETSc.Mat.Type.AIJ)
             lsize = x_int.vector().local_size()
             gsize = x_int.vector().size()
             I.setSizes(((lsize, gsize), (local_n, n)))
-            
 
             I.setUp()
             x_int = fd.interpolate(x_fct[dim], V.sub(0))
             x = x_int.vector().get_local()
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
-                coeffs[idx+self.boundary_regularities[dim]] = 1  # idx+1 because we impose hom Dir bc
+
+                # impose boundary regularity
+                coeffs[idx + self.boundary_regularities[dim]] = 1
                 degree = order - 1  # splev uses degree, not order
                 tck = (knots, coeffs, degree)
 
@@ -479,7 +524,8 @@ class BsplineControlSpace(ControlSpace):
         IFW.setType(PETSc.Mat.Type.AIJ)
 
         comm = self.comm
-        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size)) # owned part of global problem
+        # owned part of global problem
+        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size))
         (lsize, gsize) = interp_1d[0].getSizes()[0]
         IFW.setSizes(((lsize, gsize), (local_N, self.N)))
         IFW.setUp()
@@ -502,10 +548,12 @@ class BsplineControlSpace(ControlSpace):
         FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
         d = self.dim
-        free_dims = list(set(range(self.dim))-set(self.fixed_dims))
+        free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         dfree = len(free_dims)
         ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
-        FullIFW.setSizes(((d*lsize, d*gsize), (dfree*lsize_spline, dfree*gsize_spline)))
+
+        FullIFW.setSizes(((d * lsize, d * gsize),
+                          (dfree * lsize_spline, dfree * gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
         FullIFW.setUp()
 
@@ -540,7 +588,7 @@ class BsplineControlSpace(ControlSpace):
 
     def visualize_control(self, q, out):
         with out.dat.vec_wo as outp:
-                self.I_control.mult(q.vec_wo(), outp)
+            self.I_control.mult(q.vec_wo(), outp)
 
     def store(self, vec, filename="control.dat"):
         """
@@ -573,6 +621,7 @@ class ControlVector(ROL.Vector):
     A ControlVector is a ROL.Vector and thus needs the following methods:
     plus, scale, clone, dot, axpy, set.
     """
+
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
                  data=None, boundary_extension=None):
         super().__init__()
@@ -589,19 +638,19 @@ class ControlVector(ROL.Vector):
         else:
             self.fun = None
 
-
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             p1 = fe_deriv
             p1 *= -1
-            self.boundary_extension.solve_homogeneous_adjoint(p1, residual_smoothed)
-            self.boundary_extension.apply_adjoint_action(residual_smoothed, residual_smoothed)
+            self.boundary_extension.solve_homogeneous_adjoint(
+                p1, residual_smoothed)
+            self.boundary_extension.apply_adjoint_action(
+                residual_smoothed, residual_smoothed)
             residual_smoothed -= p1
             self.controlspace.restrict(residual_smoothed, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
-
 
     def to_coordinatefield(self, out):
         self.controlspace.interpolate(self, out)

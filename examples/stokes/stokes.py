@@ -5,9 +5,10 @@ import fireshape.zoo as fsz
 import ROL
 
 mesh = fd.Mesh("Sphere2D.msh")
+mh = fd.MeshHierarchy(mesh, 1)
 
-# Q = fs.FeControlSpace(mesh)
-Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=1)
+# Q = fs.FeControlSpace(mh[-1])
+Q = fs.FeMultiGridControlSpace(mh, order=1)
 inner = fs.ElasticityInnerProduct(Q, fixed_bids=[1, 2, 3])
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)

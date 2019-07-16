@@ -32,6 +32,7 @@ class UflInnerProduct(InnerProduct):
     firedrake.FunctionSpace, then an interpolation matrix between the two is
     necessary.
     """
+
     def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
@@ -170,6 +171,7 @@ class UflInnerProduct(InnerProduct):
 class H1InnerProduct(UflInnerProduct):
 
     """Inner product on H1. It involves stiffness and mass matrices."""
+
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -187,6 +189,7 @@ class LaplaceInnerProduct(UflInnerProduct):
         super().__init__(*args, **kwargs)
 
     """Inner product on H10. It comprises only the stiffness matrix."""
+
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -287,7 +290,7 @@ class SurfaceInnerProduct(InnerProduct):
         n = fd.FacetNormal(V.mesh())
 
         def surf_grad(u):
-            return fd.sym(fd.grad(u) - fd.outer(fd.grad(u)*n, n))
+            return fd.sym(fd.grad(u) - fd.outer(fd.grad(u) * n, n))
         a = (fd.inner(surf_grad(u), surf_grad(v)) + fd.inner(u, v)) * fd.ds
         # petsc doesn't like matrices with zero rows
         a += 1e-10 * fd.inner(u, v) * fd.dx
@@ -297,15 +300,19 @@ class SurfaceInnerProduct(InnerProduct):
         tdim = V.mesh().topological_dimension()
 
         lsize = fd.Function(V).vector().local_size()
+
         def get_nodes_bc(bc):
             nodes = bc.nodes
             return nodes[nodes < lsize]
 
         def get_nodes_bid(bid):
-            return get_nodes_bc(fd.DirichletBC(V, fd.Constant(tdim * (0,)), bid))
+            bc = fd.DirichletBC(V, fd.Constant(tdim * (0,)), bid)
+            return get_nodes_bc(bc)
 
-        free_nodes = np.concatenate([get_nodes_bid(bid) for bid in self.free_bids])
-        free_dofs = np.concatenate([tdim*free_nodes + i for i in range(tdim)])
+        free_nodes = np.concatenate([get_nodes_bid(bid)
+                                     for bid in self.free_bids])
+        free_dofs = np.concatenate(
+            [tdim * free_nodes + i for i in range(tdim)])
         free_dofs = np.unique(np.sort(free_dofs))
         self.free_is = PETSc.IS().createGeneral(free_dofs)
         lgr, lgc = A.getLGMap()

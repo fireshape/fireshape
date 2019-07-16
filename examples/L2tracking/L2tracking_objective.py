@@ -5,7 +5,8 @@ from L2tracking_PDEconstraint import PoissonSolver
 
 class L2trackingObjective(ShapeObjective):
     """L2 tracking functional for Poisson problem."""
-    def __init__(self, pde_solver: PoissonSolver, *args,  **kwargs):
+
+    def __init__(self, pde_solver: PoissonSolver, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u = pde_solver.solution
 
