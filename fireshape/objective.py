@@ -254,11 +254,12 @@ class ObjectiveSum(Objective):
     def derivative_form(self, v):
         return self.a.derivative_form(v) + self.b.derivative_form(v)
 
-    def update(self, x, iteration, flag):
-        self.a.update(x, iteration, flag)
-        self.b.update(x, iteration, flag)
+    def update(self, x, flag, iteration):
+        resa = self.a.update(x, flag, iteration)
+        resb = self.b.update(x, flag, iteration)
         if iteration >= 0 and self.cb is not None:
             self.cb()
+        return resa or resb
 
 
 class ScaledObjective(Objective):
@@ -275,10 +276,11 @@ class ScaledObjective(Objective):
         self.J.derivative(out)
         out.scale(self.alpha)
 
-    def update(self, x, iteration, flag):
-        self.J.update(x, iteration, flag)
+    def update(self, x, flag, iteration):
+        res = self.J.update(x, flag, iteration)
         if iteration >= 0 and self.cb is not None:
             self.cb()
+        return res
 
 
 class DeformationCheckObjective(Objective):
