@@ -1,21 +1,20 @@
 import firedrake as fd
+from .bilinearform import GoodHelmholtzForm
 
 
-class ElasticityExtension(object):
+class DirichletExtension(object):
 
-    def __init__(self, V, fixed_dims=[], direct_solve=False):
+    def __init__(self, V, form=None, fixed_dims=[], direct_solve=False):
         if isinstance(fixed_dims, int):
             fixed_dims = [fixed_dims]
+        if form is None:
+            form = GoodHelmholtzForm()
         self.V = V
         self.fixed_dims = fixed_dims
         self.direct_solve = direct_solve
         self.zero = fd.Constant(V.mesh().topological_dimension() * (0,))
-        u = fd.TrialFunction(V)
-        v = fd.TestFunction(V)
         self.zero_fun = fd.Function(V)
-        self.a = 1e-2 * \
-            fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)),
-                                              fd.sym(fd.grad(v))) * fd.dx
+        self.a = form.get_form(V)
         self.bc_fun = fd.Function(V)
         if len(self.fixed_dims) == 0:
             bcs = [fd.DirichletBC(self.V, self.bc_fun, "on_boundary")]
