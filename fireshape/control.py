@@ -720,3 +720,25 @@ class ControlVector(ROL.Vector):
     def __str__(self):
         """String representative, so we can call print(vec)."""
         return self.vec_ro()[:].__str__()
+
+    def reduce(self, r, r0):
+        vec = self.fun.vector()
+        res = r0
+        tempx = vec.get_local()
+        for i in range(len(tempx)):
+            res = r(tempx[i], res)
+        vec.set_local(tempx)
+        comm = self.controlspace.mesh_r.mpi_comm()
+        all_res = comm.allgather(res)
+        for i in range(comm.size):
+            if i == comm.rank:
+                continue
+            res = r(all_res[i], res)
+        return res
+
+    def applyBinary(self, f, y):
+        tempx = self.fun.vector().get_local()
+        tempy = y.fun.vector().get_local()
+        for i in range(len(tempx)):
+            tempx[i] = f(tempx[i], tempy[i])
+        self.fun.vector().set_local(tempx)
