@@ -697,7 +697,8 @@ class ControlVector(ROL.Vector):
         The name of this method is misleading, but it is dictated by ROL.
         """
         res = ControlVector(self.controlspace, self.inner_product,
-                            boundary_extension=self.boundary_extension)
+                            boundary_extension=self.boundary_extension,
+                            control_constraint=self.control_constraint)
         # res.set(self)
         return res
 
