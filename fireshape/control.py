@@ -623,11 +623,12 @@ class ControlVector(ROL.Vector):
     """
 
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None, boundary_extension=None):
+                 data=None, boundary_extension=None, control_constraint=None):
         super().__init__()
         self.controlspace = controlspace
         self.inner_product = inner_product
         self.boundary_extension = boundary_extension
+        self.control_constraint = control_constraint
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -648,11 +649,14 @@ class ControlVector(ROL.Vector):
             self.boundary_extension.apply_adjoint_action(
                 residual_smoothed, residual_smoothed)
             residual_smoothed -= p1
-            self.controlspace.restrict(residual_smoothed, self)
-        else:
+            fe_deriv = residual_smoothed
             self.controlspace.restrict(fe_deriv, self)
+        if self.control_constraint is not None:
+            self.control_constraint.adjoint(self.fun, self.fun)
 
     def to_coordinatefield(self, out):
+        if self.control_constraint is not None:
+            self.control_constraint.forward(self.fun, self.fun)
         self.controlspace.interpolate(self, out)
         if self.boundary_extension is not None:
             self.boundary_extension.extend(out, out)

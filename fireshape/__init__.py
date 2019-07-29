@@ -6,3 +6,4 @@ from .constraint import *
 from .boundary_extension import *
 from .gmsh_helpers import *
 from .bilinearform import *
+from .control_constraint import InteriorControlConstraint
