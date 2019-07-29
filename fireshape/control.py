@@ -1,10 +1,12 @@
 from .innerproduct import InnerProduct
+from .boundary_extension import NeumannExtension
 import ROL
 import firedrake as fd
 import firedrake_adjoint as fda
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector",
+           "ScalarFeMultiGridControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -176,7 +178,7 @@ class FeControlSpace(ControlSpace):
             chk.load(vec.fun, name=filename)
 
 
-class FeMultiGridControlSpace(ControlSpace):
+class ScalarFeMultiGridControlSpace(ControlSpace):
     """
     FEControlSpace on the coarsest mesh of a MeshHierarchy.
 
@@ -192,7 +194,7 @@ class FeMultiGridControlSpace(ControlSpace):
 
     """
 
-    def __init__(self, mh, order=1):
+    def __init__(self, mh, extension_form, order=1, fixed_bids=[]):
         self.mh_r = mh
 
         def getV(mesh):
@@ -237,9 +239,125 @@ class FeMultiGridControlSpace(ControlSpace):
         self.T = self.intermediate_Ts[-1]
         self.id = self.T.copy(deepcopy=True)
         self.V_m = getV(self.mesh_m)
+        self.V_r_scalar = fd.FunctionSpace(self.mesh_r_coarse, "CG", order)
+        self.neumann_map = NeumannExtension(
+            self.V_r_coarse, self.V_r_scalar, form=extension_form, direct_solve=True,
+            fixed_bids=fixed_bids)
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.fun)
+        rf = residual
+        for i in reversed(range(0, len(self.intermediate_Rs)-1)):
+            fd.restrict(rf, self.intermediate_Rs[i])
+            rf = self.intermediate_Rs[i]
+        self.neumann_map.adjoint(rf, out)
+
+    def interpolate(self, vector, out):
+        self.neumann_map.forward(vector, self.temp_intermediate_Ts[0])
+        Tc = self.temp_intermediate_Ts[0]
+        for i in range(1, len(self.intermediate_Ts)):
+            fd.prolong(Tc, self.temp_intermediate_Ts[i])
+            Tc = self.temp_intermediate_Ts[i]
+        out.assign(Tc)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_r_scalar)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        return (self.V_r_scalar, None)
+
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
+
+    def update_domain(self, q: 'ControlVector'):
+        parentres = super().update_domain(q)
+        if not parentres:
+            return False
+
+        for i in range(0, len(self.intermediate_Ts)):
+            self.intermediate_Ts[i].assign(
+                self.temp_intermediate_Ts[i] + self.intermediate_Ids[i])
+        return True
+
+
+class FeMultiGridControlSpace(ControlSpace):
+    """
+    FEControlSpace on the coarsest mesh of a MeshHierarchy.
+
+    Use the provided mesh hierarchy to construct a new hierarchy with meshes of
+    order `order` that then gets deformed. The control lives on the coarse grid
+    and is prolonged onto the finer grids. We do this preserve nestedness
+    properties, instead of defining the deformation on the finest grid and then
+    injecting into coarser grids.
+
+    Inputs:
+        mh: type MeshHierarchy
+        order: type int, order of Lagrange basis functions of ControlSpace.
+
+    """
+
+    def __init__(self, mh, order=1):
+        self.mh_r = mh
+
+        def getV(mesh):
+            return fd.VectorFunctionSpace(mesh, "CG", order)
+        self.intermediate_Ts = [
+            fd.Function(getV(mesh)).interpolate(mesh.coordinates)
+            for mesh in mh
+        ]
+        self.temp_intermediate_Ts = [
+            T.copy(deepcopy=True) for T in self.intermediate_Ts
+        ]
+        self.intermediate_Ids = [
+            T.copy(deepcopy=True) for T in self.intermediate_Ts
+        ]
+        # to store derivatives on the different levels
+        self.intermediate_Rs = [
+            T.copy(deepcopy=True) for T in self.intermediate_Ts
+        ]
+
+        meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
+        from collections import defaultdict
+        for i, m in enumerate(meshes_transformed):
+            m._shared_data_cache = defaultdict(dict)
+            for k in mh[i]._shared_data_cache:
+                if k != "hierarchy_physical_node_locations":
+                    m._shared_data_cache[k] = mh[i]._shared_data_cache[k]
+        self.mh_m = fd.HierarchyBase(
+            meshes_transformed, mh.coarse_to_fine_cells,
+            mh.fine_to_coarse_cells,
+            refinements_per_level=mh.refinements_per_level, nested=mh.nested
+        )
+
+        # Control space on coarsest mesh
+        self.mesh_r_coarse = self.mh_r[0]
+        self.V_r_coarse = getV(self.mesh_r_coarse)
+
+        self.mesh_r = self.mh_r[-1]
+        self.V_r = getV(self.mesh_r)
+        self.mesh_m = self.mh_m[-1]
+        self.T = self.intermediate_Ts[-1]
+        self.id = self.T.copy(deepcopy=True)
+        self.V_m = getV(self.mesh_m)
+
+    def restrict(self, residual, out):
         rf = residual
         for i in reversed(range(0, len(self.intermediate_Rs)-1)):
             fd.restrict(rf, self.intermediate_Rs[i])
@@ -286,13 +404,9 @@ class FeMultiGridControlSpace(ControlSpace):
         if not parentres:
             return False
 
-        self.intermediate_Ts[0].assign(q.fun)
-        Tc = self.intermediate_Ts[0]
-        for i in range(1, len(self.intermediate_Ts)):
-            fd.prolong(Tc, self.intermediate_Ts[i])
-            Tc = self.intermediate_Ts[i]
         for i in range(0, len(self.intermediate_Ts)):
-            self.intermediate_Ts[i] += self.intermediate_Ids[i]
+            self.intermediate_Ts[i].assign(
+                self.temp_intermediate_Ts[i] + self.intermediate_Ids[i])
         return True
 
 
@@ -650,7 +764,7 @@ class ControlVector(ROL.Vector):
                 residual_smoothed, residual_smoothed)
             residual_smoothed -= p1
             fe_deriv = residual_smoothed
-            self.controlspace.restrict(fe_deriv, self)
+        self.controlspace.restrict(fe_deriv, self)
         if self.control_constraint is not None:
             self.control_constraint.adjoint(self.fun, self.fun)
 

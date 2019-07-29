@@ -362,3 +362,84 @@ class SurfaceInnerProduct(InnerProduct):
         outvec *= 0.
         outvec.setValues(self.global_free_is_col.array, res.array)
         outvec.assemble()
+
+class ScalarSurfaceInnerProduct(InnerProduct):
+
+    def __init__(self, Q, fixed_bids=[]):
+        (V, I_interp) = Q.get_space_for_inner()
+
+        self.fixed_bids = fixed_bids
+
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+
+        n = fd.FacetNormal(V.mesh())
+
+        def surf_grad(u):
+            return fd.grad(u) - fd.inner(fd.grad(u), n) * n
+        a = (fd.inner(surf_grad(u), surf_grad(v)) + fd.inner(u, v)) * fd.ds
+        a = fd.inner(u, v) * fd.ds
+        # petsc doesn't like matrices with zero rows
+        a += 1e-10 * fd.inner(u, v) * fd.dx
+        A = fd.assemble(a, mat_type="aij")
+        A.force_evaluation()
+        A = A.petscmat
+        tdim = V.mesh().topological_dimension()
+
+        lsize = fd.Function(V).vector().local_size()
+
+        def get_nodes_bc(bc):
+            nodes = bc.nodes
+            return nodes[nodes < lsize]
+
+        def get_nodes_bid(bid):
+            bc = fd.DirichletBC(V, fd.Constant(0), bid, method="geometric")
+            return get_nodes_bc(bc)
+
+        all_nodes = get_nodes_bid("on_boundary")
+        if len(self.fixed_bids) > 0:
+            fixed_nodes = np.concatenate([get_nodes_bid(bid)
+                                          for bid in self.fixed_bids])
+            free_nodes = np.setdiff1d(all_nodes, fixed_nodes)
+        else:
+            free_nodes = all_nodes
+
+        free_dofs = free_nodes
+        free_dofs = np.unique(np.sort(free_dofs))
+        print("free_dofs %s" % (free_dofs))
+        self.free_is = PETSc.IS().createGeneral(free_dofs)
+        lgr, lgc = A.getLGMap()
+        self.global_free_is_row = lgr.applyIS(self.free_is)
+        self.global_free_is_col = lgc.applyIS(self.free_is)
+        A = A.createSubMatrix(self.global_free_is_row, self.global_free_is_col)
+        # A.view()
+        A.assemble()
+        self.A = A
+        Aksp = PETSc.KSP().create()
+        Aksp.setOperators(self.A)
+        Aksp.setOptionsPrefix("A_")
+        opts = PETSc.Options()
+        opts["A_ksp_type"] = "cg"
+        opts["A_pc_type"] = "cholesky"
+        opts["A_pc_factor_mat_solver_type"] = "mumps"
+        opts["A_ksp_atol"] = 1e-13
+        opts["A_ksp_rtol"] = 1e-13
+        Aksp.setUp()
+        Aksp.setFromOptions()
+        self.Aksp = Aksp
+
+    def eval(self, u, v):
+        usub = u.vec_ro().getSubVector(self.global_free_is_col)
+        vsub = v.vec_ro().getSubVector(self.global_free_is_col)
+        A_u = self.A.createVecLeft()
+        self.A.mult(usub, A_u)
+        return vsub.dot(A_u)
+
+    def riesz_map(self, v, out):  # dual to primal
+        vsub = v.vec_ro().getSubVector(self.global_free_is_col)
+        res = self.A.createVecLeft()
+        self.Aksp.solve(vsub, res)
+        outvec = out.vec_wo()
+        outvec *= 0.
+        outvec.setValues(self.global_free_is_col.array, res.array)
+        outvec.assemble()
