@@ -168,6 +168,19 @@ class UflInnerProduct(InnerProduct):
             self.ls.solve(out.fun, v.fun)
 
 
+class UflInnerProductFromForm(UflInnerProduct):
+
+    def __init__(self, form, *args, **kwargs):
+        self.form = form
+        super().__init__(*args, **kwargs)
+
+    def get_weak_form(self, V):
+        return self.form.get_form(V)
+
+    def get_nullspace(self, V):
+        return self.form.get_nullspace(V)
+
+
 class H1InnerProduct(UflInnerProduct):
 
     """Inner product on H1. It involves stiffness and mass matrices."""
