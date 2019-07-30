@@ -171,9 +171,9 @@ class ControlObjective(Objective):
                     form_compiler_parameters=self.params)
         out.fun.assign(self.deriv_r)
 
-    def update(self, x, flag, iteration):
-        self.f.assign(x.fun)
-        super().update(x, flag, iteration)
+    # def update(self, x, flag, iteration):
+    #     self.f.assign(x.fun)
+    #     super().update(x, flag, iteration)
 
 
 class ReducedObjective(ShapeObjective):
@@ -319,8 +319,10 @@ below) which makes it half its stepsize and try again.
         self.last_derivative = None
         self.return_last = False
         self.X = J.Q.T.copy(deepcopy=True)
+        # self.gradX = fd.Function(fd.TensorFunctionSpace(
+        #     self.X.ufl_domain(), "DG", self.X.ufl_element().degree()))
         self.gradX = fd.Function(fd.TensorFunctionSpace(
-            self.X.ufl_domain(), "DG", self.X.ufl_element().degree()))
+            self.X.ufl_domain(), "DG", 0))
         self.lastX = self.X.copy(deepcopy=True)
         self.lastX *= 0
         self.diff = self.lastX.copy(deepcopy=True)
@@ -353,13 +355,21 @@ below) which makes it half its stepsize and try again.
         from numpy.linalg import svd
         self.gradX.project(fd.grad(X))
         gradXv = self.gradX.vector()
-        dim = X.ufl_shape[0]
+        # dim = X.ufl_shape[0]
+        # max_val = 0
         for i, M in enumerate(gradXv):
             W, Sigma, V = svd(M, full_matrices=False)
-            for j in range(dim):
-                if Sigma[j] > eps:
-                    print(Sigma[j])
-                    return False
+            if Sigma[0] > eps:
+                fd.warning(fd.RED % ("Deformation too large."))
+                return False
+            # for j in range(dim):
+            #     # if Sigma[j] > max_val:
+            #     #     max_val = Sigma[j]
+            #     if Sigma[j] > eps:
+            #         # print(Sigma[j])
+            #         return False
+        # print("Biggest value in check_singular_values", max_val)
+        # return max_val < eps
         return True
 
     def update(self, q, *args):
