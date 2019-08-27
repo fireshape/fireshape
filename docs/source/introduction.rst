@@ -11,8 +11,10 @@ provide is the mesh on an initial guess,
 the shape functional, and the weak-form of its PDE-contraint.
 
 Fireshape computes adjoints and assembles first and
-second derivatives for you, and it solves the optimization
-problem using the rapid optimization library (`ROL <https://trilinos.org/packages/rol/>`_).
+second derivatives for you using
+`pyadjoint <http://www.dolfin-adjoint.org/en/release/>`_,
+and it solves the optimization problem using the rapid optimization library
+(`ROL <https://trilinos.org/packages/rol/>`_).
 
 Features
 ^^^^^^^^
