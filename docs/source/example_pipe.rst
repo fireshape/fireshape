@@ -132,7 +132,7 @@ To set up the problem, we need to:
 
    In this case, the control is discretized using tensorized cubic (:bash:`order = [4, 4]`) Bsplines
    (roughly :math:`2^4` in the :math:`x`-direction :math:`\times\, 2^3` in the :math:`y`-direction;
-   :bash:``levels = [4, 3]`).
+   :bash:`levels = [4, 3]`).
    These Bsplines lie in the box with lower left corner :math:`(1.5, 0)` and upper right corner :math:`(12., 6.)`
    (:bash:`bbox = [(1.5, 12.), (0, 6.)]`).
    With :bash:`boundary_regularities = [2, 0]` we prescribe that the transformation vanishes for :math:`x=1.5`
