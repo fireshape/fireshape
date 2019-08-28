@@ -117,6 +117,54 @@ To set up the problem, we need to:
   and solve it (*Line 60*). Note that the volume equality constraint
   is imposed in *Line 58*.
 
+.. note::
+
+   This problem can also be solved using Bsplines to discretize the control.
+   For instance, one could replace *Line 9-10* with
+
+   .. code-block:: none
+
+        bbox = [(1.5, 12.), (0, 6.)]
+        orders = [4, 4]
+        levels = [4, 3]
+        Q = fs.BsplineControlSpace(mesh, bbox, orders, levels, boundary_regularities=[2, 0])
+        inner = fs.H1InnerProduct(Q)
+
+   In this case, the control is discretized using tensorized cubic (:bash:`order = [4, 4]`) Bsplines
+   (roughly :math:`2^4` in the :math:`x`-direction :math:`\times\, 2^3` in the :math:`y`-direction;
+   :bash:``levels = [4, 3]`).
+   These Bsplines lie in the box with lower left corner :math:`(1.5, 0)` and upper right corner :math:`(12., 6.)`
+   (:bash:`bbox = [(1.5, 12.), (0, 6.)]`).
+   With :bash:`boundary_regularities = [2, 0]` we prescribe that the transformation vanishes for :math:`x=1.5`
+   and :math:`x=12` with :math:`C^1`-regularity, but it does not
+   necessarily vanish for :math:`y=0` and :math:`y=6`. In light of this,
+   we do not need to specify :bash:`fixed_bids` in the inner product.
+
+   Using Bsplines to discretize the control leads to similar results.
+   The corresponding implementation can be found in :bash:`examples/pipe/pipe_splines.py`.
+
+* choose the metric of the control space
+  (*Line 10*, :math:`H^1`-seminorm with homogeneous Dirichlet boundary conditions
+  on fixed boundaries)
+* initialize the PDE contraint on the physical mesh :bash:`mesh_m` (*Line 14*)
+* specify to save the function :math:`\mathbf{u}` after each iteration
+  in the file :bash:`u.pvd` by setting the function ``cb``
+  appropriately (*Lines 18-21*).
+* initialize the shape functional (*Line 23*),
+  and the reduced shape functional (*Line 24*),
+* specify the volume equality constraint (*Lines 27-40*)
+* create a ROL optimization prolem (*Lines 42-65*),
+  and solve it (*Line 66*). Note that the volume equality constraint
+  is imposed in *Line 64*.
+
+.. note::
+
+    This shape optimization problem is not easy. In particular,
+    it is not trivial to find a good combination of the optimization algorithm parameters
+    (e.g., :bash:`Penalty Parameter Growth Factor` and :bash:`Status Test`).
+    In particular, an unfortunate choice can lead to self-intersecting meshes.
+    This issue will be resolved in the future (cf. `this github-issue <https://github.com/fireshape/fireshape/issues/6>`_).
+
 .. literalinclude:: ../../examples/pipe/pipe_main.py
     :linenos:
 
@@ -142,7 +190,6 @@ with `ParaView <https://www.paraview.org/>`_. We see that the
 difference between the volume of the initial guess and of the
 retrieved optimized design is roughly :math:`5\cdot 10^{-4}`.
 
-
 For the 3D-example, typing :bash:`python3 pipe_main.py` in the terminal returns:
 
 .. code-block:: none
@@ -152,7 +199,7 @@ For the 3D-example, typing :bash:`python3 pipe_main.py` in the terminal returns:
 We can inspect the result by opening the file :bash:`u.pvd`
 with `ParaView <https://www.paraview.org/>`_. We see that the
 difference between the volume of the initial guess and of the
-retrieved optimized design is roughly :math:`???`.
+retrieved optimized design is roughly :math:`2\cdot 10^{-3}`.
 
 .. note::
 

@@ -11,7 +11,6 @@ class NavierStokesSolver(PdeConstraint):
         self.mesh_m = mesh_m
 
         self.failed_to_solve = False
-
         # Setup problem
         self.V = fd.VectorFunctionSpace(self.mesh_m, "CG", 2) \
             * fd.FunctionSpace(self.mesh_m, "CG", 1)

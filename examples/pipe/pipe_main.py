@@ -36,6 +36,20 @@ Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
 J = J + Jq
 
 # Set up volume constraint
+## volume constraint
+#class VolumeFunctional(fs.ShapeObjective):
+#    def __init__(self, *args, **kwargs):
+#        super().__init__(*args, **kwargs)
+#
+#        # physical mesh
+#        self.mesh_m = self.Q.mesh_m
+#
+#    def value_form(self):
+#        # volume integral
+#        return fd.Constant(1.0) * fd.dx(domain=self.mesh_m)
+#
+#
+#vol = VolumeFunctional(Q)
 vol = fsz.VolumeFunctional(Q)
 initial_vol = vol.value(q, None)
 econ = fs.EqualityConstraint([vol], target_value=[initial_vol])
@@ -53,8 +67,28 @@ params_dict = {
                 'Step Tolerance': 1e-6,
                 'Constraint Tolerance': 1e-1,
                 'Iteration Limit': 5}
-}
+#'General': {
+#    'Secant': {'Type': 'Limited-Memory BFGS',
+#               'Maximum Storage': 5}},
+#'Step': {
+#    'Type': 'Augmented Lagrangian',
+#    'Line Search': {'Descent Method': {
+#        'Type': 'Quasi-Newton Step'}
+#    },
+#    'Augmented Lagrangian': {
+#        'Subproblem Step Type': 'Line Search',
+#        'Penalty Parameter Growth Factor': 1.04,
+#        'Print Intermediate Optimization History': True,
+#        'Subproblem Iteration Limit': 5
+#    }},
+#'Status Test': {
+#    'Gradient Tolerance': 1e-2,
+#    'Step Tolerance': 1e-1,
+#    'Constraint Tolerance': 1e-3,
+#    'Iteration Limit': 20}
+                }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()
+print(vol.value(q, None) - initial_vol)
