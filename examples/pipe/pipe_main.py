@@ -1,5 +1,6 @@
 import firedrake as fd
 import fireshape as fs
+import firedrake_adjoint as fda
 import fireshape.zoo as fsz
 import ROL
 from pipe_PDEconstraint import NavierStokesSolver
@@ -14,9 +15,9 @@ q = fs.ControlVector(Q, inner)
 # setup PDE constraint
 dim = mesh.topological_dimension()
 if dim == 2:
-    viscosity = fd.Constant(1./400.)
+    viscosity = fda.Constant(1./400.)
 elif dim ==3:
-    viscosity = fd.Constant(1/10.)
+    viscosity = fda.Constant(1/10.)
 else:
     raise NotImplementedError
 e = NavierStokesSolver(Q.mesh_m, viscosity)
@@ -31,7 +32,7 @@ cb()
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
-Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
+Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.3), Q)
 J = J + Jq
 
 # volume constraint
@@ -56,7 +57,7 @@ emul = ROL.StdVector(1)
 params_dict = {
     'General': {
         'Secant': {'Type': 'Limited-Memory BFGS',
-                   'Maximum Storage': 5}},
+                   'Maximum Storage': 4}},
     'Step': {
         'Type': 'Augmented Lagrangian',
         'Line Search': {'Descent Method': {
@@ -64,13 +65,14 @@ params_dict = {
         },
         'Augmented Lagrangian': {
             'Subproblem Step Type': 'Line Search',
-            'Penalty Parameter Growth Factor': 1.04,
-            'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 5
+            'Penalty Parameter Growth Factor': 1.1,
+            'Maximum Penalty Parameter': 15,
+            'Print Intermediate Optimization History': False,
+            'Subproblem Iteration Limit': 10
         }},
     'Status Test': {
-        'Gradient Tolerance': 1e-2,
-        'Step Tolerance': 1e-1,
+        'Gradient Tolerance': 1e-3,
+        'Step Tolerance': 1e-2,
         'Constraint Tolerance': 1e-3,
         'Iteration Limit': 20}
 }
@@ -78,4 +80,4 @@ params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()
-print(vol.value(q, None) - initial_vol)
+print((vol.value(q, None) - initial_vol)/initial_vol)

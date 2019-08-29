@@ -1,4 +1,5 @@
 import firedrake as fd
+import firedrake_adjoint as fda
 from fireshape import PdeConstraint
 
 
@@ -13,10 +14,11 @@ class NavierStokesSolver(PdeConstraint):
         self.V = fd.VectorFunctionSpace(self.mesh_m, "CG", 2) \
             * fd.FunctionSpace(self.mesh_m, "CG", 1)
 
-        # Preallocate solution variables for state and adjoint equations
-        self.solution = fd.Function(self.V, name="State")
+        # Preallocate solution variables for state equation
+        self.solution = fda.Function(self.V, name="State")
         self.testfunction = fd.TestFunction(self.V)
-        self.solution_adj = fd.Function(self.V, name="Adjoint")
+        #### Preallocate solution variables for state and adjoint equations
+        #self.solution_adj = fd.Function(self.V, name="Adjoint")
 
         # Define viscosity parameter
         self.viscosity = viscosity
@@ -40,15 +42,19 @@ class NavierStokesSolver(PdeConstraint):
             uin = fd.as_vector([0, 0, 1-(2*r)**2])
         else:
             raise NotImplementedError
-        self.bcs = [fd.DirichletBC(self.V.sub(0), 0., [3, 4]),
-                    fd.DirichletBC(self.V.sub(0), uin, 1)]
+        self.bcs = [fda.DirichletBC(self.V.sub(0), 0., [3, 4]),
+                    fda.DirichletBC(self.V.sub(0), uin, 1)]
 
         # PDE-solver parameters
         self.nsp = None
         self.params = {"mat_type": "aij", "pc_type": "lu",
                        "pc_factor_mat_solver_type": "mumps"}
 
-        stateproblem = fd.NonlinearVariationalProblem(
+        problem = fda.NonlinearVariationalProblem(
             self.F, self.solution, bcs=self.bcs)
-        self.statesolver = fd.NonlinearVariationalSolver(
-            stateproblem, solver_parameters=self.params)
+        self.solver = fd.NonlinearVariationalSolver(
+            problem, solver_parameters=self.params)
+
+    def solve(self):
+        super().solve()
+        self.solver.solve()
