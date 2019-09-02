@@ -17,8 +17,6 @@ class NavierStokesSolver(PdeConstraint):
         # Preallocate solution variables for state equation
         self.solution = fda.Function(self.V, name="State")
         self.testfunction = fd.TestFunction(self.V)
-        #### Preallocate solution variables for state and adjoint equations
-        #self.solution_adj = fd.Function(self.V, name="Adjoint")
 
         # Define viscosity parameter
         self.viscosity = viscosity
@@ -36,14 +34,14 @@ class NavierStokesSolver(PdeConstraint):
         X = fd.SpatialCoordinate(self.mesh_m)
         dim = self.mesh_m.topological_dimension()
         if dim == 2:
-            uin = 6 * fd.as_vector([(1-X[1])*X[1], 0])
+            uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
-            r = fd.sqrt(X[0]**2+X[1]**2)
-            uin = fd.as_vector([0, 0, 1-(2*r)**2])
+            rsq = X[0]**2+X[1]**2
+            uin = fd.as_vector([1-4*rsq, 0, 0])
         else:
             raise NotImplementedError
-        self.bcs = [fda.DirichletBC(self.V.sub(0), 0., [3, 4]),
-                    fda.DirichletBC(self.V.sub(0), uin, 1)]
+        self.bcs = [fda.DirichletBC(self.V.sub(0), 0., [12, 13]),
+                    fda.DirichletBC(self.V.sub(0), uin, [10])]
 
         # PDE-solver parameters
         self.nsp = None
