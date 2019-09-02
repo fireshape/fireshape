@@ -9,7 +9,7 @@ from pipe_objective import PipeObjective
 # setup problem
 mesh = fd.Mesh("pipe.msh")
 Q = fs.FeControlSpace(mesh)
-inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1, 2, 3])
+inner = fs.LaplaceInnerProduct(Q, fixed_bids=[10, 11, 12])
 q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
@@ -32,7 +32,7 @@ cb()
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
-Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.3), Q)
+Jq = fsz.MoYoSpectralConstraint(20, fd.Constant(0.3), Q)
 J = J + Jq
 
 # volume constraint
@@ -55,29 +55,23 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-    'General': {
-        'Secant': {'Type': 'Limited-Memory BFGS',
-                   'Maximum Storage': 4}},
-    'Step': {
-        'Type': 'Augmented Lagrangian',
-        'Line Search': {'Descent Method': {
-            'Type': 'Quasi-Newton Step'}
-        },
-        'Augmented Lagrangian': {
-            'Subproblem Step Type': 'Line Search',
-            'Penalty Parameter Growth Factor': 1.1,
-            'Maximum Penalty Parameter': 15,
-            'Print Intermediate Optimization History': False,
-            'Subproblem Iteration Limit': 10
-        }},
-    'Status Test': {
-        'Gradient Tolerance': 1e-3,
-        'Step Tolerance': 1e-2,
-        'Constraint Tolerance': 1e-3,
-        'Iteration Limit': 20}
+'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 20}},
+'Step': {'Type': 'Augmented Lagrangian',
+         #'Line Search': {'Descent Method': {'Type': 'Quasi-Newton Step'}},
+         'Augmented Lagrangian': {'Subproblem Step Type': 'Line Search',
+                                   'Maximum Penalty Parameter': 10,
+                                   "Use Default Initial Penalty Parameter": False,
+                                   "Initial Penalty Parameter": 1.0,
+                                   'Print Intermediate Optimization History': True,
+                                   'Subproblem Iteration Limit': 100}},
+'Status Test': {'Gradient Tolerance': 1e-3,
+                'Step Tolerance': 1e-3,
+                'Constraint Tolerance': 1e-1,
+                'Iteration Limit': 12}
 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()
+print(vol.value(q, None) - initial_vol)
 print((vol.value(q, None) - initial_vol)/initial_vol)
