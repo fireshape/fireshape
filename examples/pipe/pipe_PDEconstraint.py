@@ -10,6 +10,8 @@ class NavierStokesSolver(PdeConstraint):
         super().__init__()
         self.mesh_m = mesh_m
 
+        self.failed_to_solve = False
+
         # Setup problem
         self.V = fd.VectorFunctionSpace(self.mesh_m, "CG", 2) \
             * fd.FunctionSpace(self.mesh_m, "CG", 1)
@@ -55,4 +57,9 @@ class NavierStokesSolver(PdeConstraint):
 
     def solve(self):
         super().solve()
-        self.solver.solve()
+        fix this #self.solver.solve()
+        u_old = self.solution.copy(deepcopy=True)
+        try:
+            self.solver.solve()
+        except fd.ConvergenceError:
+            self.solution = u_old.copy()

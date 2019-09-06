@@ -24,7 +24,7 @@ e = NavierStokesSolver(Q.mesh_m, viscosity)
 
 # save state variable evolution in file u.pvd
 e.solve()
-out = fd.File("u.pvd")
+out = fd.File("solution/u.pvd")
 def cb(): return out.write(e.solution.split()[0])
 cb()
 
@@ -32,7 +32,8 @@ cb()
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
-Jq = fsz.MoYoSpectralConstraint(20, fd.Constant(0.3), Q)
+Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q) #this fails in a funny way
+#Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.3), Q)
 J = J + Jq
 
 # volume constraint
@@ -55,19 +56,21 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 20}},
+'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10},
+            'Print Verbosity': 0},
 'Step': {'Type': 'Augmented Lagrangian',
-         #'Line Search': {'Descent Method': {'Type': 'Quasi-Newton Step'}},
-         'Augmented Lagrangian': {'Subproblem Step Type': 'Line Search',
-                                   'Maximum Penalty Parameter': 10,
-                                   "Use Default Initial Penalty Parameter": False,
-                                   "Initial Penalty Parameter": 1.0,
+         'Trust Region':{'Maximal Radius': 10},
+                         # 'Safeguard Size': 1.e12},#'Initial Radius': 1.e6, 0.2, 'Subproblem Solver': 'Cauchy Point'},
+         'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',#'Line Search',
+                                   #'Maximum Penalty Parameter': 10,
+                                   #"Use Default Initial Penalty Parameter": False,
+                                   #"Initial Penalty Parameter": 1.0,
                                    'Print Intermediate Optimization History': True,
-                                   'Subproblem Iteration Limit': 100}},
-'Status Test': {'Gradient Tolerance': 1e-3,
-                'Step Tolerance': 1e-3,
+                                   'Subproblem Iteration Limit': 20}},
+'Status Test': {'Gradient Tolerance': 1e-2,
+                'Step Tolerance': 1e-2,
                 'Constraint Tolerance': 1e-1,
-                'Iteration Limit': 12}
+                'Iteration Limit': 5}
 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
