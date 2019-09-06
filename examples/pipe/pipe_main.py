@@ -32,7 +32,7 @@ J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
 # add regularization to improve mesh quality
-Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
+Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q) #this fails in a funny way
 J = J + Jq
 
 # Set up volume constraint
