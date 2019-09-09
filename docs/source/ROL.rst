@@ -141,6 +141,12 @@ method.
     for the algorithms described. However, it is not necessary to
     specify a field if one does not want to modify a default value.
 
+.. note::
+
+    The following examples include all parameters that can be set
+    for the algorithms described. However, it is not necessary to
+    specify a field if one does want to modify a default value.
+
 Setting termination criteria
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
