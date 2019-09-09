@@ -51,4 +51,7 @@ On the page :ref:`example_levelset`, we show how to solve a toy shape optimizati
 On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
 constrained to a linear boundary value problem.
 
+On the page :ref:`example_pipe`, we show how to solve a shape optimization problem
+constrained to a nonlinear boundary value problem and a volume constraint.
+
 On the page :ref:`ROL`, we give a very brief introduction to ROL.
