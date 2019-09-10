@@ -1,9 +1,7 @@
 import firedrake as fd
 from ..objective import ShapeObjective
 
-
-__all__ = ["LevelsetFunctional"]
-
+__all__ = ["LevelsetFunctional", "VolumeFunctional"]
 
 class LevelsetFunctional(ShapeObjective):
     """
@@ -18,5 +16,11 @@ class LevelsetFunctional(ShapeObjective):
     def value_form(self):
         return self.f * fd.dx(domain=self.Q.mesh_m)
 
-    def derivative_form(self, v):
-        return fd.div(self.f*v) * fd.dx
+class VolumeFunctional(LevelsetFunctional):
+    """
+    Implementation of volume shape functional.
+
+    Returns the volume of the domain.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(fd.Constant(1.0), *args, **kwargs)
