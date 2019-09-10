@@ -36,20 +36,6 @@ Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q) #this fails in a funny 
 J = J + Jq
 
 # Set up volume constraint
-## volume constraint
-#class VolumeFunctional(fs.ShapeObjective):
-#    def __init__(self, *args, **kwargs):
-#        super().__init__(*args, **kwargs)
-#
-#        # physical mesh
-#        self.mesh_m = self.Q.mesh_m
-#
-#    def value_form(self):
-#        # volume integral
-#        return fd.Constant(1.0) * fd.dx(domain=self.mesh_m)
-#
-#
-#vol = VolumeFunctional(Q)
 vol = fsz.VolumeFunctional(Q)
 initial_vol = vol.value(q, None)
 econ = fs.EqualityConstraint([vol], target_value=[initial_vol])
