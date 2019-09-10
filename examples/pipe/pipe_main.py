@@ -47,7 +47,7 @@ params_dict = {
 'Step': {'Type': 'Augmented Lagrangian',
          'Trust Region':{'Maximal Radius': 10},
          'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
-                                   'Print Intermediate Optimization History': True,
+                                   'Print Intermediate Optimization History': False,
                                    'Subproblem Iteration Limit': 20}},
 'Status Test': {'Gradient Tolerance': 1e-2,
                 'Step Tolerance': 1e-6,
@@ -77,5 +77,3 @@ params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()
-print(vol.value(q, None) - initial_vol)
-print((vol.value(q, None) - initial_vol)/initial_vol)

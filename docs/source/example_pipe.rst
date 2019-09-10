@@ -143,28 +143,6 @@ To set up the problem, we need to:
    Using Bsplines to discretize the control leads to similar results.
    The corresponding implementation can be found in :bash:`examples/pipe/pipe_splines.py`.
 
-* choose the metric of the control space
-  (*Line 10*, :math:`H^1`-seminorm with homogeneous Dirichlet boundary conditions
-  on fixed boundaries)
-* initialize the PDE contraint on the physical mesh :bash:`mesh_m` (*Line 14*)
-* specify to save the function :math:`\mathbf{u}` after each iteration
-  in the file :bash:`u.pvd` by setting the function ``cb``
-  appropriately (*Lines 18-21*).
-* initialize the shape functional (*Line 23*),
-  and the reduced shape functional (*Line 24*),
-* specify the volume equality constraint (*Lines 27-40*)
-* create a ROL optimization prolem (*Lines 42-65*),
-  and solve it (*Line 66*). Note that the volume equality constraint
-  is imposed in *Line 64*.
-
-.. note::
-
-    This shape optimization problem is not easy. In particular,
-    it is not trivial to find a good combination of the optimization algorithm parameters
-    (e.g., :bash:`Penalty Parameter Growth Factor` and :bash:`Status Test`).
-    In particular, an unfortunate choice can lead to self-intersecting meshes.
-    This issue will be resolved in the future (cf. `this github-issue <https://github.com/fireshape/fireshape/issues/6>`_).
-
 .. literalinclude:: ../../examples/pipe/pipe_main.py
     :linenos:
 
