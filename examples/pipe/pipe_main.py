@@ -32,39 +32,23 @@ cb()
 J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
+# add regularization to improve mesh quality
 Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q) #this fails in a funny way
 #Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.3), Q)
 J = J + Jq
 
-# volume constraint
-class VolumeFunctional(fs.ShapeObjective):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # physical mesh
-        self.mesh_m = self.Q.mesh_m
-
-    def value_form(self):
-        # volume integral
-        return fd.Constant(1.0) * fd.dx(domain=self.mesh_m)
-
-
-vol = VolumeFunctional(Q)
+# Set up volume constraint
+vol = fsz.VolumeFunctional(Q)
 initial_vol = vol.value(q, None)
 econ = fs.EqualityConstraint([vol], target_value=[initial_vol])
 emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10},
-            'Print Verbosity': 0},
+'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
 'Step': {'Type': 'Augmented Lagrangian',
          'Trust Region':{'Maximal Radius': 10},
-                         # 'Safeguard Size': 1.e12},#'Initial Radius': 1.e6, 0.2, 'Subproblem Solver': 'Cauchy Point'},
-         'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',#'Line Search',
-                                   #'Maximum Penalty Parameter': 10,
-                                   #"Use Default Initial Penalty Parameter": False,
-                                   #"Initial Penalty Parameter": 1.0,
+         'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
                                    'Print Intermediate Optimization History': True,
                                    'Subproblem Iteration Limit': 20}},
 'Status Test': {'Gradient Tolerance': 1e-2,
