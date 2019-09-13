@@ -59,7 +59,6 @@ you can include these by declaring:
         lower = ROL.StdVector(1); lower[0] = 2
         upper = ROL.StdVector(1); upper[0] = 7
         ibnd = ROL.BoundConstraint(lower, upper)
-        ??shall we also include flags to activate??
 
 With these objects, you can solve the optimization problem with the following code.
 
@@ -105,21 +104,40 @@ method.
     situations when the routine that evaluates the functional :bash:`J`
     fails. Such failures are usually due to failure in solving the state
     constraint. Among other reasons, this can happen when the control
-    :bash:`q` is not feasible (for instance, when the underlying mesh interstects itself)
-    or when the state constraint is nonlinear and the optimization step
-    is too large (in which case the initial guess is not good enough).
+    :bash:`q` is not feasible (for instance, when the underlying mesh
+    interstects itself) or when the state constraint is nonlinear and
+    the optimization step is too large (in which case the initial guess
+    is not good enough).
+    In a nutshell, trust-region methods solve a sequence of optimization
+    problems. In each of these, one minimizes a quadratic misfit functional
+    with control constraints. The idea is that the quadratic misfict functional
+    models the original misfit functional. The control constraint limits the
+    validity of this model to a trusted region. To construct the quadratic
+    misfit functional, one evaluates the original functional, its gradient,
+    and its Hessian (or a BFGS approximation of it) in a feasible point.
+    The minimizer to this quadratic functional is sought in a ball around
+    that feasible point (computing this minimizer is cheap and does not
+    involve further evaluations of the originial functional or its derivatives).
+    Then, one evaluates the original misfit functional in this minimizer
+    and compares the *actual reduction* with the *predicted reduction*.
+    The new control is accepted if thee actual reduction is
+    positive, that is, if there is actual reduction.
+    Then, if there is good agreement between the actual and predicted
+    reductions, the trust-region radius is increased. This radius is
+    decreased if the actual reduction is not negative or the ratio between
+    actual and predicted reductions is close to zero.
+    From this, we undestand that a safe solution to deal with failed
+    evaluations of :bash:`J` is to save the previously computed value of
+    :bash:`J` and, using a :bash:`try: ... except: ...` approach,
+    and return it if the new evaluation of :bash:`J` fails. This corresponds
+    to a nonpositive actual reduction, which triggers a reduction of
+    the trust-region radius.
 
 .. note::
 
     The following examples include all parameters that can be set
     for the algorithms described. However, it is not necessary to
-    specify a field if one does want to modify a default value.
-
-.. note::
-
-    The following examples include all parameters that can be set
-    for the algorithms described. However, it is not necessary to
-    specify a field if one does want to modify a default value.
+    specify a field if one does want not to modify a default value.
 
 Setting termination criteria
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -179,8 +197,8 @@ using an augmented Lagrangian method,
 we can set :bash:`Step` and :bash:`General` as follows
 (the provided values are the default ones).
 Note that the augmented Lagrangian algorithm solves
-a sequence of surrogate models. These surrogate models
-are unconstrained optimization probelms that encode constraints
+a sequence of intermediate models. These intermediate models
+are unconstrained optimization problems that encode constraints
 via penalization. To solve these unconstrained optimization problems,
 we use again a trust-region method based on BFGS-updates of the Hessian.
 The augmented Lagrangian source code is
