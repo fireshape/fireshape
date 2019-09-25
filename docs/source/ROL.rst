@@ -105,22 +105,22 @@ method.
     fails. Such failures are usually due to failure in solving the state
     constraint. Among other reasons, this can happen when the control
     :bash:`q` is not feasible (for instance, when the underlying mesh
-    interstects itself) or when the state constraint is nonlinear and
+    intersects itself) or when the state constraint is nonlinear and
     the optimization step is too large (in which case the initial guess
     is not good enough).
 
     In a nutshell, trust-region methods solve a sequence of optimization
-    problems. In each of these, one minimizes a quadratic misfit functional
-    with control constraints. The idea is that the quadratic misfict functional
-    models the original misfit functional. The control constraint limits the
+    problems. In each of these, one minimizes a quadratic functional
+    with control constraints. The idea is that the quadratic functional
+    models the original objective functional. The control constraint limits the
     validity of this model to a trusted region. To construct the quadratic
-    misfit functional, one evaluates the original functional, its gradient,
+    functional, one evaluates the original functional, its gradient,
     and its Hessian (or a BFGS approximation of it) in a feasible point.
     The minimizer to this quadratic functional is sought in a ball around
     that feasible point (computing this minimizer is computationally inexpensive
     and does not
     involve further evaluations of the original functional or its derivatives).
-    Then, one evaluates the original misfit functional in this minimizer
+    Then, one evaluates the original objective functional in this minimizer
     and compares the *actual reduction* with the *predicted reduction*.
     The new control is accepted if the actual reduction is
     positive, that is, if there is actual reduction.
@@ -128,7 +128,7 @@ method.
     reductions, the trust-region radius is increased. This radius is
     decreased if the actual reduction is not positive or the ratio between
     actual and predicted reductions is close to zero.
-    From this, we undestand that a safe solution to deal with failed
+    From this, we understand that a safe solution to deal with failed
     evaluations of :bash:`J` is to store the previously computed value of
     :bash:`J` and, using a :bash:`try: ... except: ...` approach,
     return it if the new evaluation of :bash:`J` fails. This corresponds
@@ -139,7 +139,7 @@ method.
 
     The following examples include all parameters that can be set
     for the algorithms described. However, it is not necessary to
-    specify a field if one does want not to modify a default value.
+    specify a field if one does not want to modify a default value.
 
 Setting termination criteria
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
