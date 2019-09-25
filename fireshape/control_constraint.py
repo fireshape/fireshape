@@ -25,6 +25,7 @@ class InteriorControlConstraint(object):
         if self.direct_solve:
             params["pc_type"] = "cholesky"
             params["pc_factor_mat_solver_type"] = "mumps"
+            params["mat_mumps_icntl_14"] = 200
         else:
             params["pc_type"] = "hypre"
             params["pc_hypre_type"] = "boomeramg"
