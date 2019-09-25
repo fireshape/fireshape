@@ -16,4 +16,4 @@ class EnergyObjective(ShapeObjective):
         """Evaluate misfit functional."""
         u = fd.split(self.pde_solver.solution)[0]
         nu = self.pde_solver.nu
-        return 0.5 * nu * fd.inner(fd.grad(u), fd.grad(u)) * fd.dx
+        return nu * fd.inner(fd.sym(fd.grad(u)), fd.sym(fd.grad(u))) * fd.dx
