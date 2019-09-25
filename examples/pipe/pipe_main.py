@@ -47,10 +47,10 @@ params_dict = {
 'Step': {'Type': 'Augmented Lagrangian',
          'Trust Region':{'Maximal Radius': 10},
          'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
-                                   'Print Intermediate Optimization History': False,
+                                   'Print Intermediate Optimization History': True,
                                    'Subproblem Iteration Limit': 20}},
 'Status Test': {'Gradient Tolerance': 1e-2,
-                'Step Tolerance': 1e-2,
+                'Step Tolerance': 1e-6,
                 'Constraint Tolerance': 1e-1,
                 'Iteration Limit': 5}
 }
