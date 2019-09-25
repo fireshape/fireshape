@@ -38,7 +38,7 @@ class NavierStokesSolver(PdeConstraint):
         if dim == 2:
             uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
-            rsq = X[0]**2+X[1]**2
+            rsq = X[0]**2+X[2]**2
             uin = fd.as_vector([1-4*rsq, 0, 0])
         else:
             raise NotImplementedError
@@ -57,7 +57,7 @@ class NavierStokesSolver(PdeConstraint):
 
     def solve(self):
         super().solve()
-        #fix this #self.solver.solve()
+        #fix this #
         u_old = self.solution.copy(deepcopy=True)
         try:
             self.solver.solve()
