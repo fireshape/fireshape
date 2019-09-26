@@ -1,3 +1,7 @@
+.. _introduction:
+.. role:: bash(code)
+   :language: bash
+
 Introduction
 ============
 
@@ -37,8 +41,8 @@ Where to go from here
 ^^^^^^^^^^^^^^^^^^^^^
 If you are interested in using Fireshape, do not hesitate to get in
 contact. You can do so by using the contact forms available
-`here <https://www.maths.ox.ac.uk/people/alberto.paganini/contact>`__
-or `here <https://www.maths.ox.ac.uk/people/florian.wechsung/contact>`__.
+`here <https://www.maths.ox.ac.uk/people/florian.wechsung/contact>`__
+or by sending an email to :bash:`a.paganini@leicester.ac.uk`.
 
 You can find information on how to install Fireshape on the page :ref:`installation`.
 
@@ -47,5 +51,4 @@ On the page :ref:`example_levelset`, we show how to solve a toy shape optimizati
 On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
 constrained to a linear boundary value problem.
 
-On the page :ref:`example_pipe`, we show how to solve a shape optimization problem
-constrained to a nonlinear boundary value problem and a volume constraint.
+On the page :ref:`ROL`, we give a very brief introduction to ROL.
