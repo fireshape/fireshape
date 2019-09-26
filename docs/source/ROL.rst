@@ -32,7 +32,7 @@ To use ROL within Fireshape, you need to declare:
 
 With these objects, you can solve the optimization problem with the following code.
 
-.. code-block::
+.. code-block:: python
 
     params = ROL.ParameterList(params_dict, "Parameters")
     problem = ROL.OptimizationProblem(J, q)
@@ -54,7 +54,7 @@ you can include these by declaring:
     The variable :bash:`ibnd` is of type :bash:`ROL.BoundConstraint`. For example,
     the following code sets the lower and the upper bound to 2 and 7, respectively.
 
-    .. code-block::
+    .. code-block:: python
 
         lower = ROL.StdVector(1); lower[0] = 2
         upper = ROL.StdVector(1); upper[0] = 7
@@ -62,7 +62,7 @@ you can include these by declaring:
 
 With these objects, you can solve the optimization problem with the following code.
 
-.. code-block::
+.. code-block:: python
 
     params = ROL.ParameterList(params_dict, "Parameters")
     problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul, icon=icon, imul=imul, ibnd=ibnd)
@@ -80,10 +80,10 @@ Choosing optimization algorithms and setting parameters
 
 You can select the optimization algorithm and set
 optimization parameters by specifying the three
-fields: :bash:`Step`, :bash:`General`, and :bash:`Status Test`.
-the dictionary :bash:`params_dict`.
+fields: :bash:`Step`, :bash:`General`, and :bash:`Status Test`
+in the dictionary :bash:`params_dict`.
 
-.. code-block::
+.. code-block:: python
 
     params_dict = {'Step': #set step parameters here,
                    'General': #set general parameters here,
@@ -144,11 +144,11 @@ method.
 Setting termination criteria
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This field set the termination criteria of the algorithm.
-It's use is self-explanatory. We report its syntax with the
+This field sets the termination criteria of the algorithm.
+Its use is self-explanatory. We report its syntax with the
 default values.
 
-.. code-block::
+.. code-block:: python
 
     'Status Test':{'Gradient Tolerance':1.e-6,
                    'Step Tolerance':1.e-12,
@@ -168,7 +168,7 @@ we can set :bash:`Step` and :bash:`General` as follows
 To understand some of these parameters, please read the trust-region algorithm
 `implementation <https://github.com/trilinos/Trilinos/blob/master/packages/rol/src/step/trustregion/ROL_TrustRegion.hpp>`_.
 
-.. code-block::
+.. code-block:: python
 
     'Step':{'Type':'Trust Region',
             'Trust Region':{'Initial Radius':-1, #determine initial radius with heuristics
@@ -206,7 +206,7 @@ we use again a trust-region method based on BFGS-updates of the Hessian.
 The augmented Lagrangian source code is
 `here <https://github.com/trilinos/Trilinos/blob/master/packages/rol/src/step/ROL_AugmentedLagrangianStep.hpp>`_.
 
-.. code-block::
+.. code-block:: python
 
     'Step':{'Type':'Augmented Lagrangian',
             'Augmented Lagrangian':{'Use Default Initial Penalty Parameter':true,
