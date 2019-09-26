@@ -80,8 +80,8 @@ Choosing optimization algorithms and setting parameters
 
 You can select the optimization algorithm and set
 optimization parameters by specifying the three
-fields: :bash:`Step`, :bash:`General`, and :bash:`Status Test`.
-the dictionary :bash:`params_dict`.
+fields: :bash:`Step`, :bash:`General`, and :bash:`Status Test`
+in the dictionary :bash:`params_dict`.
 
 .. code-block::
 
@@ -144,8 +144,8 @@ method.
 Setting termination criteria
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This field set the termination criteria of the algorithm.
-It's use is self-explanatory. We report its syntax with the
+This field sets the termination criteria of the algorithm.
+Its use is self-explanatory. We report its syntax with the
 default values.
 
 .. code-block::
