@@ -309,7 +309,6 @@ class SurfaceInnerProduct(InnerProduct):
         # petsc doesn't like matrices with zero rows
         a += 1e-10 * fd.inner(u, v) * fd.dx
         A = fd.assemble(a, mat_type="aij")
-        A.force_evaluation()
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
 
@@ -383,7 +382,6 @@ class ScalarSurfaceInnerProduct(InnerProduct):
         # petsc doesn't like matrices with zero rows
         a += 1e-10 * fd.inner(u, v) * fd.dx
         A = fd.assemble(a, mat_type="aij")
-        A.force_evaluation()
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
 
