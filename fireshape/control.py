@@ -821,7 +821,7 @@ class ControlVector(ROL.Vector):
         return self.inner_product.eval(self, v)
 
     def norm(self):
-        return self.dot(self)
+        return self.dot(self)**0.5
 
     def axpy(self, alpha, x):
         vec = self.vec_wo()

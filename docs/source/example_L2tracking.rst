@@ -31,7 +31,7 @@ disc of radius :math:`0.6` centered at :math:`(0.5,0.5)`.
 
 Implementing the PDE constraint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-We implement the boundary value problem that act as PDE
+We implement the boundary value problem that acts as PDE
 constraint in a python module named :bash:`L2tracking_PDEconstraint.py`.
 In the code, we highlight the lines which characterize
 the weak formulation of this boundary value problem.
@@ -51,9 +51,7 @@ Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
 in a python module named :bash:`L2tracking_objective.py`.
-In the code, we highligth the lines
-which characterize :math:`\mathcal{J}`.
-
+In the code, we highlight the lines which characterize :math:`\mathcal{J}`.
 
 .. literalinclude:: ../../examples/L2tracking/L2tracking_objective.py
     :emphasize-lines: 16, 21

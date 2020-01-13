@@ -1,3 +1,7 @@
+.. _introduction:
+.. role:: bash(code)
+   :language: bash
+
 Introduction
 ============
 
@@ -11,8 +15,10 @@ provide is the mesh on an initial guess,
 the shape functional, and the weak-form of its PDE-contraint.
 
 Fireshape computes adjoints and assembles first and
-second derivatives for you, and it solves the optimization
-problem using the rapid optimization library (`ROL <https://trilinos.org/packages/rol/>`_).
+second derivatives for you using
+`pyadjoint <http://www.dolfin-adjoint.org/en/release/>`_,
+and it solves the optimization problem using the rapid optimization library
+(`ROL <https://trilinos.org/packages/rol/>`_).
 
 Features
 ^^^^^^^^
@@ -35,12 +41,14 @@ Where to go from here
 ^^^^^^^^^^^^^^^^^^^^^
 If you are interested in using Fireshape, do not hesitate to get in
 contact. You can do so by using the contact forms available
-`here <https://www.maths.ox.ac.uk/people/alberto.paganini/contact>`__
-or `here <https://www.maths.ox.ac.uk/people/florian.wechsung/contact>`__.
+`here <https://www.maths.ox.ac.uk/people/florian.wechsung/contact>`__
+or by sending an email to :bash:`a.paganini@leicester.ac.uk`.
 
 You can find information on how to install Fireshape on the page :ref:`installation`.
 
 On the page :ref:`example_levelset`, we show how to solve a toy shape optimization problem.
 
 On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
-constrained to a boundary value problem.
+constrained to a linear boundary value problem.
+
+On the page :ref:`ROL`, we give a very brief introduction to ROL.
