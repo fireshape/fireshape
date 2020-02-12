@@ -56,7 +56,7 @@ in the terminal (this has been tested with :bash:`gmsh v4.1.2`).
 Implementing the PDE constraint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the boundary value problem that acts as PDE
-constraint in a python module named :bash:`pipe_PDEconstraint.py`.
+constraint in a python module named :bash:`PDEconstraint_pipe.py`.
 In the code, we highlight the lines which characterize
 the weak formulation of this boundary value problem.
 
@@ -64,7 +64,7 @@ the weak formulation of this boundary value problem.
 
     The Dirichlet boundary data :math:`\mathbf{g}` depends on the dimension :math:`d` (see *Lines 36-42*)
 
-.. literalinclude:: ../../examples/pipe/pipe_PDEconstraint.py
+.. literalinclude:: ../../examples/pipe/PDEconstraint_pipe.py
     :emphasize-lines: 30,31, 43, 44
     :linenos:
 
@@ -81,19 +81,19 @@ the weak formulation of this boundary value problem.
 Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
-in a python module named :bash:`pipe_objective.py`.
+in a python module named :bash:`objective_pipe.py`.
 In the code, we highlight the lines
 which characterize :math:`\mathcal{J}`.
 
 
-.. literalinclude:: ../../examples/pipe/pipe_objective.py
+.. literalinclude:: ../../examples/pipe/objective_pipe.py
     :emphasize-lines: 15,16,17,18
     :linenos:
 
 
 Setting up and solving the problem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-We set up the problem in the script :bash:`pipe_main.py`.
+We set up the problem in the script :bash:`main_pipe.py`.
 
 To set up the problem, we need to:
 
@@ -143,12 +143,12 @@ To set up the problem, we need to:
    Using Bsplines to discretize the control leads to similar results.
    The corresponding implementation can be found in :bash:`examples/pipe/pipe_splines.py`.
 
-.. literalinclude:: ../../examples/pipe/pipe_main.py
+.. literalinclude:: ../../examples/pipe/main_pipe.py
     :linenos:
 
 Result
 ^^^^^^
-For the 2D-example, typing :bash:`python3 pipe_main.py` in the terminal returns:
+For the 2D-example, typing :bash:`python3 main_pipe.py` in the terminal returns:
 
 .. code-block:: none
 
@@ -168,7 +168,7 @@ with `ParaView <https://www.paraview.org/>`_. We see that the
 difference between the volume of the initial guess and of the
 retrieved optimized design is roughly :math:`5\cdot 10^{-4}`.
 
-For the 3D-example, typing :bash:`python3 pipe_main.py` in the terminal returns:
+For the 3D-example, typing :bash:`python3 main_pipe.py` in the terminal returns:
 
 .. code-block:: none
 
