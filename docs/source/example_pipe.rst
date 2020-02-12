@@ -178,6 +178,7 @@ We can inspect the result by opening the file :bash:`u.pvd`
 with `ParaView <https://www.paraview.org/>`_. We see that the
 difference between the volume of the initial guess and of the
 retrieved optimized design is roughly :math:`2\cdot 10^{-3}`.
+.. retrieved optimized design is roughly :math:`???`.
 
 .. note::
 

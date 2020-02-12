@@ -57,7 +57,7 @@ class NavierStokesSolver(PdeConstraint):
 
     def solve(self):
         super().solve()
-        #fix this # self.solver.solve()
+        #fix this #self.solver.solve()
         u_old = self.solution.copy(deepcopy=True)
         try:
             self.solver.solve()
