@@ -3,8 +3,8 @@ import fireshape as fs
 import firedrake_adjoint as fda
 import fireshape.zoo as fsz
 import ROL
-from pipe_PDEconstraint import NavierStokesSolver
-from pipe_objective import PipeObjective
+from PDEconstraint_pipe import NavierStokesSolver
+from objective_pipe import PipeObjective
 
 # setup problem
 mesh = fd.Mesh("pipe.msh")

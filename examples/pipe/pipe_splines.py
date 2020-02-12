@@ -1,8 +1,8 @@
 import firedrake as fd
 import fireshape as fs
 import ROL
-from pipe_PDEconstraint import NavierStokesSolver
-from pipe_objective import PipeObjective
+from PDEconstraint_pipe import NavierStokesSolver
+from objective_pipe import PipeObjective
 
 # setup problem
 mesh = fd.Mesh("pipe.msh")

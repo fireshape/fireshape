@@ -1,6 +1,6 @@
 import firedrake as fd
 from fireshape import ShapeObjective
-from pipe_PDEconstraint import NavierStokesSolver
+from PDEconstraint_pipe import NavierStokesSolver
 
 
 class PipeObjective(ShapeObjective):
