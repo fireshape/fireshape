@@ -21,7 +21,7 @@ Extrude { Surface{1}; } Using Wire {1}
 Delete{ Surface{1}; }
 
 // When using fancy commands like "extrude", it is not quite obvious
-// what the numbering of the generated lines, surfaces and volumes is 
+// what the numbering of the generated lines, surfaces and volumes is
 // going to be. To figure this out, we open the .geo file in the gmsh
 // gui and use the Tools -> Visibility menu to find the numbers for
 // each entity.
