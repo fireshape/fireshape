@@ -13,11 +13,11 @@ inner = fs.LaplaceInnerProduct(Q, fixed_bids=[10, 11, 12])
 q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
-dim = mesh.topological_dimension()
-if dim == 2:
+if mesh.topological_dimension() == 2:   #in 2D
     viscosity = fda.Constant(1./400.)
-elif dim ==3:
-    viscosity = fda.Constant(1/10.)
+elif mesh.topological_dimension() == 3: #in 3D
+    raise AssertionError('3D geometry has holes, fix it')
+    viscosity = fda.Constant(1/10.) #simpler problem in 3D
 else:
     raise NotImplementedError
 e = NavierStokesSolver(Q.mesh_m, viscosity)
@@ -53,9 +53,6 @@ params_dict = {
                 'Step Tolerance': 1e-6,
                 'Constraint Tolerance': 1e-1,
                 'Iteration Limit': 5}
-#'General': {
-#    'Secant': {'Type': 'Limited-Memory BFGS',
-#               'Maximum Storage': 5}},
 #'Step': {
 #    'Type': 'Augmented Lagrangian',
 #    'Line Search': {'Descent Method': {
@@ -67,11 +64,6 @@ params_dict = {
 #        'Print Intermediate Optimization History': True,
 #        'Subproblem Iteration Limit': 5
 #    }},
-#'Status Test': {
-#    'Gradient Tolerance': 1e-2,
-#    'Step Tolerance': 1e-1,
-#    'Constraint Tolerance': 1e-3,
-#    'Iteration Limit': 20}
                 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
