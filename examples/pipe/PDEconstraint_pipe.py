@@ -20,7 +20,7 @@ class NavierStokesSolver(PdeConstraint):
         self.testfunction = fd.TestFunction(self.V)
 
         # Define viscosity parameter
-        #self.viscosity = viscosity
+        self.viscosity = viscosity
 
         # Weak form of incompressible Navier-Stokes equations
         z = self.solution
@@ -61,4 +61,5 @@ class NavierStokesSolver(PdeConstraint):
         try:
             self.solver.solve()
         except fd.ConvergenceError:
+            self.failed_to_solve = True
             self.solution = u_old.copy()
