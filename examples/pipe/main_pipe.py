@@ -43,7 +43,7 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-'General': {'Print Verbosity':0,
+'General': {'Print Verbosity':0, #set to 1 if you struggle to understand the output
             'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
 'Step': {'Type': 'Augmented Lagrangian',
          'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
