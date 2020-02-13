@@ -57,9 +57,24 @@ class NavierStokesSolver(PdeConstraint):
     def solve(self):
         super().solve()
         #fix this #self.solver.solve()
+        self.failed_to_solve = False #resetting this should avoid NaNs when computing Riesz representatives, but it does not work. See objective_pipe.py
         u_old = self.solution.copy(deepcopy=True)
         try:
             self.solver.solve()
         except fd.ConvergenceError:
             self.failed_to_solve = True
             self.solution = u_old.copy()
+
+if __name__ == "__main__":
+    mesh = fd.Mesh("pipe.msh")
+    if mesh.topological_dimension() == 2:   #in 2D
+        viscosity = fda.Constant(1./400.)
+    elif mesh.topological_dimension() == 3: #in 3D
+        viscosity = fda.Constant(1/10.) #simpler problem in 3D
+    else:
+        raise NotImplementedError
+    e = NavierStokesSolver(mesh, viscosity)
+    e.solve()
+    print(e.failed_to_solve)
+    out = fd.File("temp_PDEConstrained_u.pvd")
+    out.write(e.solution.split()[0])

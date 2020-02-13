@@ -43,27 +43,19 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-'General': {'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
+'General': {'Print Verbosity':0,
+            'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
 'Step': {'Type': 'Augmented Lagrangian',
-         'Trust Region':{'Maximal Radius': 10},
          'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
-                                   'Print Intermediate Optimization History': False,
-                                   'Subproblem Iteration Limit': 20}},
+                                   'Print Intermediate Optimization History': True,
+                                   'Subproblem Iteration Limit': 5}},
+                                   #'Subproblem Iteration Limit': 10}}, #this fails with nans in computing grad
+                                                                       #observation: a lot of subits lead to compressing
+                                                                       #nodes in the middle of the pipe
 'Status Test': {'Gradient Tolerance': 1e-2,
-                'Step Tolerance': 1e-6,
+                'Step Tolerance': 1e-2,
                 'Constraint Tolerance': 1e-1,
-                'Iteration Limit': 5}
-#'Step': {
-#    'Type': 'Augmented Lagrangian',
-#    'Line Search': {'Descent Method': {
-#        'Type': 'Quasi-Newton Step'}
-#    },
-#    'Augmented Lagrangian': {
-#        'Subproblem Step Type': 'Line Search',
-#        'Penalty Parameter Growth Factor': 1.04,
-#        'Print Intermediate Optimization History': True,
-#        'Subproblem Iteration Limit': 5
-#    }},
+                'Iteration Limit': 10} #we can raise this to 100, nothing changes and it doesn't crash, it's good news, but finding appropriate stopping criteria is challenging
                 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
