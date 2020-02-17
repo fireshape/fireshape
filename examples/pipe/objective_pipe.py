@@ -15,8 +15,10 @@ class PipeObjective(ShapeObjective):
         """Evaluate misfit functional."""
         nu = self.pde_solver.viscosity
 
-        if self.pde_solver.failed_to_solve: #is this a good solution
+        if self.pde_solver.failed_to_solve: #is this a good solution?
             self.pde_solver.failed_to_solve = False #I don't like resetting it here, but otherwise it doesn't work :(
+                                                    #I think the issue arises because Objective.derivative_form() does not
+                                                    #call self.e.solve() (probably rightly so)
 #use self.pde_solver.failed_to_solve = True to replicate the error
             return np.nan * fd.dx(self.pde_solver.mesh_m)#is it a problem when we differentiate?
 #the following example shows that the if J = nan for one radius,
