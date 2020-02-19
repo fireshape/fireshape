@@ -15,8 +15,10 @@ class PipeObjective(ShapeObjective):
         """Evaluate misfit functional."""
         nu = self.pde_solver.viscosity
 
+        #print(self.pde_solver.solved, flush=True)
+        #self.pde_solver.solved = False
         if self.pde_solver.failed_to_solve: #is this a good solution?
-            self.pde_solver.failed_to_solve = False #I don't like resetting it here, but otherwise it doesn't work :(
+            #self.pde_solver.failed_to_solve = False #I don't like resetting it here, but otherwise it doesn't work :(
                                                     #I think the issue arises because Objective.derivative_form() does not
                                                     #call self.e.solve() (probably rightly so)
 #use self.pde_solver.failed_to_solve = True to replicate the error

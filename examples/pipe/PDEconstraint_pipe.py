@@ -51,19 +51,23 @@ class NavierStokesSolver(PdeConstraint):
 
         problem = fda.NonlinearVariationalProblem(
             self.F, self.solution, bcs=self.bcs)
+        #self.solver = fda.NonlinearVariationalSolver( #should it be fds.NonlinearVariationalSolver??
         self.solver = fd.NonlinearVariationalSolver(
             problem, solver_parameters=self.params)
 
     def solve(self):
         super().solve()
         #fix this #self.solver.solve()
+        #self.solver.solve()
+        print('----------\n -- Trying to solve--', flush = True)
         self.failed_to_solve = False #resetting this should avoid NaNs when computing Riesz representatives, but it does not work. See objective_pipe.py
         u_old = self.solution.copy(deepcopy=True)
         try:
             self.solver.solve()
         except fd.ConvergenceError:
+            print('but failed\n -----------', flush = True)
             self.failed_to_solve = True
-            self.solution = u_old.copy()
+            self.solution = u_old.copy(deepcopy=True)
 
 if __name__ == "__main__":
     mesh = fd.Mesh("pipe.msh")
