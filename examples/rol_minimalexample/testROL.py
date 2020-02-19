@@ -9,57 +9,69 @@ class ControlVector(ROL.Vector):
     """
     def __init__(self):
         super().__init__()
+        #print('initiating', flush=True)
         self.x = 0.
 
     def plus(self, v):
+        #print('adding', flush=True)
         self.x += v.x
 
     def scale(self, alpha):
+        #print('scaling', flush=True)
         self.x *= alpha
 
     def clone(self):
+        #print('cloning', flush=True)
         return ControlVector()
 
     def dot(self, v):
-        self.x *= v.x
+        #print('dotting', flush=True)
+        return self.x * v.x
+
+    def norm(self):
+        #print('norming', flush=True)
+        return abs(self.x)
 
     def axpy(self, alpha, y):
         self.x = self.x*alpha + y.x
 
     def set(self, v):
+        #print('setting', flush=True)
         self.x = v.x
 
 class Objective(ROL.Objective):
-    def __init__(self):
+    def __init__(self, cb=None):
         super().__init__()
 
     def value(self, x, tol):
-        return (x-1)**2
+        return (x.x-1)**2
 
-    def gradient(self, g, q, tol):
-        g = 2.*q.x
+    def gradient(self, g, x, tol):
+        g.x = 2.*x.x
 
 if __name__== "__main__":
-
+    #print('call ControlVector()', flush=True)
     q = ControlVector()
+    #print('call Objective()', flush=True)
     J = Objective()
     params_dict = {
-    'General': {'Print Verbosity':0, #set to 1 if you struggle to understand the output
+    'General': {'Print Verbosity':1, #set to 1 if you struggle to understand the output
                 'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
-    'Step': {'Type': 'Augmented Lagrangian',
-             'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
-                                       'Print Intermediate Optimization History': True,
-                                       #'Subproblem Iteration Limit': 5}},
-                                       'Subproblem Iteration Limit': 5}},
-                                       #'Subproblem Iteration Limit': 10}}, #this fails with nans in computing grad
-                                                                           #observation: a lot of subits lead to compressing
-                                                                           #nodes in the middle of the pipe
+    #'Step': {'Type': 'Augmented Lagrangian',
+    #         'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
+    #                                   'Print Intermediate Optimization History': True,
+    #                                   'Subproblem Iteration Limit': 5}},
     'Status Test': {'Gradient Tolerance': 1e-2,
                     'Step Tolerance': 1e-2,
                     'Constraint Tolerance': 1e-1,
-                    'Iteration Limit': 2} #we can raise this to 100, nothing changes and it doesn't crash, it's good news, but finding appropri    ate stopping criteria is challenging
+                    'Iteration Limit': 2}
                     }
+    #print('set params', flush=True)
     params = ROL.ParameterList(params_dict, "Parameters")
+    #print('set problem', flush=True)
     problem = ROL.OptimizationProblem(J, q)
+    #print('set solver', flush=True)
     solver = ROL.OptimizationSolver(problem, params)
+    #import ipdb
+    #ipdb.set_trace()
     solver.solve()
