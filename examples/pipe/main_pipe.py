@@ -1,6 +1,5 @@
 import firedrake as fd
 import fireshape as fs
-import firedrake_adjoint as fda
 import fireshape.zoo as fsz
 import ROL
 from PDEconstraint_pipe import NavierStokesSolver
@@ -14,10 +13,10 @@ q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
 if mesh.topological_dimension() == 2:   #in 2D
-    viscosity = fda.Constant(1./400.)
+    viscosity = fd.Constant(1./400.)
 elif mesh.topological_dimension() == 3: #in 3D
     raise AssertionError('3D geometry has holes, fix it')
-    viscosity = fda.Constant(1/10.) #simpler problem in 3D
+    viscosity = fd.Constant(1/10.) #simpler problem in 3D
 else:
     raise NotImplementedError
 e = NavierStokesSolver(Q.mesh_m, viscosity)
