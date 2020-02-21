@@ -18,7 +18,7 @@ class PoissonSolver(PdeConstraint):
         self.bcs = fd.DirichletBC(V, 0., "on_boundary")
 
         # PDE-solver parameters
-        params = {
+        self.params = {
             "ksp_type": "cg",
             "mat_type": "aij",
             "pc_type": "hypre",
@@ -33,7 +33,7 @@ class PoissonSolver(PdeConstraint):
         # problem = fd.NonlinearVariationalProblem(
         #     self.F, self.solution, bcs=self.bcs)
         # self.solver = fd.NonlinearVariationalSolver(
-        #     problem, solver_parameters=params)
+        #     problem, solver_parameters=self.params)
 
     def solve(self):
         super().solve()
