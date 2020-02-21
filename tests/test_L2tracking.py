@@ -1,6 +1,5 @@
 import pytest
 import firedrake as fd
-import firedrake_adjoint as fda
 import fireshape as fs
 from fireshape import ShapeObjective
 from fireshape import PdeConstraint
@@ -17,14 +16,14 @@ class PoissonSolver(PdeConstraint):
         self.V = fd.FunctionSpace(self.mesh_m, "CG", 1)
 
         # Preallocate solution variables for state and adjoint equations
-        self.solution = fda.Function(self.V, name="State")
+        self.solution = fd.Function(self.V, name="State")
 
         # Weak form of Poisson problem
         u = self.solution
         v = fd.TestFunction(self.V)
-        self.f = fda.Constant(4.)
+        self.f = fd.Constant(4.)
         self.F = (fd.inner(fd.grad(u), fd.grad(v)) - self.f * v) * fd.dx
-        self.bcs = fda.DirichletBC(self.V, 0., "on_boundary")
+        self.bcs = fd.DirichletBC(self.V, 0., "on_boundary")
 
         # PDE-solver parameters
         self.params = {
@@ -37,9 +36,9 @@ class PoissonSolver(PdeConstraint):
             "ksp_stol": 1e-15,
         }
 
-        stateproblem = fda.NonlinearVariationalProblem(
+        stateproblem = fd.NonlinearVariationalProblem(
             self.F, self.solution, bcs=self.bcs)
-        self.solver = fda.NonlinearVariationalSolver(
+        self.solver = fd.NonlinearVariationalSolver(
             stateproblem, solver_parameters=self.params)
 
     def solve(self):
