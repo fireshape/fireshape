@@ -3,6 +3,7 @@ from ..objective import ShapeObjective
 
 __all__ = ["LevelsetFunctional", "VolumeFunctional"]
 
+
 class LevelsetFunctional(ShapeObjective):
     """
     Implementation of level-set shape functional.
@@ -15,6 +16,7 @@ class LevelsetFunctional(ShapeObjective):
 
     def value_form(self):
         return self.f * fd.dx(domain=self.Q.mesh_m)
+
 
 class VolumeFunctional(LevelsetFunctional):
     """
