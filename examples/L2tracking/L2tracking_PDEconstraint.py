@@ -1,5 +1,4 @@
 import firedrake as fd
-import firedrake_adjoint as fda
 from fireshape import PdeConstraint
 
 
@@ -12,14 +11,14 @@ class PoissonSolver(PdeConstraint):
         V = fd.FunctionSpace(mesh_m, "CG", 1)
 
         # Weak form of Poisson problem
-        u = fda.Function(V, name="State")
+        u = fd.Function(V, name="State")
         v = fd.TestFunction(V)
-        f = fda.Constant(4.)
-        F = (fd.inner(fd.grad(u), fd.grad(v)) - f * v) * fd.dx
-        bcs = fda.DirichletBC(V, 0., "on_boundary")
+        f = fd.Constant(4.)
+        self.F = (fd.inner(fd.grad(u), fd.grad(v)) - f * v) * fd.dx
+        self.bcs = fd.DirichletBC(V, 0., "on_boundary")
 
         # PDE-solver parameters
-        params = {
+        self.params = {
             "ksp_type": "cg",
             "mat_type": "aij",
             "pc_type": "hypre",
@@ -30,11 +29,14 @@ class PoissonSolver(PdeConstraint):
         }
 
         self.solution = u
-        problem = fda.NonlinearVariationalProblem(
-            F, self.solution, bcs=bcs)
-        self.solver = fda.NonlinearVariationalSolver(
-            problem, solver_parameters=params)
+
+        # problem = fd.NonlinearVariationalProblem(
+        #     self.F, self.solution, bcs=self.bcs)
+        # self.solver = fd.NonlinearVariationalSolver(
+        #     problem, solver_parameters=self.params)
 
     def solve(self):
         super().solve()
-        self.solver.solve()
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                 solver_parameters=self.params)
+        # self.solver.solve()
