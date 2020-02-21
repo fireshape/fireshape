@@ -48,13 +48,13 @@ class ControlVector(ROL.Vector):
 class Objective(ROL.Objective):
     def __init__(self, cb=None):
         super().__init__()
-        self.val = [1, 2, 3, nan, nan, 2, 0.8, nan, nan]
+        self.val = [1, 2, 3, nan, 3, 0.8, 0.6, 0.5, 0.5, nan, nan, 0.3, 0.3]
         self.iter = 0
 
     def value(self, x, tol):
         #return (x.x-2)**2 * (x.y-1)**2
         val = self.val[self.iter]
-        print('evaluate function', flush=True)
+        print('evaluate function, val = %1.2f' % val, flush=True)
         self.iter += 1
         return val
 
@@ -73,7 +73,7 @@ class EqualityConstraint(ROL.Constraint):
         super().__init__()
 
     def value(self, c, x, tol):
-        return x.x**2 + x.y**2 - 1
+        return 0.#x.x**2 + x.y**2 - 1
 
 if __name__== "__main__":
     #print('call ControlVector()', flush=True)
@@ -92,7 +92,7 @@ if __name__== "__main__":
     'Status Test': {'Gradient Tolerance': 1e-18,
                     #'Step Tolerance': 1e-14,
                     'Constraint Tolerance': 1e-12,
-                    'Iteration Limit': 3}
+                    'Iteration Limit': 2}
                     }
     #print('set params', flush=True)
     params = ROL.ParameterList(params_dict, "Parameters")
