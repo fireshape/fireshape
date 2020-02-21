@@ -57,7 +57,8 @@ class FluidSolver(PdeConstraint):
     def solve(self):
         super().solve()
         # self.solver.solve()
-        fd.solve(self.F == 0, self.solution, bcs=self.bcs, solver_parameters=self.params, nullspace=self.nsp)
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                 solver_parameters=self.params, nullspace=self.nsp)
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -83,10 +84,10 @@ class FluidSolver(PdeConstraint):
         bcs = []
         if len(self.inflow_bids) is not None:
             bcs.append(fd.DirichletBC(self.V.sub(0), self.inflow_expr,
-                                       self.inflow_bids))
+                                      self.inflow_bids))
         if len(self.noslip_bids) > 0:
             bcs.append(fd.DirichletBC(self.V.sub(0), zerovector,
-                                       self.noslip_bids))
+                                      self.noslip_bids))
         return bcs
 
     def get_nullspace(self):

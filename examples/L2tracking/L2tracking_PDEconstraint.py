@@ -37,5 +37,6 @@ class PoissonSolver(PdeConstraint):
 
     def solve(self):
         super().solve()
-        fd.solve(self.F==0, self.solution, bcs=self.bcs, solver_parameters=self.params)
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                 solver_parameters=self.params)
         # self.solver.solve()
