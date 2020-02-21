@@ -37,7 +37,7 @@ class NavierStokesSolver(PdeConstraint):
             uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
             rsq = X[0]**2+X[1]**2 #squared radius = 0.5**2 = 1/4
-            uin = fd.as_vector([1-4*rsq, 0, 0])
+            uin = fd.as_vector([0, 0, 1-4*rsq])
         else:
             raise NotImplementedError
         self.bcs = [fd.DirichletBC(self.V.sub(0), 0., [12, 13]),
