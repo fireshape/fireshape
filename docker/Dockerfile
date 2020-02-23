@@ -3,7 +3,7 @@
 FROM ubuntu:18.04
 
 # This DockerFile is looked after by
-MAINTAINER Florian Wechsung <wechsung@maths.ox.ac.uk>
+MAINTAINER Florian Wechsung <wechsung@nyu.edu>
 
 # Update and install required packages for Firedrake
 USER root
@@ -15,7 +15,8 @@ RUN apt-get update \
                  cmake gfortran git libblas-dev liblapack-dev \
                  libmpich-dev libtool mercurial mpich\
                  python3-dev python3-pip python3-tk python3-venv \
-                 zlib1g-dev libboost-dev gmsh patchelf \
+                 python3-requests zlib1g-dev libboost-dev sudo bison flex \
+                 gmsh patchelf docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -29,9 +30,9 @@ USER firedrake
 WORKDIR /home/firedrake
 
 # Now install firedrake
-RUN echo "2019-04-25"
+RUN echo "2020-02-20"
 RUN curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-RUN bash -c "python3 firedrake-install --no-package-manager --disable-ssh --venv-name=firedrake --install pyadjoint --mpicc mpicc.mpich --mpicxx mpicxx.mpich --mpif90 mpif90.mpich --mpiexec mpiexec.mpich"
+RUN bash -c "python3 firedrake-install --no-package-manager --disable-ssh --mpicc mpicc.mpich --mpicxx mpicxx.mpich --mpif90 mpif90.mpich --mpiexec mpiexec.mpich"
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install wheel --upgrade
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install scipy
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install roltrilinos

@@ -1,5 +1,4 @@
 import firedrake as fd
-import firedrake_adjoint as fda
 from fireshape import PdeConstraint
 
 
@@ -16,7 +15,7 @@ class NavierStokesSolver(PdeConstraint):
             * fd.FunctionSpace(self.mesh_m, "CG", 1)
 
         # Preallocate solution variables for state equation
-        self.solution = fda.Function(self.V, name="State")
+        self.solution = fd.Function(self.V, name="State")
         self.testfunction = fd.TestFunction(self.V)
 
         # Define viscosity parameter
@@ -38,43 +37,37 @@ class NavierStokesSolver(PdeConstraint):
             uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
             rsq = X[0]**2+X[1]**2 #squared radius = 0.5**2 = 1/4
-            uin = fd.as_vector([1-4*rsq, 0, 0])
+            uin = fd.as_vector([0, 0, 1-4*rsq])
         else:
             raise NotImplementedError
-        self.bcs = [fda.DirichletBC(self.V.sub(0), 0., [12, 13]),
-                    fda.DirichletBC(self.V.sub(0), uin, [10])]
+        self.bcs = [fd.DirichletBC(self.V.sub(0), 0., [12, 13]),
+                    fd.DirichletBC(self.V.sub(0), uin, [10])]
 
         # PDE-solver parameters
         self.nsp = None
-        self.params = {"mat_type": "aij", "pc_type": "lu",
-                       "pc_factor_mat_solver_type": "mumps"}
-
-        problem = fda.NonlinearVariationalProblem(
-            self.F, self.solution, bcs=self.bcs)
-        #self.solver = fda.NonlinearVariationalSolver( #should it be fds.NonlinearVariationalSolver??
-        self.solver = fd.NonlinearVariationalSolver(
-            problem, solver_parameters=self.params)
+        self.params = {
+            "snes_max_it": 10, "mat_type": "aij", "pc_type": "lu",
+            "pc_factor_mat_solver_type": "superlu_dist", 
+            # "snes_monitor": None, "ksp_monitor": None, 
+        }
 
     def solve(self):
         super().solve()
-        #fix this #self.solver.solve()
-        #self.solver.solve()
-        print('----------\n -- Trying to solve--', flush = True)
         self.failed_to_solve = False #resetting this should avoid NaNs when computing Riesz representatives, but it does not work. See objective_pipe.py
         u_old = self.solution.copy(deepcopy=True)
         try:
-            self.solver.solve()
+            fd.solve(self.F==0, self.solution, bcs=self.bcs, solver_parameters=self.params)
         except fd.ConvergenceError:
             print('but failed\n -----------', flush = True)
             self.failed_to_solve = True
-            self.solution = u_old.copy(deepcopy=True)
+            self.solution.assign(u_old)
 
 if __name__ == "__main__":
     mesh = fd.Mesh("pipe.msh")
     if mesh.topological_dimension() == 2:   #in 2D
-        viscosity = fda.Constant(1./400.)
+        viscosity = fd.Constant(1./400.)
     elif mesh.topological_dimension() == 3: #in 3D
-        viscosity = fda.Constant(1/10.) #simpler problem in 3D
+        viscosity = fd.Constant(1/10.) #simpler problem in 3D
     else:
         raise NotImplementedError
     e = NavierStokesSolver(mesh, viscosity)
