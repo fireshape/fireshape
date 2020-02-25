@@ -58,7 +58,6 @@ class NavierStokesSolver(PdeConstraint):
         try:
             fd.solve(self.F==0, self.solution, bcs=self.bcs, solver_parameters=self.params)
         except fd.ConvergenceError:
-            print('but failed\n -----------', flush = True)
             self.failed_to_solve = True
             self.solution.assign(u_old)
 

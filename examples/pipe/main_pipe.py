@@ -42,20 +42,19 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-'General': {'Print Verbosity':1, #set to 1 if you struggle to understand the output
+'General': {'Print Verbosity':0, #set to 1 if you struggle to understand the output
             'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 10}},
 'Step': {'Type': 'Augmented Lagrangian',
          'Augmented Lagrangian': {'Subproblem Step Type': 'Trust Region',
                                    'Print Intermediate Optimization History': True,
                                    #'Subproblem Iteration Limit': 5}},
-                                   'Subproblem Iteration Limit': 5}},
-                                   #'Subproblem Iteration Limit': 10}}, #this fails with nans in computing grad
+                                   'Subproblem Iteration Limit': 10}}, #this fails with nans in computing grad
                                                                        #observation: a lot of subits lead to compressing
                                                                        #nodes in the middle of the pipe
 'Status Test': {'Gradient Tolerance': 1e-2,
                 'Step Tolerance': 1e-2,
                 'Constraint Tolerance': 1e-1,
-                'Iteration Limit': 2} #we can raise this to 100, nothing changes and it doesn't crash, it's good news, but finding appropriate stopping criteria is challenging
+                'Iteration Limit': 5} #we can raise this to 100, nothing changes and it doesn't crash, it's good news, but finding appropriate stopping criteria is challenging
                 }
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)

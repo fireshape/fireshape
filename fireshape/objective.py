@@ -226,9 +226,9 @@ class ReducedObjective(ShapeObjective):
                 if self.cb is not None:
                     self.cb()
                 raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
-
+        #if iteration >= 0 and self.cb is not None:
+        #    self.cb()
+        self.cb()
 
 class ObjectiveSum(Objective):
 
