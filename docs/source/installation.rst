@@ -6,13 +6,12 @@ Installation
 Requirements
 ^^^^^^^^^^^^
 
-Please install the finite element library `Firedrake <https://www.firedrakeproject.org/download.html>`_ first. You need to install Firedrake with
-`pyadjoint <http://www.dolfin-adjoint.org/en/release/>`_.
+Please install the finite element library `Firedrake <https://www.firedrakeproject.org/download.html>`_ first.
 
 .. code-block:: bash
 
     curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-    python3 firedrake-install --install pyadjoint
+    python3 firedrake-install
 
 How to install Fireshape
 ^^^^^^^^^^^^^^^^^^^^^^^^
