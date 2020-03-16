@@ -7,7 +7,7 @@ import numpy as np
 class PipeObjective(ShapeObjective):
     """L2 tracking functional for Poisson problem."""
 
-    def __init__(self, pde_solver: NavierStokesSolver, *args,  **kwargs):
+    def __init__(self, pde_solver: NavierStokesSolver, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pde_solver = pde_solver
 
@@ -15,7 +15,7 @@ class PipeObjective(ShapeObjective):
         """Evaluate misfit functional."""
         nu = self.pde_solver.viscosity
 
-        if self.pde_solver.failed_to_solve: #retutn NaNs if cannot solve state equation
+        if self.pde_solver.failed_to_solve:  # return NaNs if state solve fails
             return np.nan * fd.dx(self.pde_solver.mesh_m)
         else:
             z = self.pde_solver.solution

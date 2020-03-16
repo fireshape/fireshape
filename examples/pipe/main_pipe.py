@@ -52,9 +52,9 @@ params_dict = {
                            'Maximum Storage': 10}},
     'Step': {'Type': 'Augmented Lagrangian',
              'Augmented Lagrangian':
-                {'Subproblem Step Type': 'Trust Region',
-                 'Print Intermediate Optimization History': False,
-                 'Subproblem Iteration Limit': 10}},
+             {'Subproblem Step Type': 'Trust Region',
+              'Print Intermediate Optimization History': False,
+              'Subproblem Iteration Limit': 10}},
     'Status Test': {'Gradient Tolerance': 1e-2,
                     'Step Tolerance': 1e-2,
                     'Constraint Tolerance': 1e-1,

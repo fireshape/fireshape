@@ -56,7 +56,7 @@ class NavierStokesSolver(PdeConstraint):
         self.failed_to_solve = False
         u_old = self.solution.copy(deepcopy=True)
         try:
-            fd.solve(self.F==0, self.solution, bcs=self.bcs,
+            fd.solve(self.F == 0, self.solution, bcs=self.bcs,
                      solver_parameters=self.params)
         except fd.ConvergenceError:
             self.failed_to_solve = True
