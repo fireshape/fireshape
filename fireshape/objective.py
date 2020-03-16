@@ -1,6 +1,5 @@
 import ROL
 import firedrake as fd
-import firedrake_adjoint as fda
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
 from .errors import MeshDeformationError
@@ -189,6 +188,7 @@ class ReducedObjective(ShapeObjective):
         self.e = e
         # stop any annotation that might be ongoing as we only want to record
         # what's happening in e.solve()
+        import firedrake_adjoint as fda
         fda.pause_annotation()
 
     def value(self, x, tol):
@@ -213,17 +213,18 @@ class ReducedObjective(ShapeObjective):
                 # in order to do this we need to "record a tape of the forward
                 # solve", pyadjoint will then figure out all necessary
                 # adjoints.
+                import firedrake_adjoint as fda
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 fda.continue_annotation()
                 mesh_m = self.J.Q.mesh_m
-                s = fda.Function(self.J.V_m)
+                s = fd.Function(self.J.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
                 self.s = s
                 self.c = fda.Control(s)
                 self.e.solve()
-                Jpyadj = fda.assemble(self.J.value_form(),
-                                      form_compiler_parameters=self.params)
+                Jpyadj = fd.assemble(self.J.value_form(),
+                                     form_compiler_parameters=self.params)
                 self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
                 fda.pause_annotation()
             except fd.ConvergenceError:

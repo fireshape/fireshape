@@ -2,7 +2,6 @@ from .innerproduct import InnerProduct
 from .boundary_extension import NeumannExtension
 import ROL
 import firedrake as fd
-import firedrake_adjoint as fda
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector",
@@ -137,9 +136,9 @@ class FeControlSpace(ControlSpace):
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.interpolate(X, self.V_r)
-        self.T = fda.Function(self.V_r, name="T")
+        self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fda.Mesh(self.T)
+        self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
     def restrict(self, residual, out):
@@ -216,7 +215,7 @@ class ScalarFeMultiGridControlSpace(ControlSpace):
             T.copy(deepcopy=True) for T in self.intermediate_Ts
         ]
 
-        meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
+        meshes_transformed = [fd.Mesh(T) for T in self.intermediate_Ts]
         from collections import defaultdict
         for i, m in enumerate(meshes_transformed):
             m._shared_data_cache = defaultdict(dict)
@@ -333,7 +332,7 @@ class FeMultiGridControlSpace(ControlSpace):
             T.copy(deepcopy=True) for T in self.intermediate_Ts
         ]
 
-        meshes_transformed = [fda.Mesh(T) for T in self.intermediate_Ts]
+        meshes_transformed = [fd.Mesh(T) for T in self.intermediate_Ts]
         from collections import defaultdict
         for i, m in enumerate(meshes_transformed):
             m._shared_data_cache = defaultdict(dict)
@@ -498,7 +497,7 @@ class BsplineControlSpace(ControlSpace):
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fda.Mesh(self.T)
+        self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
 
         assert self.dim == self.mesh_r.geometric_dimension()

@@ -1,12 +1,11 @@
 import firedrake as fd
-import firedrake_adjoint as fda
 import numpy as np
 from ..pde_constraint import PdeConstraint
 
 __all__ = ["StokesSolver", "MassInv"]
 
 
-class PressurePinBC(fda.DirichletBC):
+class PressurePinBC(fd.DirichletBC):
 
     def __init__(self, V, *args, **kwargs):
         super().__init__(V, fd.Constant(0), None, **kwargs)
@@ -47,7 +46,7 @@ class FluidSolver(PdeConstraint):
         self.inflow_bids = inflow_bids
         self.inflow_expr = inflow_expr
         self.noslip_bids = noslip_bids
-        self.nu = fda.Constant(nu)
+        self.nu = fd.Constant(nu)
 
         # Setup problem
         self.V = self.get_functionspace()
@@ -60,8 +59,7 @@ class FluidSolver(PdeConstraint):
         self.outflow_bids = all_bids
 
         # Preallocate solution variables for state and adjoint equations
-        self.solution = fda.Function(self.V, name="State")
-        self.solution_adj = fda.Function(self.V, name="Adjoint")
+        self.solution = fd.Function(self.V, name="State")
 
         self.F = self.get_weak_form()
         self.bcs = self.get_boundary_conditions()
@@ -71,16 +69,12 @@ class FluidSolver(PdeConstraint):
             nsp = None
         self.nsp = nsp
         self.params = self.get_parameters()
-        self.Jp = self.get_Jp()
-        problem = fda.NonlinearVariationalProblem(self.F, self.solution,
-                                                  bcs=self.bcs, Jp=self.Jp)
-
-        self.solver = fda.NonlinearVariationalSolver(
-            problem, solver_parameters=self.params, nullspace=self.nsp)
 
     def solve(self):
         super().solve()
-        self.solver.solve()
+        # self.solver.solve()
+        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                 solver_parameters=self.params, nullspace=self.nsp)
 
     def get_functionspace(self):
         """Construct trial/test space for state and adjoint equations."""
@@ -105,11 +99,11 @@ class FluidSolver(PdeConstraint):
 
         bcs = []
         if len(self.inflow_bids) is not None:
-            bcs.append(fda.DirichletBC(self.V.sub(0), self.inflow_expr,
-                                       self.inflow_bids))
+            bcs.append(fd.DirichletBC(self.V.sub(0), self.inflow_expr,
+                                      self.inflow_bids))
         if len(self.noslip_bids) > 0:
-            bcs.append(fda.DirichletBC(self.V.sub(0), zerovector,
-                                       self.noslip_bids))
+            bcs.append(fd.DirichletBC(self.V.sub(0), zerovector,
+                                      self.noslip_bids))
         return bcs
 
     def get_nullspace(self):

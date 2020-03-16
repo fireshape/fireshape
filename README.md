@@ -6,10 +6,9 @@ The documentation is available [here](https://fireshape.readthedocs.io/en/latest
 ## Requirements
 
 Please install the [firedrake finite element library](https://www.firedrakeproject.org) first.
-You will need Firedrake together with pyadjoint, i.e.
 
     curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-    python3 firedrake-install --install pyadjoint
+    python3 firedrake-install
 
 
 ## Installation
