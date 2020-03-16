@@ -8,7 +8,7 @@ class NavierStokesSolver(PdeConstraint):
     def __init__(self, mesh_m, viscosity):
         super().__init__()
         self.mesh_m = mesh_m
-        self.failed_to_solve = False #when self.solver.solve() fail
+        self.failed_to_solve = False  # when self.solver.solve() fail
 
         # Setup problem, Taylor-Hood finite elements
         self.V = fd.VectorFunctionSpace(self.mesh_m, "CG", 2) \
@@ -26,8 +26,8 @@ class NavierStokesSolver(PdeConstraint):
         u, p = fd.split(z)
         test = self.testfunction
         v, q = fd.split(test)
-        nu = viscosity#self.viscosity     #shorten notation
-        self.F = nu*fd.inner(fd.grad(u), fd.grad(v))*fd.dx - p*fd.div(v)*fd.dx \
+        nu = self.viscosity  # shorten notation
+        self.F = nu*fd.inner(fd.grad(u), fd.grad(v))*fd.dx - p*fd.div(v)*fd.dx\
             + fd.inner(fd.dot(fd.grad(u), u), v)*fd.dx + fd.div(u)*q*fd.dx
 
         # Dirichlet Boundary conditions
@@ -36,7 +36,7 @@ class NavierStokesSolver(PdeConstraint):
         if dim == 2:
             uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
-            rsq = X[0]**2+X[1]**2 #squared radius = 0.5**2 = 1/4
+            rsq = X[0]**2+X[1]**2  # squared radius = 0.5**2 = 1/4
             uin = fd.as_vector([0, 0, 1-4*rsq])
         else:
             raise NotImplementedError
@@ -47,26 +47,28 @@ class NavierStokesSolver(PdeConstraint):
         self.nsp = None
         self.params = {
             "snes_max_it": 10, "mat_type": "aij", "pc_type": "lu",
-            "pc_factor_mat_solver_type": "superlu_dist", 
-            # "snes_monitor": None, "ksp_monitor": None, 
+            "pc_factor_mat_solver_type": "superlu_dist",
+            # "snes_monitor": None, "ksp_monitor": None,
         }
 
     def solve(self):
         super().solve()
-        self.failed_to_solve = False #resetting this should avoid NaNs when computing Riesz representatives, but it does not work. See objective_pipe.py
+        self.failed_to_solve = False
         u_old = self.solution.copy(deepcopy=True)
         try:
-            fd.solve(self.F==0, self.solution, bcs=self.bcs, solver_parameters=self.params)
+            fd.solve(self.F==0, self.solution, bcs=self.bcs,
+                     solver_parameters=self.params)
         except fd.ConvergenceError:
             self.failed_to_solve = True
             self.solution.assign(u_old)
 
+
 if __name__ == "__main__":
     mesh = fd.Mesh("pipe.msh")
-    if mesh.topological_dimension() == 2:   #in 2D
+    if mesh.topological_dimension() == 2:  # in 2D
         viscosity = fd.Constant(1./400.)
-    elif mesh.topological_dimension() == 3: #in 3D
-        viscosity = fd.Constant(1/10.) #simpler problem in 3D
+    elif mesh.topological_dimension() == 3:  # in 3D
+        viscosity = fd.Constant(1/10.)  # simpler problem in 3D
     else:
         raise NotImplementedError
     e = NavierStokesSolver(mesh, viscosity)
