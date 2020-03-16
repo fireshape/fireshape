@@ -229,6 +229,7 @@ class ReducedObjective(ShapeObjective):
         if iteration >= 0 and self.cb is not None:
             self.cb()
 
+
 class ObjectiveSum(Objective):
 
     def __init__(self, a, b):
