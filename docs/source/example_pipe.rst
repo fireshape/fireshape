@@ -31,7 +31,7 @@ Here, :math:`\mathbf{g}` is given by a Poiseuille flow at the inlet and is zero 
 The letter :math:`\Gamma` denotes the outlet.
 
 In addition to the PDE-contstraint, we enforce a volume constraint:
-the volume of the domain should remain constant during the optimization process.
+the volume of the optimized domain should be equal to the volume of the initial domain.
 
 Initial domain
 ^^^^^^^^^^^^^^
@@ -49,10 +49,10 @@ Initial domain
 For the 2D-example, the geometry of the initial domain is described in the following
 `gmsh <http://gmsh.info/>`_ script (this has been tested with :bash:`gmsh v4.1.2`).
 
-.. literalinclude:: ../../examples/pipe/pipe.geo
+.. literalinclude:: ../../examples/pipe/pipe2d.geo
     :linenos:
 
-The mesh can be generated typing :bash:`gmsh -2 -clscale 0.1 -format msh2 -o pipe.msh pipe.geo`
+The mesh can be generated typing :bash:`gmsh -2 -clscale 0.1 -format msh2 -o pipe.msh pipe2d.geo`
 in the terminal.
 
 For the 3D-example, the geometry of the initial domain is described in the following
@@ -103,7 +103,7 @@ the weak formulation of this boundary value problem.
 Implementing the shape functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 We implement the shape functional :math:`\mathcal{J}`
-in a python module named :bash:`objective_pipe.py`.
+in a python file named :bash:`objective_pipe.py`.
 In the code, we highlight the lines
 which characterize :math:`\mathcal{J}`.
 
