@@ -48,16 +48,26 @@ class NavierStokesSolver(PdeConstraint):
         self.params = {
             "snes_max_it": 10, "mat_type": "aij", "pc_type": "lu",
             "pc_factor_mat_solver_type": "superlu_dist",
-            # "snes_monitor": None, "ksp_monitor": None,
+            "snes_monitor": None, "ksp_monitor": None,
         }
 
-    def solve(self):
+    def solve(self, do_continuation=False):
         super().solve()
-        self.failed_to_solve = False
         u_old = self.solution.copy(deepcopy=True)
         try:
-            fd.solve(self.F == 0, self.solution, bcs=self.bcs,
-                     solver_parameters=self.params)
+            if self.failed_to_solve or do_continuation:
+                import numpy as np
+                re = 1./self.viscosity.values()[0]
+                steps = int(round(re/100))
+                for nuinv in np.linspace(0, re, num=steps+1, endpoint=True):
+                    self.viscosity.assign(1./max(1., nuinv))
+                    fd.warning("Solve for Re = %.1f" % nuinv)
+                    fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                             solver_parameters=self.params)
+            else:
+                fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+                         solver_parameters=self.params)
+            self.failed_to_solve = False
         except fd.ConvergenceError:
             self.failed_to_solve = True
             self.solution.assign(u_old)
