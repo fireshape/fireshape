@@ -13,18 +13,20 @@ q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
 if mesh.topological_dimension() == 2:  # in 2D
-    viscosity = fd.Constant(1./400.)
+    Re = 400
 elif mesh.topological_dimension() == 3:  # in 3D
-    viscosity = fd.Constant(1/10.)  # simpler problem in 3D
+    Re = 1000
 else:
     raise NotImplementedError
+viscosity = fd.Constant(1./Re)  # simpler problem in 3D
 e = NavierStokesSolver(Q.mesh_m, viscosity)
+e.solve(do_continuation=True)
 
 # save state variable evolution in file u2.pvd or u3.pvd
 if mesh.topological_dimension() == 2:  # in 2D
     out = fd.File("solution/u2D.pvd")
 elif mesh.topological_dimension() == 3:  # in 3D
-    out = fd.File("solution/u3D.pvd")
+    out = fd.File("solution/u3D_%i.pvd" % Re)
 
 
 def cb():
@@ -36,7 +38,7 @@ J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
 # add regularization to improve mesh quality
-Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
+Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.8), Q)
 J = J + Jq
 
 # Set up volume constraint
