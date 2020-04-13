@@ -328,6 +328,7 @@ class BsplineControlSpace(ControlSpace):
             meshloc.coordinates.dat.data[:, 2] += self.bbox[2][0]
             # inner_product.fixed_bids = [1,2,3,4,5,6]
 
+        #so far, fast enough (roughly 5 seconds for init)
         self.mesh_r = meshloc
         maxdegree = max(self.orders) - 1
         # self.V_r =
@@ -336,7 +337,13 @@ class BsplineControlSpace(ControlSpace):
 
         # is this the proper space?
         self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
+        # this is the first bottleneck
+        import datetime as dt
+        t_ = dt.datetime.now()
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I_control build_interpolation_matrix started", flush=True)
         self.I_control = self.build_interpolation_matrix(self.V_control)
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I.control build_interpolation_matrix finished", flush=True)
+        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
@@ -352,7 +359,12 @@ class BsplineControlSpace(ControlSpace):
         assert self.dim == self.mesh_r.geometric_dimension()
 
         # assemble correct interpolation matrix
+        print("\n", flush=True)
+        t_ = dt.datetime.now()
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix started", flush=True)
         self.FullIFW = self.build_interpolation_matrix(self.V_r)
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix finished", flush=True)
+        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
 
     def construct_knots(self):
         """
@@ -401,11 +413,22 @@ class BsplineControlSpace(ControlSpace):
         of (vectorial tensorized) Bsplines into V
         """
         # construct list of scalar univariate interpolation matrices
+        import datetime as dt
+        t_ = dt.datetime.now()
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start interp_1d", flush=True)
         interp_1d = self.construct_1d_interpolation_matrices(V)
+        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
         # construct scalar tensorial interpolation matrix
+        t_ = dt.datetime.now()
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start construct_kronecker_matrix at", flush=True)
         IFW = self.construct_kronecker_matrix(interp_1d)
+        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
         # interleave self.dim-many IFW matrices among each other
-        return self.construct_full_interpolation_matrix(IFW)
+        t_ = dt.datetime.now()
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start construct_full_interpolation_matrix", flush=True)
+        output = self.construct_full_interpolation_matrix(IFW)
+        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
+        return output
 
     def construct_1d_interpolation_matrices(self, V):
         """
@@ -513,23 +536,41 @@ class BsplineControlSpace(ControlSpace):
         free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         dfree = len(free_dims)
         ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
-
+        import ipdb
+        ipdb.set_trace() #check that this is correct!
+        nnz_ = [None] * lsize
+        for ii, row in enumerate(range(lsize)):  #for every FE dof
+            row = self.lg_map_fe.apply([row])[0]
+            (cols, vals) = IFW.getRow(row) # extract value of all tensorize Bsplines at this dof
+            nnz_[ii] = len(vals)
+        nnz = reduce(max, nnz_)#[val for val in nnz_ for _ in range(d)]
+        #import ipdb
+        #ipdb.set_trace()
+        #FullIFW = PETSc.Mat().createAIJ( mysizes, comm = self.comm, nnz=nnz)
         FullIFW.setSizes(((d * lsize, d * gsize),
                           (dfree * lsize_spline, dfree * gsize_spline)))
         # BIG TODO: figure out the sparsity pattern
+        FullIFW.setPreallocationNNZ(nnz)
         FullIFW.setUp()
 
         # this blows up the matrix to do the right thing
         # on vector fields. It's not just a block matrix,
         # but the values are interleaved as this is how
         # firedrake handles vector fields
-        for row in range(lsize):
+        import datetime as dt
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " for loop setValues", flush=True)
+        # ----->this takes all the time!!!!
+        import ipdb
+        #ipdb.set_trace()
+        for row in range(lsize):  #for every FE dof
             row = self.lg_map_fe.apply([row])[0]
-            (cols, vals) = IFW.getRow(row)
-            for j, dim in enumerate(free_dims):
-                FullIFW.setValues([d * row + dim],
-                                  [dfree * col + j for col in cols],
-                                  vals)
+            (cols, vals) = IFW.getRow(row) # extract value of all tensorize Bsplines at this dof
+            if len(vals) > 0: #AP speedup attempt
+                for j, dim in enumerate(free_dims):
+                    FullIFW.setValues([d * row + dim], #this scalar specifies which global row to fill
+                                      [dfree * col + j for col in cols], #
+                                      vals)
+        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " for loop setValues ended", flush=True)
         FullIFW.assemble()
         return FullIFW
 
