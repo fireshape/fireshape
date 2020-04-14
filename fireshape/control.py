@@ -340,10 +340,10 @@ class BsplineControlSpace(ControlSpace):
         # this is the first bottleneck
         import datetime as dt
         t_ = dt.datetime.now()
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I_control build_interpolation_matrix started", flush=True)
+        print ("  ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I_control build_interpolation_matrix started", flush=True)
         self.I_control = self.build_interpolation_matrix(self.V_control)
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I.control build_interpolation_matrix finished", flush=True)
-        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True)
+        print ("  ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.I.control build_interpolation_matrix finished",
+               ", it took : ", dt.datetime.now() - t_, flush=True)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
@@ -359,12 +359,11 @@ class BsplineControlSpace(ControlSpace):
         assert self.dim == self.mesh_r.geometric_dimension()
 
         # assemble correct interpolation matrix
-        print("\n", flush=True)
         t_ = dt.datetime.now()
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix started", flush=True)
+        print ("  ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix started", flush=True)
         self.FullIFW = self.build_interpolation_matrix(self.V_r)
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix finished", flush=True)
-        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
+        print ("  ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " --- self.FullIFW build_interpolation_matrix finished",
+               ", it took : ", dt.datetime.now() - t_, flush=True)
 
     def construct_knots(self):
         """
@@ -415,19 +414,18 @@ class BsplineControlSpace(ControlSpace):
         # construct list of scalar univariate interpolation matrices
         import datetime as dt
         t_ = dt.datetime.now()
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start interp_1d", flush=True)
         interp_1d = self.construct_1d_interpolation_matrices(V)
-        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
+        print ("    ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " interp_1d took : ", dt.datetime.now() - t_, flush=True),
         # construct scalar tensorial interpolation matrix
         t_ = dt.datetime.now()
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start construct_kronecker_matrix at", flush=True)
+        self.IFWnnz = 0
         IFW = self.construct_kronecker_matrix(interp_1d)
-        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
+        print ("    ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " construct_kronecker_matrix took : ", dt.datetime.now() - t_, flush=True),
         # interleave self.dim-many IFW matrices among each other
         t_ = dt.datetime.now()
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " start construct_full_interpolation_matrix", flush=True)
+        self.FullIFWnnz = 0
         output = self.construct_full_interpolation_matrix(IFW)
-        print ("-------------------> it took : ", dt.datetime.now() - t_, flush=True),
+        print ("    ", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " construct_full_interpolation_matrix took : ", dt.datetime.now() - t_, flush=True),
         return output
 
     def construct_1d_interpolation_matrices(self, V):
@@ -513,16 +511,74 @@ class BsplineControlSpace(ControlSpace):
         local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size))
         (lsize, gsize) = interp_1d[0].getSizes()[0]
         IFW.setSizes(((lsize, gsize), (local_N, self.N)))
-        IFW.setUp()
+
+        # sparsity pattern guessed from interp_1d[0]
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            denserows = [A[row, :] for A in interp_1d]
-            values = reduce(np.kron, denserows)
-            columns = np.where(values != 0)[0].astype(np.int32)
-            values = values[columns]
+            nnz_ = len(interp_1d[0].getRow(row)[0]) #lenght of array of nnz-entries
+            #nnz_ = len(interp_1d[0].getRow(row)[1]) #would be the same
+            self.IFWnnz = max(self.IFWnnz, nnz_**self.dim)
+        IFW.setPreallocationNNZ(self.IFWnnz)
+        IFW.setUp()
+
+        def mykron(data1, col1, shape1, data2, col2, shape2):
+            import ipdb; ipdb.set_trace()
+            #check that this is correct
+            shapeout = shape1*shape2
+
+            if len(data1) == 0 or len(data2) == 0:
+                # kronecker product is the zero matrix
+                dataout = []
+                rowout = []
+                return (dataout, rowout, shapeout)
+
+            # expand entries of a into blocks
+            #row = A.row.repeat(B.nnz)
+            col = col1.repeat(len(data2))
+            data = data1.repeat(len(data2))
+
+            #row *= B.shape[0]
+            col *= shape2
+
+            # increment block indices
+            #row,col = row.reshape(-1,len(data2),col.reshape(-1, len(data2))
+            col = col.reshape(-1, len(data2))
+            #row += B.row
+            col += col2
+            #row,col = row.reshape(-1),col.reshape(-1)
+            colout = col.reshape(-1)
+
+            # compute block entries
+            data = data.reshape(-1,len(data2)) * data2
+            dataout = data.reshape(-1)
+            return (dataout, colout,shapeout)
+
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
+
+            #matrices = [A for A in intpert_1d]
+            col = interp_1d[0].getRow(row)[0]
+            data = interp_1d[0].getRow(row)[1]
+            shape = interp_1d[0].getSize()[1]
+            for jj in range(1,len(interp_1d)):
+                col_ = interp_1d[jj].getRow(row)[0]
+                data_ = interp_1d[jj].getRow(row)[1]
+                shape_ = interp_1d[jj].getSize()[1]
+                values = mykron(data, col, shape, data_, col_, shape_)
+                data = values[0]
+                col= values[1]
+                shape = values[2]
+            columns = col
+            values = data
+            #import yyipdb; ipdb.set_trace() #use sparse kron
+            #denserows = [A[row, :] for A in interp_1d]
+            #values = reduce(np.kron, denserows)
+            #columns = np.where(values != 0)[0].astype(np.int32)
+            #values = values[columns]
             IFW.setValues([row], columns, values)
 
         IFW.assemble()
+        print(IFW.getInfo(), flush=True)
         return IFW
 
     def construct_full_interpolation_matrix(self, IFW):
@@ -536,42 +592,43 @@ class BsplineControlSpace(ControlSpace):
         free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         dfree = len(free_dims)
         ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
-        import ipdb
-        ipdb.set_trace() #check that this is correct!
-        nnz_ = [None] * lsize
-        for ii, row in enumerate(range(lsize)):  #for every FE dof
+
+        # BIG TODO: figure out the sparsity pattern
+        # find nnz of the row with most nnzeros (it would me more memory efficient to specify nnz row by row)
+        for ii, row in enumerate(range(lsize)):
             row = self.lg_map_fe.apply([row])[0]
-            (cols, vals) = IFW.getRow(row) # extract value of all tensorize Bsplines at this dof
-            nnz_[ii] = len(vals)
-        nnz = reduce(max, nnz_)#[val for val in nnz_ for _ in range(d)]
-        #import ipdb
-        #ipdb.set_trace()
-        #FullIFW = PETSc.Mat().createAIJ( mysizes, comm = self.comm, nnz=nnz)
+            self.FullIFWnnz = max(self.FullIFWnnz, len(IFW.getRow(row)[1]))
         FullIFW.setSizes(((d * lsize, d * gsize),
                           (dfree * lsize_spline, dfree * gsize_spline)))
-        # BIG TODO: figure out the sparsity pattern
-        FullIFW.setPreallocationNNZ(nnz)
+        # set sparsity pattern (it would be more efficient to specify nnz row by row,
+        # but this needs nnzdiagonal and nnzoffidagonal, seems a bit tricky)
+        # Question: is this correct in parallel? (I fear nnz is compute in parallel and thus multivalued)
+        FullIFW.setPreallocationNNZ(self.FullIFWnnz)
+        #FullIFW.setPreallocationNNZ([nnz, nnz]) #this seems to be the same as above
         FullIFW.setUp()
 
         # this blows up the matrix to do the right thing
         # on vector fields. It's not just a block matrix,
         # but the values are interleaved as this is how
         # firedrake handles vector fields
-        import datetime as dt
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " for loop setValues", flush=True)
-        # ----->this takes all the time!!!!
-        import ipdb
-        #ipdb.set_trace()
         for row in range(lsize):  #for every FE dof
             row = self.lg_map_fe.apply([row])[0]
             (cols, vals) = IFW.getRow(row) # extract value of all tensorize Bsplines at this dof
-            if len(vals) > 0: #AP speedup attempt
-                for j, dim in enumerate(free_dims):
-                    FullIFW.setValues([d * row + dim], #this scalar specifies which global row to fill
-                                      [dfree * col + j for col in cols], #
-                                      vals)
-        print (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " for loop setValues ended", flush=True)
+            #if len(vals) > 0: #this prevents calling setValues for nothing, but no difference in terms of speed
+            for j, dim in enumerate(free_dims):
+                #import ipdb; ipdb.set_trace()
+                FullIFW.setValues([d * row + dim], #this scalar specifies which global row to fill
+                                  dfree * cols + j,#[dfree * col + j for col in cols], #which colums
+                                  vals)
+                #this doesn't work, I think PETSc can only insert square bloks
+                #rows_ = [d * row + dim for dim in free_dims]
+                #columns_ = [[dfree * col + j for col in cols] for j in range(len(free_dims))], #which colums
+                ##columns_ = columns_[0] #why the hell is columns_ = ([1,2 ...],) ??
+                #allvals_ = [[val for val in vals] for dim in free_dims]
+                #import ipdb; ipdb.set_trace()
+                #FullIFW.setValues(rows_, columns_, allvals_)
         FullIFW.assemble()
+        print(FullIFW.getInfo(), flush=True)
         return FullIFW
 
     def restrict(self, residual, out):
