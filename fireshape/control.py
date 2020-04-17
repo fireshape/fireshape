@@ -494,8 +494,8 @@ class BsplineControlSpace(ControlSpace):
             return (idxout, dataout, lenout)
         else:
             # rewrite as column vector, multiply, and add row vector
-            idxout = (idx1.reshape(len(data1),1) * len2) + idx2
-            dataout = data1.reshape(len(data1),1) * data2
+            idxout = (idx1.reshape(len(data1), 1) * len2) + idx2
+            dataout = data1.reshape(len(data1), 1) * data2
             return (idxout.reshape(-1), dataout.reshape(-1), lenout)
 
     def construct_kronecker_matrix(self, interp_1d):
@@ -519,16 +519,17 @@ class BsplineControlSpace(ControlSpace):
         # guess sparsity pattern from interp_1d[0]
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            nnz_ = len(interp_1d[0].getRow(row)[0]) #lenght of array of nnz-entries
+            nnz_ = len(interp_1d[0].getRow(row)[0])  # lenght of nnz-array
             self.IFWnnz = max(self.IFWnnz, nnz_**self.dim)
         IFW.setPreallocationNNZ(self.IFWnnz)
         IFW.setUp()
 
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            M = [[A.getRow(row)[0], A.getRow(row)[1], A.getSize()[1]] for A in interp_1d]
+            M = [[A.getRow(row)[0],
+                  A.getRow(row)[1], A.getSize()[1]] for A in interp_1d]
             M = reduce(self.vectorkron, M)
-            columns, values, lenght  = M
+            columns, values, lenght = M
             IFW.setValues([row], columns, values)
 
         IFW.assemble()
@@ -551,8 +552,9 @@ class BsplineControlSpace(ControlSpace):
                           (dfree * lsize_spline, dfree * gsize_spline)))
 
         # (over)estimate sparsity pattern using row most most nonzeros
-        # possible memory improvement: allocate precise sparsity pattern row by row
-        # (but this needs nnzdiagonal and nnzoffidagonal; not straightforward to do)
+        # possible memory improvement: allocate precise sparsity pattern
+        # row by row (but this needs nnzdiagonal and nnzoffidagonal;
+        # not straightforward to do)
         for ii, row in enumerate(range(lsize)):
             row = self.lg_map_fe.apply([row])[0]
             self.FullIFWnnz = max(self.FullIFWnnz, len(IFW.getRow(row)[1]))
@@ -562,15 +564,15 @@ class BsplineControlSpace(ControlSpace):
         FullIFW.setUp()
 
         # fill matrix by blowing up entries from IFW so that it does the right
-        # thing on vector fields (not just a block matrix: values are interleaved
-        # as this is how firedrake handles vector fields)
-        for row in range(lsize):  #for every FE dof
+        # thing on vector fields (it's not just a block matrix: values are
+        # interleaved as this is how firedrake handles vector fields)
+        for row in range(lsize):  # for every FE dof
             row = self.lg_map_fe.apply([row])[0]
             # extract value of all tensorize Bsplines at this dof
             (cols, vals) = IFW.getRow(row)
             for j, dim in enumerate(free_dims):
-                FullIFW.setValues([d * row + dim], #  global row
-                                  dfree * cols + j,#  global column
+                FullIFW.setValues([d * row + dim],   # global row
+                                  dfree * cols + j,  # global column
                                   vals)
 
         FullIFW.assemble()
