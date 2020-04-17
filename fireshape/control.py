@@ -569,9 +569,10 @@ class BsplineControlSpace(ControlSpace):
             row = self.lg_map_fe.apply([row])[0]
             # extract value of all tensorize Bsplines at this dof
             (cols, vals) = IFW.getRow(row)
+            expandedcols = dfree * cols
             for j, dim in enumerate(free_dims):
                 FullIFW.setValues([d * row + dim],   # global row
-                                  dfree * cols + j,  # global column
+                                  expandedcols + j,  # global column
                                   vals)
 
         FullIFW.assemble()
