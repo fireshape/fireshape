@@ -407,8 +407,7 @@ class BsplineControlSpace(ControlSpace):
         IFW = self.construct_kronecker_matrix(interp_1d)
         # interleave self.dim-many IFW matrices among each other
         self.FullIFWnnz = 0  # to compute sparsity pattern in parallel
-        output = self.construct_full_interpolation_matrix(IFW)
-        return output
+        return self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self, V):
         """
@@ -551,7 +550,7 @@ class BsplineControlSpace(ControlSpace):
         FullIFW.setSizes(((d * lsize, d * gsize),
                           (dfree * lsize_spline, dfree * gsize_spline)))
 
-        # (over)estimate sparsity pattern using row most most nonzeros
+        # (over)estimate sparsity pattern using row with most nonzeros
         # possible memory improvement: allocate precise sparsity pattern
         # row by row (but this needs nnzdiagonal and nnzoffidagonal;
         # not straightforward to do)
@@ -563,8 +562,8 @@ class BsplineControlSpace(ControlSpace):
         # preallocate matrix
         FullIFW.setUp()
 
-        # fill matrix by blowing up entries from IFW so that it does the right
-        # thing on vector fields (it's not just a block matrix: values are
+        # fill matrix by blowing up entries from IFW to do the right thing
+        # on vector fields (it's not just a block matrix: values are
         # interleaved as this is how firedrake handles vector fields)
         for row in range(lsize):  # for every FE dof
             row = self.lg_map_fe.apply([row])[0]
