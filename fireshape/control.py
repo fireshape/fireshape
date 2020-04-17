@@ -554,8 +554,9 @@ class BsplineControlSpace(ControlSpace):
         # possible memory improvement: allocate precise sparsity pattern
         # row by row (but this needs nnzdiagonal and nnzoffidagonal;
         # not straightforward to do)
+        global_rows = self.lg_map_fe.apply([range(lsize)])
         for ii, row in enumerate(range(lsize)):
-            row = self.lg_map_fe.apply([row])[0]
+            row = global_rows[row]
             self.FullIFWnnz = max(self.FullIFWnnz, len(IFW.getRow(row)[1]))
         FullIFW.setPreallocationNNZ(self.FullIFWnnz)
 
