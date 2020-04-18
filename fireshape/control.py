@@ -566,12 +566,13 @@ class BsplineControlSpace(ControlSpace):
         # fill matrix by blowing up entries from IFW to do the right thing
         # on vector fields (it's not just a block matrix: values are
         # interleaved as this is how firedrake handles vector fields)
+        innerloop_idx = [[i, free_dims[i]] for i in range(dfree)]
         for row in range(lsize):  # for every FE dof
             row = self.lg_map_fe.apply([row])[0]
             # extract value of all tensorize Bsplines at this dof
             (cols, vals) = IFW.getRow(row)
             expandedcols = dfree * cols
-            for j, dim in enumerate(free_dims):
+            for j, dim in innerloop_idx:
                 FullIFW.setValues([d * row + dim],   # global row
                                   expandedcols + j,  # global column
                                   vals)
