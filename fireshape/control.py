@@ -572,6 +572,60 @@ class BsplineControlSpace(ControlSpace):
         vec.vec_wo().load(viewer)
 
 
+class HermiteControlSpace(ControlSpace):
+    """ControlSpace based on Hermite FE on reference mesh."""
+
+    def __init__(self, mesh_r):
+        self.mesh_r = mesh_r
+        self.V_control = fd.VectorFunctionSpace(mesh_r, "HER", 3)
+
+        # standard construction of ControlSpace
+        self.mesh_r = mesh
+        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.Function(self.V_r).interpolate(X)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+    def restrict(self, residual, out):
+        """From CG3 to Hermite."""
+        out.fun.interpolate(residual)  # maybe project?
+
+    def interpolate(self, vector, out):
+        """From Hermite to CG3."""
+        out.interpolate(vector.fun)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_control)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        return (self.V_control, None)
+
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
+
+
 class ControlVector(ROL.Vector):
     """
     A ControlVector is a variable in the ControlSpace.
