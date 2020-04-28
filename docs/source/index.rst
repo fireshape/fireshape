@@ -9,6 +9,8 @@
 Introduction
 ============
 
+Welcome to the documentation for Fireshape.
+
 Overview
 ^^^^^^^^
 Fireshape is a shape optimization toolbox for the finite
