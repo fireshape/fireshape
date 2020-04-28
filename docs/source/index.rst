@@ -9,17 +9,6 @@
 Introduction
 ============
 
-.. toctree::
-   :maxdepth: 2
-   :hidden:
-
-   self
-   installation
-   example_levelset
-   example_L2tracking
-   example_pipe
-   ROL
-
 Overview
 ^^^^^^^^
 Fireshape is a shape optimization toolbox for the finite
@@ -71,3 +60,13 @@ constrained to a nonlinear boundary value problem and a volume constraint.
 On the page :ref:`ROL`, we give a very brief introduction to ROL.
 
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   self
+   installation
+   example_levelset
+   example_L2tracking
+   example_pipe
+   ROL
