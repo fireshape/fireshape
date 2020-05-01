@@ -3,13 +3,17 @@ import firedrake as fd
 
 class InteriorControlConstraint(object):
 
-    def __init__(self, V, form, direct_solve=True):
+    def __init__(self, V, form, direct_solve=True, extra_bcs=[]):
+        if isinstance(extra_bcs, fd.DirichletBC):
+            extra_bcs = [extra_bcs]
         self.V = V
         self.direct_solve = direct_solve
         self.a = form.get_form(V)
         assert form.is_symmetric()
-        self.bc = fd.DirichletBC(V, 0, "on_boundary")
-        self.A = fd.assemble(self.a, bcs=self.bc, mat_type="aij")
+        self.bcs = [fd.DirichletBC(V, 0, "on_boundary")]
+        if len(extra_bcs) > 0:
+            self.bcs += extra_bcs
+        self.A = fd.assemble(self.a, bcs=self.bcs, mat_type="aij")
         self.ls = fd.LinearSolver(self.A, solver_parameters=self.get_params())
         self.temp1 = fd.Function(V)
         self.temp2 = fd.Function(V)
