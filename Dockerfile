@@ -1,4 +1,4 @@
-FROM florianwechsung/firedrake:latest
+FROM firedrakeproject/firedrake:latest
 
 # Install
 
