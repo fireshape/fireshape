@@ -403,8 +403,10 @@ class BsplineControlSpace(ControlSpace):
         # construct list of scalar univariate interpolation matrices
         interp_1d = self.construct_1d_interpolation_matrices(V)
         # construct scalar tensorial interpolation matrix
+        self.IFWnnz = 0  # to compute sparsity pattern in parallel
         IFW = self.construct_kronecker_matrix(interp_1d)
         # interleave self.dim-many IFW matrices among each other
+        self.FullIFWnnz = 0  # to compute sparsity pattern in parallel
         return self.construct_full_interpolation_matrix(IFW)
 
     def construct_1d_interpolation_matrices(self, V):
@@ -472,6 +474,29 @@ class BsplineControlSpace(ControlSpace):
         # from IPython import embed; embed()
         return interp_1d
 
+    def vectorkron(self, v, w):
+        """
+        Compute the kronecker product of two sparse vectors.
+        A sparse vector v satisfies: v[idx_] = data_; len_ = len(v)
+        This code is an adaptation of scipy.sparse.kron()
+        """
+        idx1, data1, len1 = v
+        idx2, data2, len2 = w
+
+        # lenght of output vector
+        lenout = len1*len2
+
+        if len(data1) == 0 or len(data2) == 0:
+            # if a vector is zero, the output is the zero vector
+            idxout = []
+            dataout = []
+            return (idxout, dataout, lenout)
+        else:
+            # rewrite as column vector, multiply, and add row vector
+            idxout = (idx1.reshape(len(data1), 1) * len2) + idx2
+            dataout = data1.reshape(len(data1), 1) * data2
+            return (idxout.reshape(-1), dataout.reshape(-1), lenout)
+
     def construct_kronecker_matrix(self, interp_1d):
         """
         Construct the tensorized interpolation matrix.
@@ -480,8 +505,7 @@ class BsplineControlSpace(ControlSpace):
         the 1d univariate interpolation matrices.
         In the future, this may be done matrix-free.
         """
-        # this is awfully slow in 3D!!!!!!!!!!! (FW: it might not be anymore)
-
+        # this is one of the two bottlenecks that slow down initiating Bsplines
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
 
@@ -490,13 +514,21 @@ class BsplineControlSpace(ControlSpace):
         local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size))
         (lsize, gsize) = interp_1d[0].getSizes()[0]
         IFW.setSizes(((lsize, gsize), (local_N, self.N)))
-        IFW.setUp()
+
+        # guess sparsity pattern from interp_1d[0]
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            denserows = [A[row, :] for A in interp_1d]
-            values = reduce(np.kron, denserows)
-            columns = np.where(values != 0)[0].astype(np.int32)
-            values = values[columns]
+            nnz_ = len(interp_1d[0].getRow(row)[0])  # lenght of nnz-array
+            self.IFWnnz = max(self.IFWnnz, nnz_**self.dim)
+        IFW.setPreallocationNNZ(self.IFWnnz)
+        IFW.setUp()
+
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
+            M = [[A.getRow(row)[0],
+                  A.getRow(row)[1], A.getSize()[1]] for A in interp_1d]
+            M = reduce(self.vectorkron, M)
+            columns, values, lenght = M
             IFW.setValues([row], columns, values)
 
         IFW.assemble()
@@ -506,30 +538,45 @@ class BsplineControlSpace(ControlSpace):
         """
         Assemble interpolation matrix for vectorial tensorized spline space.
         """
-        # this is THE MOST awfully slow in 3D!!!!!!!!!!!
+        # this is one of the two bottlenecks that slow down initiating Bsplines
         FullIFW = PETSc.Mat().create(self.comm)
         FullIFW.setType(PETSc.Mat.Type.AIJ)
+
+        # set proper matrix sizes
         d = self.dim
         free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         dfree = len(free_dims)
         ((lsize, gsize), (lsize_spline, gsize_spline)) = IFW.getSizes()
-
         FullIFW.setSizes(((d * lsize, d * gsize),
                           (dfree * lsize_spline, dfree * gsize_spline)))
-        # BIG TODO: figure out the sparsity pattern
+
+        # (over)estimate sparsity pattern using row with most nonzeros
+        # possible memory improvement: allocate precise sparsity pattern
+        # row by row (but this needs nnzdiagonal and nnzoffidagonal;
+        # not straightforward to do)
+        global_rows = self.lg_map_fe.apply([range(lsize)])
+        for ii, row in enumerate(range(lsize)):
+            row = global_rows[row]
+            self.FullIFWnnz = max(self.FullIFWnnz, len(IFW.getRow(row)[1]))
+        FullIFW.setPreallocationNNZ(self.FullIFWnnz)
+
+        # preallocate matrix
         FullIFW.setUp()
 
-        # this blows up the matrix to do the right thing
-        # on vector fields. It's not just a block matrix,
-        # but the values are interleaved as this is how
-        # firedrake handles vector fields
-        for row in range(lsize):
+        # fill matrix by blowing up entries from IFW to do the right thing
+        # on vector fields (it's not just a block matrix: values are
+        # interleaved as this is how firedrake handles vector fields)
+        innerloop_idx = [[i, free_dims[i]] for i in range(dfree)]
+        for row in range(lsize):  # for every FE dof
             row = self.lg_map_fe.apply([row])[0]
+            # extract value of all tensorize Bsplines at this dof
             (cols, vals) = IFW.getRow(row)
-            for j, dim in enumerate(free_dims):
-                FullIFW.setValues([d * row + dim],
-                                  [dfree * col + j for col in cols],
+            expandedcols = dfree * cols
+            for j, dim in innerloop_idx:
+                FullIFW.setValues([d * row + dim],   # global row
+                                  expandedcols + j,  # global column
                                   vals)
+
         FullIFW.assemble()
         return FullIFW
 
