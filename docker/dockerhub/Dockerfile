@@ -1,4 +1,4 @@
-FROM firedrakeproject/firedrake-notebooks:latest
+FROM firedrakeproject/firedrake:latest
 
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 
