@@ -2,8 +2,8 @@ version: 2
 jobs:
   build:
     docker:
-      - image: florianwechsung/firedrake:latest
-      
+      - image: fireshape/firedrake4tests:latest
+
     working_directory: ~/repo
 
     steps:
