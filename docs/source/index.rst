@@ -61,6 +61,7 @@ constrained to a nonlinear boundary value problem and a volume constraint.
 
 On the page :ref:`ROL`, we give a very brief introduction to ROL.
 
+Finally, you can find a manuscript about Fireshape `here <https://arxiv.org/abs/2005.07264>`_.
 
 .. toctree::
    :maxdepth: 2
