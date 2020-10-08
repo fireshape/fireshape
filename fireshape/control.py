@@ -2,7 +2,7 @@ from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace",
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "PeriodicControlSpace",
            "BsplineControlSpace", "ControlVector"]
 
 # new imports for splines
@@ -263,6 +263,83 @@ class FeMultiGridControlSpace(ControlSpace):
             chk.load(vec.fun, name=filename)
 
 
+class PeriodicControlSpace(ControlSpace):
+    """
+    PeriodicControlSpace on given mesh and StateSpace on uniformly refined mesh.
+
+    Use the provided mesh to construct a Lagrangian finite element control
+    space. Then, refine the mesh `refinements`-times to construct
+    representatives of ControlVectors that are compatible with the state
+    space.
+
+    Inputs:
+        refinements: type int, number of uniform refinements to perform
+                     to obtain the StateSpace mesh.
+        order: type int, order of Lagrange basis functions of ControlSpace.
+
+    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
+    """
+
+    def __init__(self, mesh_r, order=1):
+        self.mesh_r = mesh_r
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+
+        # Create self.id and self.T, self.mesh_m, and self.V_m.
+        X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(X, self.V_r)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        
+        # ContinuousVectorSpace
+        # FIXME: V_c should be on mesh_r?
+        # Does V_c need to be on mesh_r, and Interpolator need to be on V_r or V_m
+        # Because the control perturbation occurs on V_m perhaps it is best to let V_m
+        # be the space of V_c
+        # Pragmatically this doesn't matter as this initiated before any mesh movements
+        # hence V_r and V_m are indentical.
+        self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", order)
+        self.Ip  = fd.Interpolator(fd.TestFunction(self.V_c),self.V_r).callable().handle
+
+    def restrict(self, residual, out):
+        with residual.dat.vec as w:
+            self.Ip.multTranspose(w, out.vec_wo())
+
+    def interpolate(self, vector, out):
+        with out.dat.vec as w:
+            self.Ip.mult(vector.vec_ro(),w)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.V_c)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        # FIXME: Give it Ip or whatever
+        # Giving it self.Ip yields wrong matrix dimension
+        return (self.V_c, None)
+
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
 
