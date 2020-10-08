@@ -3,7 +3,6 @@ import fireshape as fs
 import fireshape.zoo as fsz
 import ROL
 from PDEconstraint_beam import CNBeamSolver
-from objective_beam import FakeObjective
 
 # setup problem
 mesh = fd.RectangleMesh(40,4,1,0.1)
@@ -18,16 +17,17 @@ def cb():
 
 
 # create PDEconstrained objective functional
-J_ = FakeObjective(e, Q, cb=cb)
-J = fs.TimeReducedObjective(J_, e)
+J = fs.TimeReducedObjective(Q,e,cb)
 
 # Testing Derivatives
-#J.update(q,None,0) # FIXME: This is needed to do one forward solve
-#dJdct = J.Jred.derivative()
-#temp = fd.Function(Q.V_r, name = "ShapePert")
-#outgrad = fd.File("outgrad/test.pvd")
-#temp.assign(dJdct)
-#outgrad.write(temp)
+J.update(q,None,0) # FIXME: This is needed to do one forward solve
+dJdct = J.Jred.derivative()
+temp = fd.Function(Q.V_r, name = "ShapePert")
+outgrad = fd.File("outgrad/test.pvd")
+temp.assign(dJdct)
+outgrad.write(temp)
+
+import sys;sys.exit()
 
 # ROL parameters
 params_dict = {

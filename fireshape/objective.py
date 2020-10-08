@@ -232,14 +232,8 @@ class ReducedObjective(ShapeObjective):
 
 class TimeReducedObjective(ShapeObjective):
     """Abstract class of reduced shape time dependent functionals """
-    def __init__(self, J: Objective, e: PdeConstraint):
-        if not isinstance(J, ShapeObjective):
-            msg = "PDE constraints are currently only supported"
-            + " for shape objectives."
-            raise NotImplementedError(msg)
-
-        super().__init__(J.Q, J.cb)
-        self.J = J
+    def __init__(self, Q: ControlSpace, e: PdeConstraint, cb = None):
+        super().__init__(Q, cb)
         self.e = e
         # stop any annotation that might be ongoing as we only want to record
         # what's happening in e.solve()
@@ -275,8 +269,8 @@ class TimeReducedObjective(ShapeObjective):
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 fda.continue_annotation()
-                mesh_m = self.J.Q.mesh_m
-                s = fd.Function(self.J.V_m)
+                mesh_m = self.Q.mesh_m
+                s = fd.Function(self.Q.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
                 self.s = s
                 self.c = fda.Control(s)
