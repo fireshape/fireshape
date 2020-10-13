@@ -265,19 +265,8 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class PeriodicControlSpace(ControlSpace):
     """
-    PeriodicControlSpace on given mesh and StateSpace on uniformly refined mesh.
+    PeriodicControlSpace
 
-    Use the provided mesh to construct a Lagrangian finite element control
-    space. Then, refine the mesh `refinements`-times to construct
-    representatives of ControlVectors that are compatible with the state
-    space.
-
-    Inputs:
-        refinements: type int, number of uniform refinements to perform
-                     to obtain the StateSpace mesh.
-        order: type int, order of Lagrange basis functions of ControlSpace.
-
-    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
     """
 
     def __init__(self, mesh_r, order=1):
@@ -292,17 +281,19 @@ class PeriodicControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
-        
+        self.V_m = fd.FunctionSpace(self.mesh_m, element) 
         # ContinuousVectorSpace
-        # FIXME: V_c should be on mesh_r?
-        # Does V_c need to be on mesh_r, and Interpolator need to be on V_r or V_m
-        # Because the control perturbation occurs on V_m perhaps it is best to let V_m
-        # be the space of V_c
-        # Pragmatically this doesn't matter as this initiated before any mesh movements
-        # hence V_r and V_m are indentical.
-        self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", order)
-        self.Ip  = fd.Interpolator(fd.TestFunction(self.V_c),self.V_r).callable().handle
+        """
+        Discussion with AP:
+        V_c:    Continous/Coarse Function Space must lie on mesh_m
+        Ip:     Interpolate from V_c to V_m: Coarse to Fine (CG -> DG)
+        
+        Depending on the cost of assembling Ip we should recompute after every update
+        If Ip does not get updated everytime V_c->V_r == V_c->V_m. 
+        
+        """
+        self.V_c = fd.VectorFunctionSpace(self.mesh_m, "CG", order)
+        self.Ip  = fd.Interpolator(fd.TestFunction(self.V_c),self.V_m).callable().handle
 
     def restrict(self, residual, out):
         with residual.dat.vec as w:
