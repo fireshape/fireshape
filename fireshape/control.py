@@ -403,11 +403,8 @@ class BsplineControlSpace(ControlSpace):
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders) - 1
-        # self.V_r =
-        # self.inner_product = inner_product
-        # self.inner_product.get_impl(self.V_r, self.FullIFW)
 
-        # is this the proper space?
+        # Bspline control space
         self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
         self.I_control = self.build_interpolation_matrix(self.V_control)
 
