@@ -3,20 +3,22 @@ from fireshape import *
 import numpy as np
 import ROL
 
-# goal: update the mesh coordinates of a periodic mesh
-# so that a function defined on the mesh becomes a given one
-mesh = PeriodicSquareMesh(30, 30, 1)
-Q = PeriodicControlSpace(mesh)  #how can we fix the boundary?
-inner = LaplaceInnerProduct(Q)
-q = ControlVector(Q, inner)
+# goal: optimise the mesh coordinates so that
+# a function defined on the mesh approximates
+# a target one
+
+# setup problem
+mesh = UnitSquareMesh(30, 30)
+Q = FeControlSpace(mesh)
+inner = LaplaceInnerProduct(Q, fixed_bids=[1,2,3,4])
 
 # save shape evolution in file domain.pvd
-V = FunctionSpace(Q.mesh_m, "DG", 0)
+V = FunctionSpace(Q.mesh_m, "DG", 1)
 sigma = Function(V)
 x, y = SpatialCoordinate(Q.mesh_m)
-perturbation = 0.1*sin(x*np.pi)*sin(y*np.pi)**2
-sigma.interpolate(sin(y*np.pi)*(cos(2*np.pi*x*(1+perturbation))))
-f = cos(2*np.pi*x)*sin(y*np.pi)
+perturbation = 0.1*sin(x*np.pi)*(16*y**2*(1-y)**2)
+sigma.interpolate(y*(1-y)*(cos(2*np.pi*x*(1+perturbation))))
+f = cos(2*np.pi*x)*y*(1-y)
 
 class LevelsetFct(ShapeObjective):
     def __init__(self, sigma, f, *args, **kwargs):
