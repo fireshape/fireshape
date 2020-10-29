@@ -2,7 +2,6 @@ import firedrake as fd
 import numpy as np
 from firedrake.petsc import PETSc
 
-
 class InnerProduct(object):
 
     """
@@ -245,13 +244,24 @@ class ElasticityInnerProduct(UflInnerProduct):
         """
         This nullspace contains constant functions as well as rotations.
         """
+        # Elasticity null space is different for periodic domains.
+        # If domain is partially periodic modify the nullspace or 
+        # specify at least 1 DirichletBC to empty the nullspace
+        is_periodic=False
+        from .control import PeriodicControlSpace   # Avoid circular import
+        if isinstance(self.Q, PeriodicControlSpace):
+            is_periodic=True
         X = fd.SpatialCoordinate(V.mesh())
         dim = V.value_size
         if dim == 2:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0)))
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0)))
             n3 = fd.Function(V).interpolate(fd.as_vector([X[1], -X[0]]))
-            res = [n1, n2, n3]
+            if is_periodic:
+                res = [n1, n2]
+            else:
+                res = [n1, n2, n3]
+
         elif dim == 3:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0, 0.0)))
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0, 0.0)))
@@ -259,7 +269,12 @@ class ElasticityInnerProduct(UflInnerProduct):
             n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
             n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
-            res = [n1, n2, n3, n4, n5, n6]
+            
+            if is_periodic :
+                res = [n1, n2, n3]
+            else:
+                res = [n1, n2, n3, n4, n5, n6]
+
         else:
             raise NotImplementedError
         return res
