@@ -245,7 +245,8 @@ class ElasticityInnerProduct(UflInnerProduct):
         This nullspace contains constant functions as well as rotations.
         """
         # Elasticity null space is different for periodic domains.
-        # If domain is partially periodic modify the nullspace or 
+        # This code assumes that the domain is periodic on every bdry.
+        # If the domain is only partially periodic, modify the nullspace or
         # specify at least 1 DirichletBC to empty the nullspace
         is_periodic=False
         from .control import PeriodicControlSpace   # Avoid circular import
@@ -269,7 +270,7 @@ class ElasticityInnerProduct(UflInnerProduct):
             n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
             n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
-            
+
             if is_periodic :
                 res = [n1, n2, n3]
             else:
