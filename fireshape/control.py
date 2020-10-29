@@ -31,8 +31,15 @@ class ControlSpace(object):
             space on mesh_m
         self.inner_product is the inner product of the ControlSpace
 
-    Key idea: solve state and adjoint equations in V_m. Then, compute update
-    of mesh_m in V_m, transplant it to V_r, and restrict it to ControlSpace.
+    Key idea: solve state and adjoint equations on mesh_m. Then, evaluate
+    shape derivatives along directions in V_m, transplant this to V_r,
+    restrict to ControlSpace, compute the update (using inner_product),
+    and interpolate it into V_r to update mesh_m.
+
+    Note: transplant to V_r means creating an function in V_r and using the
+    values of the directional shape derivative as coefficients. Since
+    Lagrangian finite elements are parametric, no transformation matrix is
+    required by this operation.
     """
 
     def restrict(self, residual, out):
@@ -103,9 +110,10 @@ class ControlSpace(object):
 
     def get_space_for_inner(self):
         """
-        return the functionspace V to define the inner product on
+        Return the functionspace V to define the inner product on
         and possibly an interpolation matrix I between the finite element
-        functions in V and the control functions.
+        functions in V and the control functions. Note that this matrix
+        is not necessarily related to self.restict() and self.interpolate()
         """
         raise NotImplementedError
 
@@ -265,11 +273,15 @@ class FeMultiGridControlSpace(ControlSpace):
 
 class PeriodicControlSpace(ControlSpace):
     """
-    PeriodicControlSpace
+    ControlSpace for periodic meshes.
 
+    In Firedrake, periodic meshes are implemented usind a discontinuous field.
+    This implies that self.V_r contains discontinuous functions. To ensure
+    domain updates do not create holes in the domain, use a continuous subspace
+    self.V_c of self.V_r as control space.
     """
 
-    def __init__(self, mesh_r, order=1):
+    def __init__(self, mesh_r):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
@@ -280,20 +292,13 @@ class PeriodicControlSpace(ControlSpace):
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        
-        self.V_m = fd.FunctionSpace(self.mesh_m, element) 
-        # ContinuousVectorSpace
-        """
-        Discussion with AP:
-        V_c:    Continous/Coarse Function Space must lie on mesh_m
-        Ip:     Interpolate from V_c to V_m: Coarse to Fine (CG -> DG)
-        
-        Depending on the cost of assembling Ip we should recompute after every update
-        If Ip does not get updated everytime V_c->V_r == V_c->V_m. 
-        
-        """
-        self.V_c = fd.VectorFunctionSpace(self.mesh_m, "CG", order)
-        self.Ip  = fd.Interpolator(fd.TestFunction(self.V_c),self.V_m).callable().handle
+
+        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+        # Create control space
+        self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", element._degree)
+        self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
+                                  self.V_r).callable().handle
 
     def restrict(self, residual, out):
         with residual.dat.vec as w:
@@ -301,7 +306,7 @@ class PeriodicControlSpace(ControlSpace):
 
     def interpolate(self, vector, out):
         with out.dat.vec as w:
-            self.Ip.mult(vector.vec_ro(),w)
+            self.Ip.mult(vector.vec_ro(), w)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_c)
@@ -309,8 +314,6 @@ class PeriodicControlSpace(ControlSpace):
         return fun
 
     def get_space_for_inner(self):
-        # FIXME: Give it Ip or whatever
-        # Giving it self.Ip yields wrong matrix dimension
         return (self.V_c, None)
 
     def store(self, vec, filename="control"):
@@ -331,6 +334,8 @@ class PeriodicControlSpace(ControlSpace):
         """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
             chk.load(vec.fun, name=filename)
+
+
 class BsplineControlSpace(ControlSpace):
     """ConstrolSpace based on cartesian tensorized Bsplines."""
 
