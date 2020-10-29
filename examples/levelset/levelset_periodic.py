@@ -13,7 +13,8 @@ elif d== 3:
     mesh = PeriodicUnitCubeMesh(20, 20, 20)
 Q = PeriodicControlSpace(mesh)  #how can we fix the boundary?
 #inner = LaplaceInnerProduct(Q)
-inner = H1InnerProduct(Q)
+inner = ElasticityInnerProduct(Q)
+#inner = H1InnerProduct(Q)
 q = ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
@@ -45,9 +46,10 @@ class LevelsetFct(ShapeObjective):
         # volume integral
         self.detDT.interpolate(det(grad(self.Q.T)))
         if min(self.detDT.vector()) > 0.05:
-            return (self.sigma - self.f)**2 * dx(metadata={"quadrature_degree":1})
+            integrand = (self.sigma - self.f)**2
         else:
-            return np.nan*(self.sigma - self.f)**2 * dx(metadata={"quadrature_degree":1})
+            integrand = np.nan*(self.sigma - self.f)**2
+        return integrand * dx(metadata={"quadrature_degree":1})
 
 CB = File("domain.pvd")
 J = LevelsetFct(sigma, f, Q, cb=lambda: CB.write(sigma))
