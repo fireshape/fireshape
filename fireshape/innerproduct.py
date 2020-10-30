@@ -2,6 +2,7 @@ import firedrake as fd
 import numpy as np
 from firedrake.petsc import PETSc
 
+
 class InnerProduct(object):
 
     """
@@ -248,10 +249,12 @@ class ElasticityInnerProduct(UflInnerProduct):
         # This code assumes that the domain is periodic on every bdry.
         # If the domain is only partially periodic, modify the nullspace or
         # specify at least 1 DirichletBC to empty the nullspace
-        is_periodic=False
+
+        is_periodic = False
         from .control import PeriodicControlSpace   # Avoid circular import
+
         if isinstance(self.Q, PeriodicControlSpace):
-            is_periodic=True
+            is_periodic = True
         X = fd.SpatialCoordinate(V.mesh())
         dim = V.value_size
         if dim == 2:
@@ -271,7 +274,7 @@ class ElasticityInnerProduct(UflInnerProduct):
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
             n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
 
-            if is_periodic :
+            if is_periodic:
                 res = [n1, n2, n3]
             else:
                 res = [n1, n2, n3, n4, n5, n6]
