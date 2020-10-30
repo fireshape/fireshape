@@ -17,7 +17,7 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
     """ Test template for PeriodicControlSpace."""
 
     if dim == 2:
-        mesh = fd.PeriodicUnitSquare(30,30)
+        mesh = fd.PeriodicUnitSquareMesh(30,30)
     elif dim == 3:
         mesh = fd.PeriodicUnitCubeMesh(20, 20, 20)
     else:
