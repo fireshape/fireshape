@@ -1,5 +1,6 @@
 import pytest
 import firedrake as fd
+
 import fireshape as fs
 import ROL
 import numpy as np
@@ -16,7 +17,7 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
     """ Test template for PeriodicControlSpace."""
 
     if dim == 2:
-        mesh = fd.PeriodicUnitSquareMesh(30, 30)
+        mesh = 
     elif dim == 3:
         mesh = fd.PeriodicUnitCubeMesh(20, 20, 20)
     else:
@@ -79,7 +80,8 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
     else:
         ext = None
 
-    q = fd.ControlVector(Q, inner, boundary_extension=ext)
+    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+
 
     """
     move mesh a bit to check that we are not doing the
