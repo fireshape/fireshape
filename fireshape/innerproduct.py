@@ -245,13 +245,24 @@ class ElasticityInnerProduct(UflInnerProduct):
         """
         This nullspace contains constant functions as well as rotations.
         """
+        # Elasticity null space is different for periodic domains.
+        # This code assumes that the domain is periodic on every bdry.
+        # If the domain is only partially periodic, modify the nullspace or
+        # specify at least 1 DirichletBC to empty the nullspace
+        is_periodic = False
+        if hasattr(self.Q, 'is_DG'):
+            is_periodic = self.Q.is_DG
         X = fd.SpatialCoordinate(V.mesh())
         dim = V.value_size
         if dim == 2:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0)))
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0)))
             n3 = fd.Function(V).interpolate(fd.as_vector([X[1], -X[0]]))
-            res = [n1, n2, n3]
+            if is_periodic:
+                res = [n1, n2]
+            else:
+                res = [n1, n2, n3]
+
         elif dim == 3:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0, 0.0)))
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0, 0.0)))
@@ -259,7 +270,12 @@ class ElasticityInnerProduct(UflInnerProduct):
             n4 = fd.Function(V).interpolate(fd.as_vector([-X[1], X[0], 0]))
             n5 = fd.Function(V).interpolate(fd.as_vector([-X[2], 0, X[0]]))
             n6 = fd.Function(V).interpolate(fd.as_vector([0, -X[2], X[1]]))
-            res = [n1, n2, n3, n4, n5, n6]
+
+            if is_periodic:
+                res = [n1, n2, n3]
+            else:
+                res = [n1, n2, n3, n4, n5, n6]
+
         else:
             raise NotImplementedError
         return res

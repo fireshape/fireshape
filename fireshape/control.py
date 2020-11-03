@@ -31,8 +31,15 @@ class ControlSpace(object):
             space on mesh_m
         self.inner_product is the inner product of the ControlSpace
 
-    Key idea: solve state and adjoint equations in V_m. Then, compute update
-    of mesh_m in V_m, transplant it to V_r, and restrict it to ControlSpace.
+    Key idea: solve state and adjoint equations on mesh_m. Then, evaluate
+    shape derivatives along directions in V_m, transplant this to V_r,
+    restrict to ControlSpace, compute the update (using inner_product),
+    and interpolate it into V_r to update mesh_m.
+
+    Note: transplant to V_r means creating an function in V_r and using the
+    values of the directional shape derivative as coefficients. Since
+    Lagrangian finite elements are parametric, no transformation matrix is
+    required by this operation.
     """
 
     def restrict(self, residual, out):
@@ -103,9 +110,10 @@ class ControlSpace(object):
 
     def get_space_for_inner(self):
         """
-        return the functionspace V to define the inner product on
+        Return the functionspace V to define the inner product on
         and possibly an interpolation matrix I between the finite element
-        functions in V and the control functions.
+        functions in V and the control functions. Note that this matrix
+        is not necessarily related to self.restict() and self.interpolate()
         """
         raise NotImplementedError
 
@@ -138,21 +146,51 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.is_DG = False
+
+        """
+        ControlSpace for discontinuous coordinate fields
+        (e.g.  periodic domains)
+
+        In Firedrake, periodic meshes are implemented using a discontinuous
+        field. This implies that self.V_r contains discontinuous functions.
+        To ensure domain updates do not create holes in the domain,
+        use a continuous subspace self.V_c of self.V_r as control space.
+        """
+        if element.family() == 'Discontinuous Lagrange':
+            self.is_DG = True
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r,
+                                              "CG", element._degree)
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
+                                      self.V_r).callable().handle
 
     def restrict(self, residual, out):
-        with residual.dat.vec as vecres:
-            with out.fun.dat.vec as vecout:
-                vecres.copy(vecout)
+        if self.is_DG:
+            with residual.dat.vec as w:
+                self.Ip.multTranspose(w, out.vec_wo())
+        else:
+            with residual.dat.vec as vecres:
+                with out.fun.dat.vec as vecout:
+                    vecres.copy(vecout)
 
     def interpolate(self, vector, out):
-        out.assign(vector.fun)
+        if self.is_DG:
+            with out.dat.vec as w:
+                self.Ip.mult(vector.vec_ro(), w)
+        else:
+            out.assign(vector.fun)
 
     def get_zero_vec(self):
-        fun = fd.Function(self.V_r)
+        if self.is_DG:
+            fun = fd.Function(self.V_c)
+        else:
+            fun = fd.Function(self.V_r)
         fun *= 0.
         return fun
 
     def get_space_for_inner(self):
+        if self.is_DG:
+            return (self.V_c, None)
         return (self.V_r, None)
 
     def store(self, vec, filename="control"):
@@ -330,11 +368,8 @@ class BsplineControlSpace(ControlSpace):
 
         self.mesh_r = meshloc
         maxdegree = max(self.orders) - 1
-        # self.V_r =
-        # self.inner_product = inner_product
-        # self.inner_product.get_impl(self.V_r, self.FullIFW)
 
-        # is this the proper space?
+        # Bspline control space
         self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
         self.I_control = self.build_interpolation_matrix(self.V_control)
 
