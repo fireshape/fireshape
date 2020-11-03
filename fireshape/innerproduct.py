@@ -249,11 +249,9 @@ class ElasticityInnerProduct(UflInnerProduct):
         # This code assumes that the domain is periodic on every bdry.
         # If the domain is only partially periodic, modify the nullspace or
         # specify at least 1 DirichletBC to empty the nullspace
-
+        element = self.Q.mesh_r.coordinates.function_space().ufl_element()
         is_periodic = False
-        from .control import PeriodicControlSpace   # Avoid circular import
-
-        if isinstance(self.Q, PeriodicControlSpace):
+        if element.family() == 'Discontinuous Lagrange':
             is_periodic = True
         X = fd.SpatialCoordinate(V.mesh())
         dim = V.value_size

@@ -2,7 +2,7 @@ from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "PeriodicControlSpace",
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
 
 # new imports for splines
@@ -146,21 +146,51 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.is_DG = False
+
+        """
+        ControlSpace for discontinuous coordinate fields
+        (e.g.  periodic domains)
+
+        In Firedrake, periodic meshes are implemented using a discontinuous
+        field. This implies that self.V_r contains discontinuous functions.
+        To ensure domain updates do not create holes in the domain,
+        use a continuous subspace self.V_c of self.V_r as control space.
+        """
+        if element.family() == 'Discontinuous Lagrange':
+            self.is_DG = True
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r,
+                                              "CG", element._degree)
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
+                                      self.V_r).callable().handle
 
     def restrict(self, residual, out):
-        with residual.dat.vec as vecres:
-            with out.fun.dat.vec as vecout:
-                vecres.copy(vecout)
+        if self.is_DG:
+            with residual.dat.vec as w:
+                self.Ip.multTranspose(w, out.vec_wo())
+        else:
+            with residual.dat.vec as vecres:
+                with out.fun.dat.vec as vecout:
+                    vecres.copy(vecout)
 
     def interpolate(self, vector, out):
-        out.assign(vector.fun)
+        if self.is_DG:
+            with out.dat.vec as w:
+                self.Ip.mult(vector.vec_ro(), w)
+        else:
+            out.assign(vector.fun)
 
     def get_zero_vec(self):
-        fun = fd.Function(self.V_r)
+        if self.is_DG:
+            fun = fd.Function(self.V_c)
+        else:
+            fun = fd.Function(self.V_r)
         fun *= 0.
         return fun
 
     def get_space_for_inner(self):
+        if self.is_DG:
+            return (self.V_c, None)
         return (self.V_r, None)
 
     def store(self, vec, filename="control"):
@@ -250,71 +280,6 @@ class FeMultiGridControlSpace(ControlSpace):
 
     def get_space_for_inner(self):
         return (self.V_r_coarse, None)
-
-    def store(self, vec, filename="control"):
-        """
-        Store the vector to a file to be reused in a later computation.
-        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
-        decomposition are identical between store and load.
-
-        """
-        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
-            chk.store(vec.fun, name=filename)
-
-    def load(self, vec, filename="control"):
-        """
-        Load a vector from a file.
-        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
-        decomposition are identical between store and load.
-        """
-        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
-            chk.load(vec.fun, name=filename)
-
-
-class PeriodicControlSpace(ControlSpace):
-    """
-    ControlSpace for periodic meshes.
-
-    In Firedrake, periodic meshes are implemented usind a discontinuous field.
-    This implies that self.V_r contains discontinuous functions. To ensure
-    domain updates do not create holes in the domain, use a continuous subspace
-    self.V_c of self.V_r as control space.
-    """
-
-    def __init__(self, mesh_r):
-        self.mesh_r = mesh_r
-        element = self.mesh_r.coordinates.function_space().ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-
-        # Create self.id and self.T, self.mesh_m, and self.V_m.
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.interpolate(X, self.V_r)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
-
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
-
-        # Create control space
-        self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", element._degree)
-        self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
-                                  self.V_r).callable().handle
-
-    def restrict(self, residual, out):
-        with residual.dat.vec as w:
-            self.Ip.multTranspose(w, out.vec_wo())
-
-    def interpolate(self, vector, out):
-        with out.dat.vec as w:
-            self.Ip.mult(vector.vec_ro(), w)
-
-    def get_zero_vec(self):
-        fun = fd.Function(self.V_c)
-        fun *= 0.
-        return fun
-
-    def get_space_for_inner(self):
-        return (self.V_c, None)
 
     def store(self, vec, filename="control"):
         """

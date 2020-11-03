@@ -1,5 +1,5 @@
-from firedrake import fd
-from fireshape import fs
+import firedrake as fd
+import fireshape as fs
 import numpy as np
 import ROL
 
@@ -11,7 +11,7 @@ if d == 2:
     mesh = fd.PeriodicUnitSquareMesh(30, 30)
 elif d == 3:
     mesh = fd.PeriodicUnitCubeMesh(20, 20, 20)
-Q = fs.PeriodicControlSpace(mesh)
+Q = fs.FeControlSpace(mesh)
 # inner = LaplaceInnerProduct(Q)
 inner = fs.ElasticityInnerProduct(Q)
 # inner = H1InnerProduct(Q)

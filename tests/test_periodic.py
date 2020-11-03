@@ -23,7 +23,7 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
     else:
         raise NotImplementedError
 
-    Q = fs.PeriodicControlSpace(mesh)
+    Q = fs.FeControlSpace(mesh)
 
     inner = inner_t(Q)
 
