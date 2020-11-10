@@ -9,15 +9,7 @@ mesh = fd.RectangleMesh(40,4,1,0.1)
 Q = fs.FeControlSpace(mesh)
 inner = fs.LaplaceInnerProduct(Q, fixed_bids=[1])
 q = fs.ControlVector(Q, inner)
-
-e = CNBeamSolver(Q.mesh_m)
-
-def cb():
-    return
-
-
-# create PDEconstrained objective functional
-J = fs.TimeReducedObjective(Q,e,cb)
+J = CNBeam(Q)
 
 # Testing Derivatives
 # J.update(q,None,0) # FIXME: This is needed to do one forward solve

@@ -2,7 +2,7 @@ from firedrake import *
 from fireshape import PdeConstraint
 
 
-class CNBeamSolver(PdeConstraint):
+class CNBeam(PDEconstrainedObjective):
     def __init__(self, mesh_m):
         super().__init__()
         self.mesh_m = mesh_m
@@ -58,8 +58,7 @@ class CNBeamSolver(PdeConstraint):
     def sigma(self,r):
         return self.lmbda*tr(self.eps(r))*Identity(2)+2*self.mu*self.eps(r)
 
-    def solve(self):
-        super().solve()
+    def solvePDE(self):
         count = self.num_solves
         self.J = 0.0
         t = self.t
@@ -79,9 +78,11 @@ class CNBeamSolver(PdeConstraint):
             self.J += assemble(Constant(1e3)*inner(self.sigma(u),self.eps(u))*dx)
             outfile.write(u,v)
 
+    def value(self, x, tol):
+        return self.J
 
 
 if __name__ == "__main__":
     mesh = RectangleMesh(40,4,1,0.1)
-    e = CNBeamSolver(mesh) 
-    e.solve()
+    e = CNBeam(mesh)
+    e.solvePDE()
