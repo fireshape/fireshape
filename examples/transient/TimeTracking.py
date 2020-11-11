@@ -1,7 +1,7 @@
 from firedrake import *
 from fireshape import *
 
-def TimeTracking(PDEconstrainedObjective):
+def TimeTrackingFct(PDEconstrainedObjective):
 
     def __init__(self, *args, **kwargs):
 
