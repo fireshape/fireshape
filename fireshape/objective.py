@@ -302,19 +302,11 @@ class ObjectiveSum(Objective):
     def value(self, x, tol):
         return self.a.value(x, tol) + self.b.value(x, tol)
 
-    def value_form(self):
-        return NotImplementedError
-        #return self.a.value_form() + self.b.value_form()
-
     def derivative(self, out):
         temp = out.clone()
         self.a.derivative(out)
         self.b.derivative(temp)
         out.plus(temp)
-
-    def derivative_form(self, v):
-        return NotImplementedError
-        #return self.a.derivative_form(v) + self.b.derivative_form(v)
 
     def update(self, *args):
         self.a.update(*args)
