@@ -161,6 +161,7 @@ class ControlObjective(Objective):
         self.f.assign(x.fun)
         super().update(x, flag, iteration)
 
+
 class PDEconstrainedObjective(Objective):
     """
     Abstract class of reduced PDE-constrained functionals.
@@ -217,7 +218,7 @@ class PDEconstrainedObjective(Objective):
                 self.s = s
                 self.c = fda.Control(s)
                 self.solvePDE()
-                Jpyadj = self.value([],[])
+                Jpyadj = self.objective_value()
                 self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
                 fda.pause_annotation()
             except fd.ConvergenceError:
