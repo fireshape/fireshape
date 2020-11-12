@@ -228,6 +228,7 @@ class PDEconstrainedObjective(Objective):
         if iteration >= 0 and self.cb is not None:
             self.cb()
 
+
 class ReducedObjective(ShapeObjective):
     """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
@@ -236,9 +237,9 @@ class ReducedObjective(ShapeObjective):
             + " for shape objectives."
             raise NotImplementedError(msg)
 
-        raise DeprecationWarning("ReducedObjective is deprecated and may"
-                                 + " be removed in the future. Use"
-                                 + " PDEconstrainedObjective instead.")
+        msg = "ReducedObjective is deprecated and may be removed"
+        + "in the future. Use PDEconstrainedObjective instead."
+        raise DeprecationWarning(msg)
 
         super().__init__(J.Q, J.cb)
         self.J = J
@@ -261,14 +262,6 @@ class ReducedObjective(ShapeObjective):
         """
 
         out.from_first_derivative(self.Jred.derivative())
-
-    #def derivative_form(self, v):
-    #    """
-    #    The derivative of the reduced objective is given by the derivative of
-    #    the Lagrangian.
-    #    """
-    #    return self.J.scale * self.J.derivative_form(v) \
-    #        + self.e.derivative_form(v)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
