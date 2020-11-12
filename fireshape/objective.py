@@ -108,7 +108,6 @@ class ShapeObjective(Objective):
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
-        # return self.deriv_control
 
 
 class DeformationObjective(Objective):
