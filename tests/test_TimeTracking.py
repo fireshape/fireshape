@@ -4,6 +4,7 @@ import fireshape as fs
 from fireshape import PDEconstrainedObjective
 import ROL
 
+
 class TimeTracking(PDEconstrainedObjective):
     """
     L1-L2 misfit functional for time-dependent problem constrained
@@ -23,9 +24,11 @@ class TimeTracking(PDEconstrainedObjective):
         # target solution, which also specifies rhs and DirBC
         mesh_m = self.Q.mesh_m
         x, y = fd.SpatialCoordinate(mesh_m)
-        sin = fd.sin; cos = fd.cos; pi = fd.pi
-        self.u_t= lambda t:  sin(pi*x)*sin(pi*y)*cos(t)
-        f = lambda t: sin(pi*x)*sin(pi*y)*(2*pi**2*cos(t) - sin(t))
+        sin = fd.sin
+        cos = fd.cos
+        pi = fd.pi
+        self.u_t = lambda t: sin(pi*x)*sin(pi*y)*cos(t)
+        self.f = lambda t: sin(pi*x)*sin(pi*y)*(2*pi**2*cos(t) - sin(t))
 
         # perturped initial guess to be fixed by shape optimization
         V = fd.FunctionSpace(mesh_m, "CG", 1)
@@ -44,13 +47,14 @@ class TimeTracking(PDEconstrainedObjective):
         self.dx = fd.dx(metadata={"quadrature_degree": 1})
         self.dt = 0.125
         v = fd.TestFunction(V)
-        self.F = lambda t, u, u_old: fd.inner((u-u_old)/self.dt,v)*self.dx \
-                                     + fd.inner(fd.grad(u), fd.grad(v))*self.dx \
-                                     - f(t+self.dt)*v*self.dx
+        self.F = lambda t, u, u_old: fd.inner((u-u_old)/self.dt, v)*self.dx \
+            + fd.inner(fd.grad(u), fd.grad(v))*self.dx \
+            - self(t+self.dt)*v*self.dx
 
     def solvePDE(self):
         """Solve the heat equation and evaluate the objective function."""
-        self.J = 0; t = 0
+        self.J = 0
+        t = 0
         self.u.assign(self.u0)
         self.J += fd.assemble(self.dt*(self.u - self.u_t(t))**2*self.dx)
 
@@ -63,7 +67,6 @@ class TimeTracking(PDEconstrainedObjective):
     def objective_value(self):
         """Return the value of the objective function."""
         return self.J
-
 
 
 def test_TimeTrackingn():
@@ -96,6 +99,7 @@ def test_TimeTrackingn():
     # verify that the norm of the gradient at optimum is small enough
     state = solver.getAlgorithmState()
     assert (state.gnorm < 1e-3)
+
 
 if __name__ == '__main__':
     pytest.main()
