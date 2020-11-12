@@ -45,7 +45,7 @@ class L2tracking(PDEconstrainedObjective):
         (x, y) = fd.SpatialCoordinate(self.mesh_m)
         self.u_target = 0.36 - (x-0.5)*(x-0.5) - (y-0.5)*(y-0.5)
 
-    def value(self, x, tol):
+    def objective_value(self):
         """Evaluate misfit functional. Signature imposed by ROL."""
         u = self.solution
         return fd.assemble((u - self.u_target)**2 * fd.dx)
