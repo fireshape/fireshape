@@ -180,6 +180,13 @@ class PDEconstrainedObjective(Objective):
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
+        return self.objective_value()
+
+    def objective_value(self):
+        """
+        Evaluate reduced objective. Method introduced to
+        bypass ROL signature in self.value.
+        """
         raise NotImplementedError
 
     def solvePDE(self):
