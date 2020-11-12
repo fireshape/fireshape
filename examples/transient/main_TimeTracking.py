@@ -24,7 +24,7 @@ class TimeTracking(PDEconstrainedObjective):
         self.u_t= lambda t:  sin(pi*x)*sin(pi*y)*cos(t)
         f = lambda t: sin(pi*x)*sin(pi*y)*(2*pi**2*cos(t) - sin(t))
 
-        # perturped initial guess to be fixed by shape optimization
+        # perturbed initial guess to be fixed by shape optimization
         V = FunctionSpace(mesh_m, "CG", 1)
         self.u0 = Function(V)
         perturbation = 0.25*sin(x*pi)*sin(y*pi)**2
@@ -34,7 +34,7 @@ class TimeTracking(PDEconstrainedObjective):
         self.File = File("u0.pvd")
         self.cb = lambda : self.File.write(self.u0)
 
-        # heat equation discreized with implicit Euler
+        # heat equation discretized with implicit Euler
         self.u = Function(V)
         self.u_old = Function(V)  # solution at previous time
         self.bcs = DirichletBC(V, 0, "on_boundary")
