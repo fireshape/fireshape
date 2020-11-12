@@ -292,65 +292,6 @@ class ReducedObjective(ShapeObjective):
             self.cb()
 
 
-#class TimeReducedObjective(ShapeObjective):
-#    """Abstract class of reduced shape time dependent functionals """
-#
-#    # FIXME: Pass in FormSpecified penalty terms e.g. regularization
-#    def __init__(self, Q: ControlSpace, e: PdeConstraint, cb = None):
-#        super().__init__(Q, cb)
-#
-#        raise DeprecationWarning("This is obsolete, use PDEconstrainedObjective instead.")
-#        self.e = e
-#        # stop any annotation that might be ongoing as we only want to record
-#        # what's happening in e.solve()
-#        import firedrake_adjoint as fda
-#        fda.pause_annotation()
-#
-#    def value(self, x, tol):
-#        """
-#        Evaluate reduced objective.
-#        Function signature imposed by ROL.
-#        """
-#        # PDE contains the information
-#        return self.e.J
-#
-#    def derivative(self, out):
-#        """
-#        Get the derivative from pyadjoint.
-#        """
-#
-#        out.from_first_derivative(self.Jred.derivative())
-#    
-#    # FIXME:  derivative_form was removed-- Id on't think it was being used
-#
-#    def update(self, x, flag, iteration):
-#        """Update domain and solution to state and adjoint equation."""
-#        if self.Q.update_domain(x):
-#            try:
-#                # We use pyadjoint to calculate adjoint and shape derivatives,
-#                # in order to do this we need to "record a tape of the forward
-#                # solve", pyadjoint will then figure out all necessary
-#                # adjoints.
-#                import firedrake_adjoint as fda
-#                tape = fda.get_working_tape()
-#                tape.clear_tape()
-#                fda.continue_annotation()
-#                mesh_m = self.Q.mesh_m
-#                s = fd.Function(self.Q.V_m)
-#                mesh_m.coordinates.assign(mesh_m.coordinates + s)
-#                self.s = s
-#                self.c = fda.Control(s)
-#                self.e.solve()
-#                Jpyadj = self.e.J
-#                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-#                fda.pause_annotation()
-#            except fd.ConvergenceError:
-#                if self.cb is not None:
-#                    self.cb()
-#                raise
-#        if iteration >= 0 and self.cb is not None:
-#            self.cb()
-
 class ObjectiveSum(Objective):
 
     def __init__(self, a, b):
