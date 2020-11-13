@@ -69,7 +69,7 @@ class TimeTracking(PDEconstrainedObjective):
         return self.J
 
 
-def test_TimeTrackingn():
+def test_TimeTracking():
     """ Test template for fsz.LevelsetFunctional."""
 
     # setup problem

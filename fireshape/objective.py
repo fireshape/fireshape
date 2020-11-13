@@ -233,13 +233,14 @@ class ReducedObjective(ShapeObjective):
     """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
         if not isinstance(J, ShapeObjective):
-            msg = "PDE constraints are currently only supported"
+            msg = "PDE constraints are currently only supported" \
             + " for shape objectives."
             raise NotImplementedError(msg)
 
-        msg = "ReducedObjective is deprecated and may be removed"
+        msg = "ReducedObjective is deprecated and may be removed" \
         + "in the future. Use PDEconstrainedObjective instead."
-        raise DeprecationWarning(msg)
+        print(msg)
+        #raise DeprecationWarning(msg)
 
         super().__init__(J.Q, J.cb)
         self.J = J
