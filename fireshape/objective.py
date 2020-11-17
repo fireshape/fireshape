@@ -170,11 +170,10 @@ class PDEconstrainedObjective(Objective):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        # stop any annotation that might be ongoing as we only want to record
+        # stop any annotation that might be ongoing as we only need to record
         # what happens in self.solvePDE()
         from pyadjoint.tape import pause_annotation, annotate_tape
-        annotate = annotate_tape()
-        if annotate:
+        if annotate_tape():
             pause_annotation()
 
     def value(self, x, tol):
@@ -212,7 +211,15 @@ class PDEconstrainedObjective(Objective):
                 import firedrake_adjoint as fda
                 tape = fda.get_working_tape()
                 tape.clear_tape()
-                fda.continue_annotation()
+                # ensure we are annotating
+                from pyadjoint.tape import annotate_tape
+                safety_counter = 0
+                while not annotate_tape():
+                    safety_counter += 1
+                    fda.continue_annotation()
+                    if safety_counter > 1e2:
+                        import sys
+                        sys.exit('Cannot annotate even after 100 attempts.')
                 mesh_m = self.Q.mesh_m
                 s = fd.Function(self.Q.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
@@ -235,18 +242,17 @@ class ReducedObjective(ShapeObjective):
     def __init__(self, J: Objective, e: PdeConstraint):
         if not isinstance(J, ShapeObjective):
             msg = "PDE constraints are currently only supported" \
-            + " for shape objectives."
+                  + " for shape objectives."
             raise NotImplementedError(msg)
 
         msg = "ReducedObjective is deprecated and may be removed" \
-        + "in the future. Use PDEconstrainedObjective instead."
+              + "in the future. Use PDEconstrainedObjective instead."
         print(msg)
-        #raise DeprecationWarning(msg)
 
         super().__init__(J.Q, J.cb)
         self.J = J
         self.e = e
-        # stop any annotation that might be ongoing as we only want to record
+        # stop any annotation that might be ongoing as we only need to record
         # what's happening in e.solve()
         from pyadjoint.tape import pause_annotation, annotate_tape
         annotate = annotate_tape()
@@ -278,7 +284,15 @@ class ReducedObjective(ShapeObjective):
                 import firedrake_adjoint as fda
                 tape = fda.get_working_tape()
                 tape.clear_tape()
-                fda.continue_annotation()
+                # ensure we are annotating
+                from pyadjoint.tape import annotate_tape
+                safety_counter = 0
+                while not annotate_tape():
+                    safety_counter += 1
+                    fda.continue_annotation()
+                    if safety_counter > 1e2:
+                        import sys
+                        sys.exit('Cannot annotating even after 100 attempts.')
                 mesh_m = self.J.Q.mesh_m
                 s = fd.Function(self.J.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
