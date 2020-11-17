@@ -172,9 +172,10 @@ class PDEconstrainedObjective(Objective):
         super().__init__(*args, **kwargs)
         # stop any annotation that might be ongoing as we only want to record
         # what happens in self.solvePDE()
-
-        import firedrake_adjoint as fda
-        fda.pause_annotation()
+        from pyadjoint.tape import pause_annotation, annotate_tape
+        annotate = annotate_tape()
+        if annotate:
+            pause_annotation()
 
     def value(self, x, tol):
         """
@@ -247,8 +248,10 @@ class ReducedObjective(ShapeObjective):
         self.e = e
         # stop any annotation that might be ongoing as we only want to record
         # what's happening in e.solve()
-        import firedrake_adjoint as fda
-        fda.pause_annotation()
+        from pyadjoint.tape import pause_annotation, annotate_tape
+        annotate = annotate_tape()
+        if annotate:
+            pause_annotation()
 
     def value(self, x, tol):
         """
