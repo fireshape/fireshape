@@ -3,6 +3,24 @@ import firedrake as fd
 import fireshape as fs
 from fireshape import PDEconstrainedObjective
 import ROL
+from pyadjoint.tape import get_working_tape, pause_annotation, annotate_tape
+
+
+@pytest.fixture(autouse=True)
+def handle_taping():
+    yield
+    tape = get_working_tape()
+    tape.clear_tape()
+
+
+@pytest.fixture(autouse=True, scope="function")
+def handle_exit_annotation():
+    yield
+    # Since importing firedrake_adjoint modifies a global variable, we need to
+    # pause annotations at the end of the module
+    annotate = annotate_tape()
+    if annotate:
+        pause_annotation()
 
 
 class TimeTracking(PDEconstrainedObjective):
