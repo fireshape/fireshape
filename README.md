@@ -18,7 +18,11 @@ Activate the Firedrake virtualenv first
 
     source path/to/firedrake/bin/activate
 
-Then install the _Rapid Optimization Library_
+If you're on linux, you will need the patchelf package. Install it e.g. via 
+
+    sudo apt install patchelf
+
+On MacOS, this not necessary. Now install the _Rapid Optimization Library_
 
     pip3 install --no-cache-dir roltrilinos rol
 
