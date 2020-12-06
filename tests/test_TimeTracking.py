@@ -88,7 +88,7 @@ class TimeTracking(PDEconstrainedObjective):
 
 
 def test_TimeTracking():
-    """ Test template for fsz.LevelsetFunctional."""
+    """ Main test."""
 
     # setup problem
     mesh = fd.UnitSquareMesh(20, 20)
