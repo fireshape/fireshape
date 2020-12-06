@@ -292,7 +292,7 @@ class ReducedObjective(ShapeObjective):
                     fda.continue_annotation()
                     if safety_counter > 1e2:
                         import sys
-                        sys.exit('Cannot annotating even after 100 attempts.')
+                        sys.exit('Cannot annotate even after 100 attempts.')
                 mesh_m = self.J.Q.mesh_m
                 s = fd.Function(self.J.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
