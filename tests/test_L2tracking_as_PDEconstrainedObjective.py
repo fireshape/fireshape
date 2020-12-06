@@ -1,8 +1,7 @@
 import pytest
 import firedrake as fd
 import fireshape as fs
-from fireshape import ShapeObjective
-from fireshape import PdeConstraint
+from fireshape import PDEconstrainedObjective
 import ROL
 from pyadjoint.tape import get_working_tape, pause_annotation, annotate_tape
 
@@ -24,11 +23,11 @@ def handle_exit_annotation():
         pause_annotation()
 
 
-class PoissonSolver(PdeConstraint):
+class L2tracking(PDEconstrainedObjective):
     """A Poisson BVP with hom DirBC as PDE constraint."""
-    def __init__(self, mesh_m):
-        super().__init__()
-        self.mesh_m = mesh_m
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mesh_m = self.Q.mesh_m
 
         # Setup problem
         self.V = fd.FunctionSpace(self.mesh_m, "CG", 1)
@@ -59,26 +58,18 @@ class PoissonSolver(PdeConstraint):
         self.solver = fd.NonlinearVariationalSolver(
             stateproblem, solver_parameters=self.params)
 
-    def solve(self):
-        super().solve()
-        self.solver.solve()
-
-
-class L2trackingObjective(ShapeObjective):
-    """L2 tracking functional for Poisson problem."""
-    def __init__(self, pde_solver: PoissonSolver, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.pde_solver = pde_solver
-
         # target function, exact soln is disc of radius 0.6 centered at
         # (0.5,0.5)
-        (x, y) = fd.SpatialCoordinate(pde_solver.mesh_m)
+        (x, y) = fd.SpatialCoordinate(self.mesh_m)
         self.u_target = 0.36 - (x-0.5)*(x-0.5) - (y-0.5)*(y-0.5)
 
-    def value_form(self):
-        """Evaluate misfit functional."""
-        u = self.pde_solver.solution
-        return (u - self.u_target)**2 * fd.dx
+    def objective_value(self):
+        """Evaluate misfit functional. Signature imposed by ROL."""
+        u = self.solution
+        return fd.assemble((u - self.u_target)**2 * fd.dx)
+
+    def solvePDE(self):
+        self.solver.solve()
 
 
 def run_L2tracking_optimization(write_output=False):
@@ -101,13 +92,8 @@ def run_L2tracking_optimization(write_output=False):
     inner = fs.ElasticityInnerProduct(Q)
     q = fs.ControlVector(Q, inner)
 
-    # setup PDE constraint
-    mesh_m = Q.mesh_m
-    e = PoissonSolver(mesh_m)
-
     # create PDEconstrained objective functional
-    J_ = L2trackingObjective(e, Q, cb=cb)
-    J = fs.ReducedObjective(J_, e)
+    J = L2tracking(Q, cb=cb)
 
     # ROL parameters
     params_dict = {

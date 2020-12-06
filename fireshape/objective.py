@@ -108,7 +108,6 @@ class ShapeObjective(Objective):
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
-        # return self.deriv_control
 
 
 class DeformationObjective(Objective):
@@ -163,21 +162,102 @@ class ControlObjective(Objective):
         super().update(x, flag, iteration)
 
 
+class PDEconstrainedObjective(Objective):
+    """
+    Abstract class of reduced PDE-constrained functionals.
+    Shape differentiate using pyadjoint.
+    """
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        # stop any annotation that might be ongoing as we only need to record
+        # what happens in self.solvePDE()
+        from pyadjoint.tape import pause_annotation, annotate_tape
+        if annotate_tape():
+            pause_annotation()
+
+    def value(self, x, tol):
+        """
+        Evaluate reduced objective.
+        Function signature imposed by ROL.
+        """
+        return self.objective_value()
+
+    def objective_value(self):
+        """
+        Evaluate reduced objective. Method introduced to
+        bypass ROL signature in self.value.
+        """
+        raise NotImplementedError
+
+    def solvePDE(self):
+        """Solve the PDE constraint."""
+        raise NotImplementedError
+
+    def derivative(self, out):
+        """
+        Get the derivative from pyadjoint.
+        """
+        out.from_first_derivative(self.Jred.derivative())
+
+    def update(self, x, flag, iteration):
+        """Update domain and solution to state and adjoint equation."""
+        if self.Q.update_domain(x):
+            try:
+                # We use pyadjoint to calculate adjoint and shape derivatives,
+                # in order to do this we need to "record a tape of the forward
+                # solve", pyadjoint will then figure out all necessary
+                # adjoints.
+                import firedrake_adjoint as fda
+                tape = fda.get_working_tape()
+                tape.clear_tape()
+                # ensure we are annotating
+                from pyadjoint.tape import annotate_tape
+                safety_counter = 0
+                while not annotate_tape():
+                    safety_counter += 1
+                    fda.continue_annotation()
+                    if safety_counter > 1e2:
+                        import sys
+                        sys.exit('Cannot annotate even after 100 attempts.')
+                mesh_m = self.Q.mesh_m
+                s = fd.Function(self.Q.V_m)
+                mesh_m.coordinates.assign(mesh_m.coordinates + s)
+                self.s = s
+                self.c = fda.Control(s)
+                self.solvePDE()
+                Jpyadj = self.objective_value()
+                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+                fda.pause_annotation()
+            except fd.ConvergenceError:
+                if self.cb is not None:
+                    self.cb()
+                raise
+        if iteration >= 0 and self.cb is not None:
+            self.cb()
+
+
 class ReducedObjective(ShapeObjective):
     """Abstract class of reduced shape functionals."""
     def __init__(self, J: Objective, e: PdeConstraint):
         if not isinstance(J, ShapeObjective):
-            msg = "PDE constraints are currently only supported"
-            + " for shape objectives."
+            msg = "PDE constraints are currently only supported" \
+                  + " for shape objectives."
             raise NotImplementedError(msg)
+
+        msg = "ReducedObjective is deprecated and may be removed" \
+              + "in the future. Use PDEconstrainedObjective instead."
+        print(msg)
 
         super().__init__(J.Q, J.cb)
         self.J = J
         self.e = e
-        # stop any annotation that might be ongoing as we only want to record
+        # stop any annotation that might be ongoing as we only need to record
         # what's happening in e.solve()
-        import firedrake_adjoint as fda
-        fda.pause_annotation()
+        from pyadjoint.tape import pause_annotation, annotate_tape
+        annotate = annotate_tape()
+        if annotate:
+            pause_annotation()
 
     def value(self, x, tol):
         """
@@ -193,14 +273,6 @@ class ReducedObjective(ShapeObjective):
 
         out.from_first_derivative(self.Jred.derivative())
 
-    def derivative_form(self, v):
-        """
-        The derivative of the reduced objective is given by the derivative of
-        the Lagrangian.
-        """
-        return self.J.scale * self.J.derivative_form(v) \
-            + self.e.derivative_form(v)
-
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
         if self.Q.update_domain(x):
@@ -212,7 +284,15 @@ class ReducedObjective(ShapeObjective):
                 import firedrake_adjoint as fda
                 tape = fda.get_working_tape()
                 tape.clear_tape()
-                fda.continue_annotation()
+                # ensure we are annotating
+                from pyadjoint.tape import annotate_tape
+                safety_counter = 0
+                while not annotate_tape():
+                    safety_counter += 1
+                    fda.continue_annotation()
+                    if safety_counter > 1e2:
+                        import sys
+                        sys.exit('Cannot annotate even after 100 attempts.')
                 mesh_m = self.J.Q.mesh_m
                 s = fd.Function(self.J.V_m)
                 mesh_m.coordinates.assign(mesh_m.coordinates + s)
@@ -240,17 +320,11 @@ class ObjectiveSum(Objective):
     def value(self, x, tol):
         return self.a.value(x, tol) + self.b.value(x, tol)
 
-    def value_form(self):
-        return self.a.value_form() + self.b.value_form()
-
     def derivative(self, out):
         temp = out.clone()
         self.a.derivative(out)
         self.b.derivative(temp)
         out.plus(temp)
-
-    def derivative_form(self, v):
-        return self.a.derivative_form(v) + self.b.derivative_form(v)
 
     def update(self, *args):
         self.a.update(*args)
