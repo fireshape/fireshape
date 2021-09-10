@@ -22,11 +22,18 @@ Activate Firedrake's virtualenv first.
 
     source path/to/firedrake/bin/activate
 
-Then install the `Rapid Optimization Library <https://trilinos.org/packages/rol/>`_.
+On Linux, install the :code:`patchelf` library, e.g.
 
 .. code-block:: bash
 
-    pip3 install --no-cache-dir roltrilinos rol
+    sudo apt install patchelf
+
+Then install the `Rapid Optimization Library <https://trilinos.org/packages/rol/>`_ along with :code:`roltrilinos`.
+
+.. code-block:: bash
+
+    pip3 install --no-cache-dir roltrilinos
+    pip3 install --no-cache-dir ROL
 
 Now you are ready to install fireshape.
 
@@ -34,7 +41,7 @@ For users:
 
 .. code-block:: bash
 
-    pip install git+https://github.com/fireshape/fireshape.git
+    pip3 install git+https://github.com/fireshape/fireshape.git
 
 For developers:
 
