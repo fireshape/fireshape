@@ -22,7 +22,7 @@ Activate Firedrake's virtualenv first.
 
     source path/to/firedrake/bin/activate
 
-On Linux, you will need to install :code:`patchelf`, e.g.
+On Linux, install the :code:`patchelf` library, e.g.
 
 .. code-block:: bash
 

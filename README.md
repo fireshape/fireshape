@@ -18,7 +18,7 @@ Activate the Firedrake virtualenv first
 
     source path/to/firedrake/bin/activate
 
-On Linux, you will need to install `patchelf`, e.g.
+On Linux, install the :code:`patchelf` library, e.g.
 
     sudo apt install patchelf
 
