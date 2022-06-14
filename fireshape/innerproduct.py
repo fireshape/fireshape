@@ -36,18 +36,22 @@ class UflInnerProduct(InnerProduct):
     def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
-
+        self.extra_bcs = extra_bcs
         self.direct_solve = direct_solve
         self.fixed_bids = fixed_bids  # fixed parts of bdry
         self.params = self.get_params()  # solver parameters
         self.Q = Q
+        self.setup_bcs()
+        self.setup_matrix()
 
+    def setup_bcs(self):
         """
         V: type fd.FunctionSpace
         I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
         """
-        (V, I_interp) = Q.get_space_for_inner()
+        (V, I_interp) = self.Q.get_space_for_inner()
         free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        extra_bcs = self.extra_bcs
         self.free_bids = [int(i) for i in free_bids]  # np.int->int
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
@@ -61,6 +65,7 @@ class UflInnerProduct(InnerProduct):
             if nsp_functions is not None:
                 nsp = fd.VectorSpaceBasis(nsp_functions)
                 nsp.orthonormalize()
+        self.nsp = nsp
 
         bcs = []
         # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
@@ -79,9 +84,11 @@ class UflInnerProduct(InnerProduct):
 
         if len(bcs) == 0:
             bcs = None
+        self.bcs = bcs
 
+    def setup_matrix(self):
         a = self.get_weak_form(V)
-        A = fd.assemble(a, mat_type='aij', bcs=bcs)
+        A = fd.assemble(a, mat_type='aij', bcs=self.bcs)
         ls = fd.LinearSolver(A, solver_parameters=self.params,
                              nullspace=nsp, transpose_nullspace=nsp)
         self.ls = ls
@@ -90,6 +97,7 @@ class UflInnerProduct(InnerProduct):
 
         # If the matrix I is passed, replace A with transpose(I)*A*I
         # and set up a ksp solver for self.riesz_map
+        (V, I_interp) = self.Q.get_space_for_inner()
         if I_interp is not None:
             self.interpolated = True
             ITAI = self.A.PtAP(I_interp)
