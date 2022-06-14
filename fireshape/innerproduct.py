@@ -87,7 +87,9 @@ class UflInnerProduct(InnerProduct):
         self.bcs = bcs
 
     def setup_matrix(self):
+        (V, I_interp) = self.Q.get_space_for_inner()
         a = self.get_weak_form(V)
+        nsp = self.nsp
         A = fd.assemble(a, mat_type='aij', bcs=self.bcs)
         ls = fd.LinearSolver(A, solver_parameters=self.params,
                              nullspace=nsp, transpose_nullspace=nsp)
@@ -97,7 +99,6 @@ class UflInnerProduct(InnerProduct):
 
         # If the matrix I is passed, replace A with transpose(I)*A*I
         # and set up a ksp solver for self.riesz_map
-        (V, I_interp) = self.Q.get_space_for_inner()
         if I_interp is not None:
             self.interpolated = True
             ITAI = self.A.PtAP(I_interp)
