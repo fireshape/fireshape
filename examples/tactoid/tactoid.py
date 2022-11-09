@@ -5,10 +5,10 @@ import fireshape.zoo as zoo
 from numpy import nan
 import ROL
 
-class NematicFrankOseenSolver(PdeConstraint):
-    def __init__(self, mesh):
-        super().__init__()
-        self.mesh = mesh
+class NematicObjective(PDEconstrainedObjective):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        mesh = self.Q.mesh_m
         self.failed_to_solve = False
 
         V = VectorFunctionSpace(mesh, "CG", 2, dim=2)
@@ -52,8 +52,14 @@ class NematicFrankOseenSolver(PdeConstraint):
         self.solution = z
         self.solution_old = Function(z)
 
-    def solve(self):
-        super().solve()
+        self.pvd = File("output/solution.pvd")
+        def callback():
+            (n, l) = self.solution.split()
+            n.rename("Director")
+            self.pvd.write(n)
+        self.cb = callback
+
+    def solvePDE(self):
         self.failed_to_solve = False
         self.solution_old.assign(self.solution)
         try:
@@ -62,47 +68,23 @@ class NematicFrankOseenSolver(PdeConstraint):
             self.failed_to_solve = True
             self.solution.assign(self.solution_old)
 
-class NematicObjective(ShapeObjective):
-    def __init__(self, pde_solver, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.pde_solver = pde_solver
+    def objective_value(self):
+        sigma = Constant(5.0*0.04)  # from morpho example
+        mesh = self.Q.mesh_m
 
-    def value_form(self):
-        """Evaluate functional."""
-        mesh = self.pde_solver.mesh
+        J = (
+              self.J_nem  # nematic energy
+            + sigma * ds(mesh)
+            )
 
-        if self.pde_solver.failed_to_solve:  # return NaNs if state solve fails
-            return nan * dx(mesh)
-        else:
-            z = self.pde_solver.solution
-            (n, l) = split(z)
-
-            sigma = Constant(5.0*0.04)  # from morpho example
-
-            J = (
-                  self.pde_solver.J_nem  # nematic energy
-                + sigma * ds(mesh)
-                )
-
-            return J
+        return assemble(J)
 
 if __name__ == "__main__":
     mesh = Mesh("disk.msh")
     Q = FeControlSpace(mesh)
     finner = LaplaceInnerProduct(Q)
     q = ControlVector(Q, finner)
-
-    e = NematicFrankOseenSolver(mesh)
-
-    pvd = File("output/solution.pvd")
-
-    def callback():
-        (n, l) = e.solution.split()
-        n.rename("Director")
-        pvd.write(n)
-
-    J_ = NematicObjective(e, Q, cb=callback)
-    J = ReducedObjective(J_, e)
+    J = NematicObjective(Q)
 
     # Add regularisation to improve mesh quality
     Jq = zoo.MoYoSpectralConstraint(10, Constant(0.5), Q)
