@@ -72,12 +72,15 @@ class NematicObjective(PDEconstrainedObjective):
         sigma = Constant(5.0*0.04)  # from morpho example
         mesh = self.Q.mesh_m
 
-        J = (
-              self.J_nem  # nematic energy
-            + sigma * ds(mesh)
-            )
+        if self.failed_to_solve:
+            return assemble(nan*dx(mesh))
+        else:
+            J = (
+                  self.J_nem  # nematic energy
+                + sigma * ds(mesh)
+                )
 
-        return assemble(J)
+            return assemble(J)
 
 if __name__ == "__main__":
     mesh = Mesh("disk.msh")
@@ -87,8 +90,8 @@ if __name__ == "__main__":
     J = NematicObjective(Q)
 
     # Add regularisation to improve mesh quality
-    Jq = zoo.MoYoSpectralConstraint(10, Constant(0.5), Q)
-    J = J + Jq
+    #Jq = zoo.MoYoSpectralConstraint(10, Constant(0.5), Q)
+    #J = J + Jq
 
     # Set up volume constraint
     vol = zoo.VolumeFunctional(Q)
