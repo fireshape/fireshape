@@ -90,8 +90,8 @@ if __name__ == "__main__":
     J = NematicObjective(Q)
 
     # Add regularisation to improve mesh quality
-    #Jq = zoo.MoYoSpectralConstraint(10, Constant(0.5), Q)
-    #J = J + Jq
+    Jq = zoo.MoYoSpectralConstraint(10, Constant(0.1), Q)
+    J = J + Jq
 
     # Set up volume constraint
     vol = zoo.VolumeFunctional(Q)
