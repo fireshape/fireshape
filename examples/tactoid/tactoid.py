@@ -80,7 +80,18 @@ class NematicObjective(PDEconstrainedObjective):
                 + sigma * ds(mesh)
                 )
 
-            return assemble(J)
+            J_out = assemble(J)
+
+            area = assemble(Constant(1)*dx(mesh))
+            area_penalty = 150 * (area - 2*pi)**2
+
+            (x, y) = SpatialCoordinate(mesh)
+            bary_x = assemble(x*dx)
+            bary_y = assemble(y*dx)
+            bary_penalty_x = 100 * (bary_x - 0)**2
+            bary_penalty_y = 100 * (bary_y - 0)**2
+
+            return J_out + area_penalty + bary_penalty_x + bary_penalty_y
 
 if __name__ == "__main__":
     mesh = Mesh("disk.msh")
@@ -94,26 +105,36 @@ if __name__ == "__main__":
     J = J + Jq
 
     # Set up volume constraint
-    vol = zoo.VolumeFunctional(Q)
-    initial_vol = vol.value(q, None)
-    econ = EqualityConstraint([vol], target_value=[initial_vol])
-    emul = ROL.StdVector(1)
+    #vol = zoo.VolumeFunctional(Q)
+    #initial_vol = vol.value(q, None)
+    #econ = EqualityConstraint([vol], target_value=[initial_vol])
+    #emul = ROL.StdVector(1)
 
     # ROL parameters
     params_dict = {
-        'General': {'Print Verbosity': 1,  # set to 1 to understand output
-                    'Secant': {'Type': 'Limited-Memory BFGS',
-                               'Maximum Storage': 10}},
-        'Step': {'Type': 'Augmented Lagrangian',
-                 'Augmented Lagrangian':
-                 {'Subproblem Step Type': 'Trust Region',
-                  'Print Intermediate Optimization History': False,
-                  'Subproblem Iteration Limit': 10}},
-        'Status Test': {'Gradient Tolerance': 1e-4,
-                        'Step Tolerance': 1e-4,
-                        'Constraint Tolerance': 1e-1,
-                        'Iteration Limit': 100}}
+        'Step': {
+            'Type': 'Line Search',
+            'Line Search': {
+                'Descent Method': {
+                    'Type': 'Quasi-Newton Step'
+                }
+            },
+        },
+        'General': {
+            'Print Verbosity': 1,
+            'Secant': {
+                'Type': 'Limited-Memory BFGS',
+                'Maximum Storage': 10
+            }
+        },
+        'Status Test': {
+            'Gradient Tolerance': 1e-4,
+            'Step Tolerance': 1e-5,
+            'Iteration Limit': 200
+        }
+    }
     params = ROL.ParameterList(params_dict, "Parameters")
-    problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
+    #problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
+    problem = ROL.OptimizationProblem(J, q)
     solver = ROL.OptimizationSolver(problem, params)
     solver.solve()

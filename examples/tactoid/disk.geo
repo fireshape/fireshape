@@ -20,4 +20,4 @@ Plane Surface(3) = {3};
 Curve Loop(4) = {1, -8, -4};
 Plane Surface(4) = {4};
 Physical Surface(9) = {2, 1, 4, 3};
-Recombine Surface "*";
+//Recombine Surface "*";
