@@ -1,21 +1,41 @@
 import firedrake as fd
-from fireshape import ShapeObjective
+from fireshape import PDEconstrainedObjective
 import numpy as np
 from scattering_PDEconstraint import PMLSolver
-from utils import generate_mesh
+from utils import generate_mesh, plot_mesh, plot_field, plot_vector_field,\
+                  plot_far_field
 
 
-class FarFieldObjective(ShapeObjective):
+class FarFieldObjective(PDEconstrainedObjective):
     """Misfit of the far field pattern."""
 
-    def __init__(self, pde_solver: PMLSolver, R0, R1, *args, **kwargs):
+    def __init__(self, pde_solver: PMLSolver, R0, R1, layer, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.R0 = R0
-        self.R1 = R1
         self.e = pde_solver
         self.k = pde_solver.k
-        self.d = pde_solver.d
-        self.u_s = pde_solver.solution
+        self.dirs = pde_solver.dirs
+        self.u_s = pde_solver.solutions
+        self.R0 = R0
+        self.R1 = R1
+        self.layer = layer
+
+        # cut-off function for far field evaluation
+        V = self.u_s[0].function_space()
+        mesh = V.mesh()
+        y = fd.SpatialCoordinate(mesh)
+        r = fd.sqrt(fd.dot(y, y))
+        psi = (1 - fd.cos((r - R0) / (R1 - R0) * fd.pi)) / 2
+        self.grad_psi = fd.interpolate(fd.grad(psi), V)
+        self.laplace_psi = fd.interpolate(fd.div(fd.grad(psi)),
+                                          fd.FunctionSpace(mesh, "CG", 1))
+
+        # points on S^1
+        self.n = 50
+        self.weight = 2 * np.pi / self.n / pde_solver.n_wave
+        theta = np.linspace(0, 2 * np.pi, self.n).reshape(-1, 1)
+        self.xs = np.hstack((np.cos(theta), np.sin(theta)))
+
+        # target far field pattern
         self.g = self.target_far_field()
 
         # stop any annotation that might be ongoing as we only need to record
@@ -34,30 +54,51 @@ class FarFieldObjective(ShapeObjective):
         a1 = b1 = 2.25
         R0 = 1.5
         R1 = 1.9
+        layer = [(a0, a1), (b0, b1)]
 
         if use_cached_mesh:
             mesh = fd.Mesh("target.msh")
         else:
             obstacle = {
-                "shape": "circle",
-                "center": (0.1, 0.0),
-                "scale": 0.5,
-                "nodes": 50
+                "shape": "kite",
+                "center": (0.1, 0.),
+                "scale": 0.3
             }
-            h0 = 0.1
-            mesh = generate_mesh(
-                a0, a1, b0, b1, R0, R1, obstacle, h0, name="target")
+            mesh = generate_mesh(obstacle, layer, R0, R1, 3, name="target")
 
-        solver = PMLSolver(mesh, self.k, self.d, a1, b1)
+        if hasattr(self.Q, "bbox"):
+            plot_mesh(mesh, self.Q.bbox)
+        else:
+            plot_mesh(mesh)
+
+        solver = PMLSolver(mesh, self.k, self.dirs, a1, b1)
         solver.solve()
-        u_target = solver.solution
-        fd.File("u_target.pvd").write(u_target.sub(0))
-        return self.far_field(u_target, R0, R1)
+        u_target = solver.solutions
+        plot_field(u_target[0], layer)
+        g = self.far_field(u_target, R0, R1)
+        return g
 
     def far_field(self, u_s, R0, R1):
         """
         Evaluate far field of the scattered wave.
         """
+        V = u_s[0].function_space()
+        mesh = V.mesh()
+        y = fd.SpatialCoordinate(mesh)
+        k = self.k
+        c = 1 / np.sqrt(8 * np.pi) / fd.sqrt(k)
+
+        # cut-off function
+        if mesh != self.grad_psi.function_space().mesh():
+            r = fd.sqrt(fd.dot(y, y))
+            psi = (1 - fd.cos((r - R0) / (R1 - R0) * fd.pi)) / 2
+            grad_psi = fd.interpolate(fd.grad(psi), V)
+            laplace_psi = fd.interpolate(fd.div(fd.grad(psi)),
+                                         fd.FunctionSpace(mesh, "CG", 1))
+        else:
+            grad_psi = self.grad_psi
+            laplace_psi = self.laplace_psi
+
         # product of complex numbers
         def dot(x, y):
             x_re, x_im = x
@@ -66,102 +107,62 @@ class FarFieldObjective(ShapeObjective):
             res_im = x_re * y_im + x_im * y_re
             return res_re, res_im
 
-        mesh = u_s.function_space().mesh()
-        y = fd.SpatialCoordinate(mesh)
-        k = fd.Constant(self.k)
-        c = 1 / np.sqrt(8 * np.pi * self.k)
-
-        # cut-off function
-        r = fd.sqrt(fd.dot(y, y))
-        psi = (1 - fd.cos((r - R0) / (R1 - R0) * fd.pi)) / 2
-
-        theta = np.linspace(0, 2 * np.pi, 100)
-        u_inf = []
+        far_fields = []
         fcp = {"quadrature_degree": 4}
-        for t in theta:
-            x = fd.Constant((np.cos(t), np.sin(t)))
-            phi = fd.pi / 4 - k * fd.inner(x, y)
-            f = (fd.cos(phi), fd.sin(phi))
-            g = dot(u_s, (fd.div(fd.grad(psi)),
-                          -2 * k * fd.dot(x, fd.grad(psi))))
-            h = dot(f, g)
-            u_inf_re = fd.assemble(h[0] * fd.dx(2),
-                                   form_compiler_parameters=fcp)
-            u_inf_im = fd.assemble(h[1] * fd.dx(2),
-                                   form_compiler_parameters=fcp)
-            u_inf.append((u_inf_re * c, u_inf_im * c))
-        # self.plot_far_field(u_inf)
-        return u_inf
+        for u in u_s:
+            u_inf = []
+            for i in range(self.n):
+                x = fd.Constant(self.xs[i, :])
+                phi = fd.pi / 4 - k * fd.inner(x, y)
+                f = (fd.cos(phi), fd.sin(phi))
+                g = dot(u, (laplace_psi, -2 * k * fd.dot(x, grad_psi)))
+                h = dot(f, g)
+                u_inf_re = fd.assemble(c * h[0] * fd.dx(2),
+                                       form_compiler_parameters=fcp)
+                u_inf_im = fd.assemble(c * h[1] * fd.dx(2),
+                                       form_compiler_parameters=fcp)
+                u_inf.append((u_inf_re, u_inf_im))
+            far_fields.append(u_inf)
+        return far_fields
 
-    def plot_far_field(self, u_inf):
-        import matplotlib.pyplot as plt
-        theta = np.linspace(0, 2 * np.pi, len(u_inf))
-        u_inf = np.array(u_inf)
-        fig, (ax1, ax2) = plt.subplots(
-            1, 2, subplot_kw={'projection': 'polar'}, constrained_layout=True)
-        ax1.plot(theta, u_inf[:, 0])
-        ax1.set_title("Real part")
-        ax1.set_rlabel_position(90)
-        ax1.grid(True)
-        ax2.plot(theta, u_inf[:, 1])
-        ax2.set_title("Imaginary part")
-        ax2.set_rlabel_position(90)
-        ax2.grid(True)
-        plt.show()
-
-    def value(self, x, tol):
+    def objective_value(self):
         """
-        Evaluate misfit functional.
-        Function signature imposed by ROL.
+        Evaluate reduced objective. Method introduced to
+        bypass ROL signature in self.value.
         """
-        u_inf = self.far_field(self.u_s, self.R0, self.R1)
-        n = len(u_inf)
         res = 0
-        for i in range(n):
-            res += (u_inf[i][0] - self.g[i][0])**2 +\
-                   (u_inf[i][1] - self.g[i][1])**2
-        return res * 2 * np.pi / n
+        for i in range(self.e.n_wave):
+            u_inf = self.u_inf[i]
+            g = self.g[i]
+            for j in range(self.n):
+                res += (u_inf[j][0] - g[j][0])**2 + (u_inf[j][1] - g[j][1])**2
+        return res * self.weight
+
+    def solvePDE(self):
+        """Solve the PDE constraint."""
+        self.e.solve()
+        self.u_inf = self.far_field(self.u_s, self.R0, self.R1)
 
     def derivative(self, out):
         """
         Get the derivative from pyadjoint.
         """
-        out.from_first_derivative(self.Jred.derivative())
+        deriv = self.Jred.derivative()
+        out.from_first_derivative(deriv)
 
-    def update(self, x, flag, iteration):
-        """
-        Update domain and solution to state and adjoint equation.
-        """
-        if self.Q.update_domain(x):
-            try:
-                # We use pyadjoint to calculate adjoint and shape derivatives,
-                # in order to do this we need to "record a tape of the forward
-                # solve", pyadjoint will then figure out all necessary
-                # adjoints.
-                import firedrake_adjoint as fda
-                tape = fda.get_working_tape()
-                tape.clear_tape()
-                # ensure we are annotating
-                from pyadjoint.tape import annotate_tape
-                safety_counter = 0
-                while not annotate_tape():
-                    safety_counter += 1
-                    fda.continue_annotation()
-                    if safety_counter > 1e2:
-                        import sys
-                        sys.exit('Cannot annotate even after 100 attempts.')
-                mesh_m = self.Q.mesh_m
-                s = fd.Function(self.V_m)
-                mesh_m.coordinates.assign(mesh_m.coordinates + s)
-                self.s = s
-                self.c = fda.Control(s)
-                self.e.solve()
-                Jpyadj = self.value(x, None)
-                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-                fda.pause_annotation()
-            except fd.ConvergenceError:
-                if self.cb is not None:
-                    self.cb()
-                raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
+        plot_field(self.u_s[0], self.layer)
+        plot_far_field(self.u_inf[0], self.g[0])
+        if hasattr(self.Q, "bbox"):
+            plot_vector_field(deriv, self.layer, self.Q.bbox)
+        else:
+            plot_vector_field(deriv, self.layer)
+
+    def gradient(self, g, x, tol):
+        super().gradient(g, x, tol)
+
+        T = fd.Function(self.Q.T)
+        g.to_coordinatefield(T)
+        if hasattr(self.Q, "bbox"):
+            plot_vector_field(T, self.layer, self.Q.bbox)
+        else:
+            plot_vector_field(T, self.layer)

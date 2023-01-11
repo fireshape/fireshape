@@ -4,18 +4,17 @@ from fireshape import PdeConstraint
 
 class PMLSolver(PdeConstraint):
     """Acoustic scattering problem from a sound-soft obstacle solved by PML."""
-    def __init__(self, mesh_m, k, d, a1, b1):
+    def __init__(self, mesh_m, k, dirs, a1, b1):
         super().__init__()
+        k = self.k = fd.Constant(k)
+        dirs = self.dirs = [fd.Constant(d) for d in dirs]
+        self.n_wave = len(dirs)
 
         # Setup problem
         V = fd.VectorFunctionSpace(mesh_m, "CG", 1)
         X = fd.SpatialCoordinate(mesh_m)
-        u = fd.Function(V, name="State")
+        u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        self.k = k
-        self.d = d
-        k = fd.Constant(k)
-        d = fd.as_vector(d)
 
         # Subdomains
         dx_F = fd.dx(1) + fd.dx(2)  # physical domain
@@ -68,10 +67,12 @@ class PMLSolver(PdeConstraint):
             + (inner(ux, vx, c=c1_xy) + inner(uy, vy, c=c2_xy)
                 - k**2 * inner(u, v, c=c3_xy)) * dx_A_xy
         # boundary condition
-        kdx = k * fd.dot(d, X)
-        u_inc = fd.as_vector((fd.cos(kdx), fd.sin(kdx)))
-        self.bcs = [fd.DirichletBC(V, -u_inc, 1),
-                    fd.DirichletBC(V, (0., 0.), 5)]
+        self.bcs = []
+        for d in dirs:
+            kdx = k * fd.dot(d, X)
+            u_inc = fd.as_vector((fd.cos(kdx), fd.sin(kdx)))
+            self.bcs.append([fd.DirichletBC(V, -u_inc, 1),
+                             fd.DirichletBC(V, (0., 0.), 5)])
 
         # PDE-solver parameters
         self.params = {
@@ -81,9 +82,15 @@ class PMLSolver(PdeConstraint):
             "ksp_stol": 1e-15,
         }
 
-        self.solution = u
+        self.u = u
+        self.solutions = []
+        for i in range(self.n_wave):
+            self.solutions.append(fd.Function(V, name="State"+str(i)))
 
     def solve(self):
         super().solve()
-        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
-                 solver_parameters=self.params)
+        for i in range(self.n_wave):
+            solution = self.solutions[i]
+            F = fd.replace(self.F, {self.u: solution})
+            fd.solve(F == 0, solution, bcs=self.bcs[i],
+                     solver_parameters=self.params)
