@@ -14,36 +14,61 @@ class FarFieldObjective(PDEconstrainedObjective):
         self.e = pde_solver
         self.k = pde_solver.k
         self.dirs = pde_solver.dirs
-        self.u_s = pde_solver.solutions
+        self.solutions = pde_solver.solutions
         self.R0 = R0
         self.R1 = R1
         self.layer = layer
 
-        # cut-off function for far field evaluation
-        V = self.u_s[0].function_space()
+        # Cut-off function for far field evaluation
+        V = pde_solver.V
         mesh = V.mesh()
         y = fd.SpatialCoordinate(mesh)
         r = fd.sqrt(fd.dot(y, y))
         psi = (1 - fd.cos((r - R0) / (R1 - R0) * fd.pi)) / 2
-        self.grad_psi = fd.interpolate(fd.grad(psi), V)
-        self.laplace_psi = fd.interpolate(fd.div(fd.grad(psi)),
-                                          fd.FunctionSpace(mesh, "CG", 1))
+        self.grad_psi = fd.Function(V, name="grad_psi")
+        self.grad_psi.interpolate(fd.grad(psi))
+        elem = V.ufl_element().sub_elements()[0]
+        self.laplace_psi = fd.Function(fd.FunctionSpace(mesh, elem),
+                                       name="laplace_psi")
+        self.laplace_psi.interpolate(fd.div(fd.grad(psi)))
 
-        # points on S^1
-        self.n = 50
+        # Product of complex numbers
+        def dot(x, y):
+            x_re, x_im = x
+            y_re, y_im = y
+            res_re = x_re * y_re - x_im * y_im
+            res_im = x_re * y_im + x_im * y_re
+            return res_re, res_im
+
+        # Form of far field
+        k = fd.Constant(self.k)
+        x_hat = fd.Constant((0, 0))
+        coeff = 1 / np.sqrt(8 * np.pi * self.k)
+        u = fd.Function(V)
+
+        phi = fd.pi / 4 - k * fd.dot(x_hat, y)
+        f = (fd.cos(phi), fd.sin(phi))
+        g = dot(u, (self.laplace_psi, -2 * k * fd.dot(x_hat, self.grad_psi)))
+        h = dot(f, g)
+        self.integrand = (coeff * h[0], coeff * h[1])
+
+        # Save placeholders
+        self.dx = fd.dx(2, metadata={"quadrature_degree": 4})
+        self.x_hat = x_hat
+        self.y = y
+        self.u = u
+
+        # Points on S^1
+        n = self.n = 50
         self.weight = 2 * np.pi / self.n / pde_solver.n_wave
-        theta = np.linspace(0, 2 * np.pi, self.n).reshape(-1, 1)
-        self.xs = np.hstack((np.cos(theta), np.sin(theta)))
+        theta = 2 * np.pi / n * np.arange(n)
+        self.xs = []
+        for i in range(n):
+            t = theta[i]
+            self.xs.append(fd.Constant((np.cos(t), np.sin(t))))
 
-        # target far field pattern
+        # Target far field pattern
         self.g = self.target_far_field()
-
-        # stop any annotation that might be ongoing as we only need to record
-        # what's happening in e.solve()
-        from pyadjoint.tape import pause_annotation, annotate_tape
-        annotate = annotate_tape()
-        if annotate:
-            pause_annotation()
 
     def target_far_field(self):
         """
@@ -57,71 +82,56 @@ class FarFieldObjective(PDEconstrainedObjective):
         layer = [(a0, a1), (b0, b1)]
 
         if use_cached_mesh:
-            mesh = fd.Mesh("target.msh")
+            mesh = fd.Mesh("target.msh", name="target")
         else:
             obstacle = {
-                "shape": "kite",
+                "shape": "circle",
                 "center": (0.1, 0.),
-                "scale": 0.3
+                "scale": 0.4
             }
             mesh = generate_mesh(obstacle, layer, R0, R1, 3, name="target")
-
-        if hasattr(self.Q, "bbox"):
-            plot_mesh(mesh, self.Q.bbox)
-        else:
-            plot_mesh(mesh)
+        plot_mesh(mesh, self.Q.bbox, "target")
 
         solver = PMLSolver(mesh, self.k, self.dirs, a1, b1)
         solver.solve()
         u_target = solver.solutions
-        plot_field(u_target[0], layer)
+        plot_field(u_target[0], layer, "u_target")
         g = self.far_field(u_target, R0, R1)
         return g
 
-    def far_field(self, u_s, R0, R1):
+    def far_field(self, near_fields, R0, R1):
         """
         Evaluate far field of the scattered wave.
         """
-        V = u_s[0].function_space()
+        V = near_fields[0].function_space()
         mesh = V.mesh()
-        y = fd.SpatialCoordinate(mesh)
-        k = self.k
-        c = 1 / np.sqrt(8 * np.pi) / fd.sqrt(k)
 
-        # cut-off function
-        if mesh != self.grad_psi.function_space().mesh():
+        # Integrand of far field pattern
+        if mesh == self.grad_psi.function_space().mesh():
+            expr = self.integrand
+        else:
+            # Replace cut-off function for target mesh
+            y = fd.SpatialCoordinate(mesh)
             r = fd.sqrt(fd.dot(y, y))
             psi = (1 - fd.cos((r - R0) / (R1 - R0) * fd.pi)) / 2
             grad_psi = fd.interpolate(fd.grad(psi), V)
+            elem = V.ufl_element().sub_elements()[0]
             laplace_psi = fd.interpolate(fd.div(fd.grad(psi)),
-                                         fd.FunctionSpace(mesh, "CG", 1))
-        else:
-            grad_psi = self.grad_psi
-            laplace_psi = self.laplace_psi
-
-        # product of complex numbers
-        def dot(x, y):
-            x_re, x_im = x
-            y_re, y_im = y
-            res_re = x_re * y_re - x_im * y_im
-            res_im = x_re * y_im + x_im * y_re
-            return res_re, res_im
+                                         fd.FunctionSpace(mesh, elem))
+            replacement = {self.y: y,
+                           self.grad_psi: grad_psi,
+                           self.laplace_psi: laplace_psi}
+            expr = (fd.replace(self.integrand[0], replacement),
+                    fd.replace(self.integrand[1], replacement))
 
         far_fields = []
-        fcp = {"quadrature_degree": 4}
-        for u in u_s:
+        for u in near_fields:
+            form = (fd.replace(expr[0], {self.u: u}) * self.dx,
+                    fd.replace(expr[1], {self.u: u}) * self.dx)
             u_inf = []
             for i in range(self.n):
-                x = fd.Constant(self.xs[i, :])
-                phi = fd.pi / 4 - k * fd.inner(x, y)
-                f = (fd.cos(phi), fd.sin(phi))
-                g = dot(u, (laplace_psi, -2 * k * fd.dot(x, grad_psi)))
-                h = dot(f, g)
-                u_inf_re = fd.assemble(c * h[0] * fd.dx(2),
-                                       form_compiler_parameters=fcp)
-                u_inf_im = fd.assemble(c * h[1] * fd.dx(2),
-                                       form_compiler_parameters=fcp)
-                u_inf.append((u_inf_re, u_inf_im))
+                self.x_hat.assign(self.xs[i])
+                u_inf.append((fd.assemble(form[0]), fd.assemble(form[0])))
             far_fields.append(u_inf)
         return far_fields
 
@@ -141,7 +151,7 @@ class FarFieldObjective(PDEconstrainedObjective):
     def solvePDE(self):
         """Solve the PDE constraint."""
         self.e.solve()
-        self.u_inf = self.far_field(self.u_s, self.R0, self.R1)
+        self.u_inf = self.far_field(self.solutions, self.R0, self.R1)
 
     def derivative(self, out):
         """
@@ -150,19 +160,13 @@ class FarFieldObjective(PDEconstrainedObjective):
         deriv = self.Jred.derivative()
         out.from_first_derivative(deriv)
 
-        plot_field(self.u_s[0], self.layer)
-        plot_far_field(self.u_inf[0], self.g[0])
-        if hasattr(self.Q, "bbox"):
-            plot_vector_field(deriv, self.layer, self.Q.bbox)
-        else:
-            plot_vector_field(deriv, self.layer)
+        plot_field(self.solutions[0], self.layer, "u")
+        plot_far_field(self.u_inf[0], self.g[0], "u_inf")
+        plot_vector_field(deriv, self.layer, self.Q.bbox, "deriv")
 
     def gradient(self, g, x, tol):
         super().gradient(g, x, tol)
 
         T = fd.Function(self.Q.T)
         g.to_coordinatefield(T)
-        if hasattr(self.Q, "bbox"):
-            plot_vector_field(T, self.layer, self.Q.bbox)
-        else:
-            plot_vector_field(T, self.layer)
+        plot_vector_field(T, self.layer, self.Q.bbox, "grad")

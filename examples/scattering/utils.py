@@ -144,6 +144,19 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
     gmsh.model.geo.addPlaneSurface([cl0, cl1], 10)
     gmsh.model.geo.addPlaneSurface([cl1, 1], 11)
 
+    # set cell size
+    N = 2  # number of rectangles through thickness of absorbing layer
+    NN = ceil(2 * max(a0, b0) / min(a1 - a0, b1 - b0)) * N
+    for c in range(1, 9):
+        gmsh.model.geo.mesh.setTransfiniteCurve(c, NN + 1)
+    for s in range(1, 5):
+        gmsh.model.geo.mesh.setTransfiniteSurface(s)
+
+    h0 = min(a1 - a0, b1 - b0) / N  # cell size of physical domain
+    gmsh.option.setNumber("Mesh.MeshSizeFactor", h0)
+
+    gmsh.model.geo.synchronize()
+
     # set subdomain ids
     gmsh.model.addPhysicalGroup(1, cs, 1, name="Gamma")
     gmsh.model.addPhysicalGroup(1, cs0, 2, name="R0")
@@ -159,19 +172,7 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
     gmsh.model.addPhysicalGroup(2, [2, 4], 4, name="Omega_Ay")
     gmsh.model.addPhysicalGroup(2, range(5, 9), 5, name="Omega_Axy")
 
-    # set cell size
-    N = 2  # number of rectangles through thickness of absorbing layer
-    NN = ceil(2 * max(a0, b0) / min(a1 - a0, b1 - b0)) * N
-    for c in range(1, 9):
-        gmsh.model.geo.mesh.setTransfiniteCurve(c, NN + 1)
-    for s in range(1, 5):
-        gmsh.model.geo.mesh.setTransfiniteSurface(s)
-
-    h0 = min(a1 - a0, b1 - b0) / N  # cell size of physical domain
-    gmsh.option.setNumber("Mesh.MeshSizeFactor", h0)
-
     # generate mesh
-    gmsh.model.geo.synchronize()
     gmsh.model.mesh.generate(2)
     for _ in range(level):
         gmsh.model.mesh.refine()
@@ -181,7 +182,7 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
 
     gmsh.finalize()
 
-    return fd.Mesh(msh_file)
+    return fd.Mesh(msh_file, name=name)
 
 
 def plot_mesh(mesh, bbox=None, name=None):
@@ -273,9 +274,9 @@ def plot_vector_field(v, layer, bbox=None, name=None):
 
 def plot_far_field(u_inf, g, name=None):
     n = len(u_inf)
-    theta = np.linspace(0, 2 * np.pi, n)
-    u_inf = np.array(u_inf)
-    g = np.array(g)
+    theta = 2 * np.pi / n * np.arange(n + 1)
+    u_inf = np.array(u_inf + [u_inf[0]])
+    g = np.array(g + [g[0]])
     fig, (ax1, ax2) = plt.subplots(
         1, 2, subplot_kw={'projection': 'polar'}, constrained_layout=True)
 

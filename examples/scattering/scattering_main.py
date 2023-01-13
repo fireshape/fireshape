@@ -16,12 +16,11 @@ R1 = 1.9
 layer = [(a0, a1), (b0, b1)]
 
 if use_cached_mesh:
-    mesh = fd.Mesh("mesh.msh")
+    mesh = fd.Mesh("mesh.msh", name="mesh")
 else:
     obstacle = {
         "shape": "circle",
         "scale": 0.4,
-        "nodes": 50
     }
     mesh = generate_mesh(obstacle, layer, R0, R1, 1, name="mesh")
 
@@ -31,14 +30,14 @@ orders = [3, 3]
 levels = [5, 5]
 Q = fs.BsplineControlSpace(mesh, bbox, orders, levels,
                            boundary_regularities=[1, 1])
-# Q = fs.FeControlSpace(mesh)
 inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
-plot_mesh(mesh, bbox)
+plot_mesh(mesh, bbox, "mesh")
 
 # Setup PDE constraint
 k = 5
-theta = np.linspace(0, 2 * np.pi, 4)
+n_wave = 4
+theta = 2 * np.pi / n_wave * np.arange(n_wave)
 dirs = [(np.cos(t), np.sin(t)) for t in theta]
 mesh_m = Q.mesh_m
 e = PMLSolver(mesh_m, k, dirs, a1, b1)
@@ -48,15 +47,12 @@ e.solve()
 out = fd.File("u.pvd")
 
 # Create PDE-constrained objective functional
-J = FarFieldObjective(e, R0, R1, layer, Q)
-# J = FarFieldObjective(e, R0, R1, layer, Q,
-#                       cb=lambda: out.write(e.solutions[0].sub(0)))
-
+J = FarFieldObjective(e, R0, R1, layer, Q,
+                      cb=lambda: out.write(e.solutions[0].sub(0)))
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
 J.checkGradient(q, g, 7, 1)
-
 
 # ROL parameters
 params_dict = {
@@ -75,8 +71,8 @@ params_dict = {
         }
     },
     'Status Test': {
-        'Gradient Tolerance': 1e-4,
-        'Step Tolerance': 1e-5,
+        'Gradient Tolerance': 1e-2,
+        'Step Tolerance': 1e-3,
         'Iteration Limit': 15
     }
 }
