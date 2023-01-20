@@ -133,7 +133,7 @@ class ControlSpace(object):
 class FeControlSpace(ControlSpace):
     """Use self.V_r as actual ControlSpace."""
 
-    def __init__(self, mesh_r):
+    def __init__(self, mesh_r, alternative_control_element = None):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
@@ -147,6 +147,7 @@ class FeControlSpace(ControlSpace):
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.is_DG = False
+        self.alternative_control_element = alternative_control_element
 
         """
         ControlSpace for discontinuous coordinate fields
@@ -163,6 +164,18 @@ class FeControlSpace(ControlSpace):
                                               "CG", element._degree)
             self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
                                       self.V_r).callable().handle
+        
+        if alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5, dim = 2)
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
+
+        if alternative_control_element == "CG5": # For comparison with Argyris to demonstrate issue
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree = 5, dim = 2)
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
+
+        if alternative_control_element == "DG5": # For comparison with Argyris to demonstrate issue
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "DG", degree = 5, dim = 2)
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
 
     def restrict(self, residual, out):
         if self.is_DG:
