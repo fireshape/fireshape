@@ -666,9 +666,11 @@ class WaveletControlSpace(BsplineControlSpace):
                  homogeneous_bc=None, deriv_orders=[0, 1], norm_equiv=False):
         homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
             else homogeneous_bc
+        self.dual_orders = dual_orders
 
         self.j0 = []
         self.mat = []
+        self.n_split = []
         for dim in range(len(bbox)):
             d = orders[dim]
             d_t = dual_orders[dim]
@@ -1062,11 +1064,14 @@ class WaveletControlSpace(BsplineControlSpace):
 
         n = 2**j0 + d - 1 - 2 * bc
         T_split = [T[:, :n]]
+        n_split = [n]
         offset = n
         for j in range(j0, J):
             n = 2**j
             T_split.append(T[:, offset:offset+n])
+            n_split.append(n)
             offset += n
+        self.n_split.append(n_split)
         return T_split
 
     def gramian_matrix(self, j, d, bc, nu):
@@ -1232,6 +1237,116 @@ class WaveletControlSpace(BsplineControlSpace):
 
         IFW.assemble()
         return IFW
+
+    def visualize_control(self, q, filename="control"):
+        if self.dim != 2:
+            raise ValueError("Only 2D visualization is supported.")
+
+        supp_1d = []
+        nx_1d = []
+        for dim in range(self.dim):
+            d = self.orders[dim]
+            d_t = self.dual_orders[dim]
+            j0 = self.j0[dim]
+            J = self.levels[dim]
+            bc = self.boundary_regularities[dim]
+            n = self.n_split[dim]
+            m = (d + d_t - 2) // 2  # number of boundary wavelets
+            supp_split = []
+            nx = []
+
+            supp = []
+            for k in range(n[0]):
+                supp.append((max(k+bc-d+1, 0),
+                             min(k+bc+1, 2**j0)))
+            supp_split.append(supp)
+            nx.append(2**j0)
+
+            for j in range(j0, J):
+                supp = []
+                if bc and d == 2:
+                    for k in range(d_t // 2):
+                        supp.append((0, d_t + 1))
+                    for k in range(d_t // 2, 2**j - d_t // 2):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - d_t // 2, 2**j):
+                        supp.append((2**j - (d_t + 1), 2**j))
+                else:
+                    for k in range(m):
+                        supp.append((0, d + d_t - 2))
+                    for k in range(m, 2**j - m):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - m, 2**j):
+                        supp.append((2**j - (d + d_t - 2), 2**j))
+                supp_split.append(supp)
+                nx.append(2**j)
+            supp_1d.append(supp_split)
+            nx_1d.append(nx)
+
+        v = q.vec_ro().array**2
+        free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
+        dfree = len(free_dims)
+
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+        fig_rows, fig_cols = len(supp_1d[1]), len(supp_1d[0])
+        figs = []
+        axs = []
+        ims = []
+        for _ in free_dims:
+            fig, ax = plt.subplots(fig_rows, fig_cols)
+            figs.append(fig)
+            axs.append(ax)
+            ims.append(None)
+
+        extent = [self.bbox[0][0], self.bbox[0][1],
+                  self.bbox[1][0], self.bbox[1][1]]
+        k = 0
+        for j in range(fig_cols):
+            supp_x = supp_1d[0][j]
+            for i in range(fig_rows):
+                supp_y = supp_1d[1][i]
+                data = [np.zeros((nx_1d[1][i], nx_1d[0][j]))
+                        for _ in free_dims]
+
+                for xmin, xmax in supp_x:
+                    for ymin, ymax in supp_y:
+                        for d in range(dfree):
+                            data[d][ymin:ymax, xmin:xmax] += v[k]
+                            k += 1
+
+                for d in range(dfree):
+                    ax = axs[d][i, j]
+                    data_ = np.sqrt(data[d][::-1, :])
+                    data_[data_ < 1e-12] = 1e-12
+                    ims[d] = ax.imshow(data_, extent=extent, cmap="gray",
+                                       norm=colors.LogNorm(vmin=1e-3, vmax=1))
+                    # ax.add_patch(plt.Circle((-2, 0), 0.5, color='w', lw=0.5,
+                    #                         fill=False))
+                    if i == 0:
+                        j0 = self.j0[0]
+                        ax.xaxis.set_label_position('top')
+                        if j == 0:
+                            ax.set_xlabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_xlabel(rf"$W_{j0+j-1}$")
+                    if j == 0:
+                        j0 = self.j0[1]
+                        if i == 0:
+                            ax.set_ylabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_ylabel(rf"$W_{j0+i-1}$")
+
+        for d in range(dfree):
+            fig = figs[d]
+            ax = axs[d]
+            im = ims[d]
+            plt.setp(ax, xticks=[], yticks=[])
+            fig.colorbar(im, ax=ax)
+            fig.savefig(filename + str(free_dims[d]) + ".png", dpi=150,
+                        bbox_inches="tight")
 
 
 class ControlVector(ROL.Vector):

@@ -30,6 +30,14 @@ out = fd.File("u.pvd")
 # Create PDEconstrained objective functional
 J_ = L2trackingObjective(e, Q, cb=lambda: out.write(e.solution))
 J = fs.ReducedObjective(J_, e)
+J.update(q, None, 1)
+g = q.clone()
+J.gradient(g, q, None)
+c = 1 / g.norm()
+J = c * J  # normalize gradient in first optimization step
+
+g.scale(c)
+Q.visualize_control(g)
 
 # ROL parameters
 params_dict = {
@@ -48,8 +56,8 @@ params_dict = {
         }
     },
     'Status Test': {
-        'Gradient Tolerance': 1e-8,
-        'Step Tolerance': 1e-7,
+        'Gradient Tolerance': 1e-4,
+        'Step Tolerance': 1e-5,
         'Iteration Limit': 15
     }
 }
