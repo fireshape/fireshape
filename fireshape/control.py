@@ -2,14 +2,19 @@ from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "BsplineControlSpace",
+           "WaveletControlSpace", "ControlVector"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
+
+# new imports for wavelets
+from itertools import product
+from math import factorial, floor, ceil
+from scipy.special import binom
 
 
 class ControlSpace(object):
@@ -518,7 +523,7 @@ class BsplineControlSpace(ControlSpace):
         idx1, data1, len1 = v
         idx2, data2, len2 = w
 
-        # lenght of output vector
+        # length of output vector
         lenout = len1*len2
 
         if len(data1) == 0 or len(data2) == 0:
@@ -553,7 +558,7 @@ class BsplineControlSpace(ControlSpace):
         # guess sparsity pattern from interp_1d[0]
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            nnz_ = len(interp_1d[0].getRow(row)[0])  # lenght of nnz-array
+            nnz_ = len(interp_1d[0].getRow(row)[0])  # length of nnz-array
             self.IFWnnz = max(self.IFWnnz, nnz_**self.dim)
         IFW.setPreallocationNNZ(self.IFWnnz)
         IFW.setUp()
@@ -563,7 +568,7 @@ class BsplineControlSpace(ControlSpace):
             M = [[A.getRow(row)[0],
                   A.getRow(row)[1], A.getSize()[1]] for A in interp_1d]
             M = reduce(self.vectorkron, M)
-            columns, values, lenght = M
+            columns, values, length = M
             IFW.setValues([row], columns, values)
 
         IFW.assemble()
@@ -654,6 +659,718 @@ class BsplineControlSpace(ControlSpace):
         vec.vec_wo().load(viewer)
 
 
+class WaveletControlSpace(BsplineControlSpace):
+    """ControlSpace based on cartesian tensorized B-spline wavelets."""
+
+    def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
+                 homogeneous_bc=None, deriv_orders=[0, 1], norm_equiv=False,
+                 tol=None):
+        homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
+            else homogeneous_bc
+        self.dual_orders = dual_orders
+
+        self.j0 = []
+        self.mat = []
+        self.n_split = []
+        for dim in range(len(bbox)):
+            d = orders[dim]
+            d_t = dual_orders[dim]
+            J = levels[dim]
+            bc = homogeneous_bc[dim]
+
+            a = self.primal_refinement_coeffs(d)
+            a_t = self.dual_refinement_coeffs(d, d_t)
+            ML = self.primal_ML(d, bc)
+            ML_t = self.dual_ML(d, d_t, a, a_t, ML, bc)
+            GL = self.primal_GL(d, d_t, a, a_t, ML, ML_t, bc)
+            T = self.transformation_matrix(J, d, d_t, a, a_t, ML, GL, bc,
+                                           deriv_orders)
+            self.mat.append(T)
+
+        if norm_equiv:
+            self.boundary_regularities = homogeneous_bc
+            self.dim = len(bbox)  # geometric dimension
+            self.bbox = bbox
+            self.orders = orders
+            self.levels = levels
+            if isinstance(fixed_dims, int):
+                fixed_dims = [fixed_dims]
+            self.fixed_dims = fixed_dims
+            self.construct_knots()
+            self.comm = mesh.mpi_comm()
+            maxdegree = max(self.orders) - 1
+
+            # standard construction of ControlSpace
+            self.mesh_r = mesh
+            element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
+            self.V_r = fd.FunctionSpace(self.mesh_r, element)
+            X = fd.SpatialCoordinate(self.mesh_r)
+            self.id = fd.Function(self.V_r).interpolate(X)
+            self.T = fd.Function(self.V_r, name="T")
+            self.T.assign(self.id)
+            self.mesh_m = fd.Mesh(self.T)
+            self.V_m = fd.FunctionSpace(self.mesh_m, element)
+
+            assert self.dim == self.mesh_r.geometric_dimension()
+
+            # assemble correct interpolation matrix
+            self.FullIFW = self.build_interpolation_matrix(self.V_r)
+        else:
+            super().__init__(mesh, bbox, orders, levels, fixed_dims,
+                             homogeneous_bc)
+
+        self.free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
+        self.dfree = len(self.free_dims)
+        self.tol = tol
+
+    def primal_refinement_coeffs(self, d):
+        l1 = -floor(d / 2)
+        l2 = ceil(d / 2)
+        a = 2**(1-d) * np.array([binom(d, k - l1) for k in range(l1, l2 + 1)])
+        return a
+
+    def primal_ML(self, d, bc):
+        knots = np.concatenate((np.zeros(d - 1), np.arange(3 * d - 3)))
+        x = np.arange(2 * d - 2)
+
+        B1 = np.empty((2 * d - 2, d - 1))
+        for k in range(d - 1):
+            coeffs = np.zeros(3 * d - 4)
+            coeffs[k] = 1.
+            tck = (knots, coeffs, d - 1)
+            B1[:, k] = splev(x / 2, tck, der=0, ext=1)
+
+        B2 = np.empty((2 * d - 2, 2 * d - 2))
+        for k in range(2 * d - 2):
+            coeffs = np.zeros(3 * d - 4)
+            coeffs[k] = 1.
+            tck = (knots, coeffs, d - 1)
+            B2[:, k] = splev(x, tck, der=0, ext=1)
+
+        ML = np.linalg.solve(B2, B1)
+        ML[np.abs(ML) < 1e-9] = 0.
+        if bc:
+            ML = ML[1:, 1:]
+        return ML
+
+    def primal_A(self, j, d, a):
+        n = a.size
+        A = np.zeros((2**(j+1) - d + 1, 2**j - d + 1))
+        for k in range(A.shape[1]):
+            A[2*k:2*k+n, k] = a
+        return A
+
+    def primal_M0(self, j, d, a, ML, bc):
+        A = self.primal_A(j, d, a)
+
+        M0 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
+        m, n = M0.shape
+        mL, nL = ML.shape
+        M0[:mL, :nL] = ML
+        M0[nL:m-nL, nL:n-nL] = A
+        M0[m-mL:, n-nL:] = ML[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M0
+
+    def dual_refinement_coeffs(self, d, d_t):
+        l1_t = -floor(d / 2) - d_t + 1
+        l2_t = ceil(d / 2) + d_t - 1
+        K = (d + d_t) // 2
+
+        def entry(k):
+            res = 0
+            for n in range(K):
+                for i in range(2 * n + 1):
+                    res += 2**(1 - d_t - 2 * n) * (-1)**(n + i) \
+                           * binom(d_t, k + floor(d_t / 2) - i + n) \
+                           * binom(K - 1 + n, n) * binom(2 * n, i)
+            return res
+        a_t = np.array([entry(k) for k in range(l1_t, l2_t + 1)])
+        return a_t
+
+    def dual_ML(self, d, d_t, a, a_t, ML, bc):
+        l1 = -floor((a.size - 1) / 2)
+        l2 = ceil((a.size - 1) / 2)
+        l1_t = -floor((a_t.size - 1) / 2)
+        l2_t = ceil((a_t.size - 1) / 2)
+        if bc and d == 2:
+            ML_t = np.zeros((5 * d_t,  2 * d_t))
+        else:
+            ML_t = np.zeros((2 * d + 3 * d_t - 5 - bc, d + d_t - 2 - bc))
+        mL, nL = ML_t.shape
+
+        m, n = ML.shape
+        ML_full = np.zeros_like(ML_t)
+        ML_full[:m, :n] = ML
+        for k in range(n, nL):
+            ML_full[2*k-n:2*k-n+d+1, k] = a
+        ML = ML_full
+
+        # Compute block of ML_t corresponding to k = d-2, ..., d+2*d_t-3
+
+        # Compute alpha_{0,r}
+        alpha0 = np.zeros(d_t)
+        alpha0[0] = 1
+        for r in range(1, d_t):
+            for k in range(l1, l2 + 1):
+                sum = 0
+                for s in range(r):
+                    sum += binom(r, s) * k**(r-s) * alpha0[s]
+                alpha0[r] += a[k-l1] * sum
+            alpha0[r] /= (2**(r+1) - 2)
+
+        # Compute alpha_{k,r}
+        def alpha(k, r):
+            res = 0
+            for i in range(r + 1):
+                res += binom(r, i) * k**i * alpha0[r-i]
+            return res
+
+        def compute_gramian():
+            n = ML.shape[1]
+            UL = ML[:n, :]
+            LL = ML[n:, :]
+            UL_t = ML_t[:n, :]
+            LL_t = ML_t[n:, :]
+            lhs = 2 * np.identity(n**2) - np.kron(UL_t.T, UL.T)
+            rhs = (LL.T @ LL_t).reshape(-1, order='F')
+            gamma = np.linalg.solve(lhs, rhs)
+            return gamma.reshape((n, n), order='F')
+
+        if bc and d == 2:
+            # Compute beta_{n,r}
+            def beta(n, r):
+                res = 0
+                for k in range(ceil((n-d_t) / 2), d_t + 1):
+                    res += alpha(k, r) * a_t[n-2*k+d_t]
+                return res
+
+            ML_t[:d_t, :d_t] = np.diag([2**(-r) for r in range(d_t)])
+            ML_t[d_t, :d_t] = np.array(
+                [2**(-r) * alpha(d_t + 1, r) for r in range(d_t)])
+            ML_t[d_t+1:3*d_t, :d_t] = np.array(
+                [[beta(n+d_t+2, r) for r in range(d_t)]
+                 for n in range(2 * d_t - 1)])
+            for k in range(d_t, 2 * d_t):
+                ML_t[2*k-d_t+1:2*k+d_t+2, k] = a_t
+
+            # Biorthogonalize
+
+            gramian = compute_gramian()
+            ML_t[:2*d_t, :] = gramian @ ML_t[:2*d_t, :]
+            ML_t = np.linalg.solve(gramian.T, ML_t.T).T
+            ML_t = ML_t[:3*d_t, :d_t]
+
+        else:
+            # Compute beta_{n,r}
+            def beta(n, r):
+                res = 0
+                for k in range(ceil((n-l2_t) / 2), -l1_t):
+                    res += alpha(k, r) * a_t[n-2*k-l1_t]
+                return res
+
+            def divided_diff(f, t):
+                if t.size == 1:
+                    return f(t[0])
+                return (divided_diff(f, t[1:]) - divided_diff(f, t[:-1])) \
+                    / (t[-1] - t[0])
+
+            D1 = np.zeros((d_t, d_t))
+            D2 = np.zeros((d_t, d_t))
+            D3 = np.zeros((d_t, d_t))
+            k0 = -l1_t - 1
+            for n in range(d_t):
+                for k in range(n + 1):
+                    D1[n, k] = binom(n, k) * alpha0[n-k]
+                    D2[n, k] = binom(n, k) * k0**(n-k) * (-1)**k
+                    D3[n, k] = factorial(k) \
+                        * divided_diff(lambda x: x**n, np.arange(k + 1))
+            D_t = D1 @ D2 @ D3
+            rhs = np.empty((d_t, d + 3 * d_t - 3))
+            rhs[:, :d_t] = \
+                np.diag([2**(-r) for r in range(d_t)]) @ D_t[:, ::-1]
+            rhs[:, d_t:] = np.array(
+                [[beta(n-l1_t, r) for n in range(d + 2 * d_t - 3)]
+                 for r in range(d_t)])
+            ML_t[d-2-bc:, d-2-bc:] = np.linalg.solve(D_t, rhs)[::-1, :].T
+
+            # Compute block of ML_t corresponding to k = 0, ..., d-3
+
+            gramian_full = np.identity(mL)
+            for k in range(d - 3 - bc, -1, -1):
+                gramian_full[:nL, :nL] = compute_gramian()
+                B_k = ML[:, :k+d].T @ gramian_full[:, k+1:2*k+d+1] / 2.
+
+                delta = np.zeros(k + d)
+                delta[k] = 1
+                ML_t[k+1:2*k+d+1, k] = np.linalg.solve(B_k, delta)
+
+            # Biorthogonalize
+
+            gramian = np.triu(compute_gramian())
+            gramian[:d-2-bc, :d-2-bc] = np.identity(d - 2 - bc)
+            ML_t[:d+d_t-2-bc, :] = gramian @ ML_t[:d+d_t-2-bc, :]
+            ML_t = np.linalg.solve(gramian.T, ML_t.T).T
+
+        ML_t[np.abs(ML_t) < 1e-9] = 0.
+        return ML_t
+
+    def dual_A(self, j, d, d_t, a_t, bc):
+        n = a_t.size
+        if bc and d == 2:
+            A_t = np.zeros((2**(j+1) - 2 * d_t - 3,
+                            2**j - 2 * d_t - 1))
+        else:
+            A_t = np.zeros((2**(j+1) - d - 2 * d_t + 3,
+                            2**j - d - 2 * d_t + 3))
+        for k in range(A_t.shape[1]):
+            A_t[2*k:2*k+n, k] = a_t
+        return A_t
+
+    def dual_M0(self, j, d, d_t, a_t, ML_t, bc):
+        A_t = self.dual_A(j, d, d_t, a_t, bc)
+
+        M0_t = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
+        m, n = M0_t.shape
+        mL, nL = ML_t.shape
+        shift = (m - A_t.shape[0]) // 2
+        M0_t[:mL, :nL] = ML_t
+        M0_t[shift:m-shift, nL:n-nL] = A_t
+        M0_t[m-mL:, n-nL:] = ML_t[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M0_t
+
+    def primal_GL(self, d, d_t, a, a_t, ML, ML_t, bc):
+        if bc and d == 2:
+            j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
+        else:
+            j0 = ceil(np.log2(d + d_t - 2) + 1)
+
+        # initial completion
+        l1 = -floor((a.size - 1) / 2)
+        l2 = ceil((a.size - 1) / 2)
+        p = 2**j0 - d + 1
+        q = 2**(j0+1) - d + 1
+
+        mL, nL = ML.shape
+        P = np.identity(q + 2 * nL)
+        P[:mL, :nL] = ML
+        P[q+2*nL-mL:, q+nL:] = ML[::-1, ::-1]
+
+        ML_inv = np.linalg.inv(P[:mL, :mL])
+        P_inv = np.identity(q + 2 * nL)
+        P_inv[:mL, :mL] = ML_inv
+        P_inv[q+2*nL-mL:, q+2*nL-mL:] = ML_inv[::-1, ::-1]
+
+        A = self.primal_A(j0, d, a)
+        H_inv = np.identity(q)
+        for i in range(d):
+            if i % 2 == 0:
+                m = i // 2
+                v = A[m, 0] / A[m+1, 0]
+                H_i = np.identity(q)
+                H_i_inv = np.identity(q)
+                rows = np.arange(m % 2, q, 2)
+                cols = np.arange(m % 2 + 1, q, 2)
+                rows = rows[:cols.size]
+                H_i[rows, cols] = -v
+                H_i_inv[rows, cols] = v
+            else:
+                m = (i - 1) // 2
+                v = A[d-m, 0] / A[d-m-1, 0]
+                H_i = np.identity(q)
+                H_i_inv = np.identity(q)
+                rows = np.arange(q - m % 2, 0, -2) - 1
+                cols = np.arange(q - m % 2 - 1, 0, -2) - 1
+                rows = rows[:cols.size]
+                H_i[rows, cols] = -v
+                H_i_inv[rows, cols] = v
+            A = H_i @ A
+            H_inv = H_inv @ H_i_inv
+
+        b = A[l2, 0]
+        rows = np.arange(p) * 2 + l2 - 1
+        cols = np.arange(p)
+        F = np.zeros_like(A)
+        F[rows, cols] = 1
+
+        F_hat = np.zeros((q + 2 * nL, 2**j0))
+        F_hat[nL:l2-1+nL, :l2-1] = np.identity(l2 - 1)
+        F_hat[nL:q+nL, l2-1:p+l2-1] = F
+        F_hat[q+nL+l1:q+nL, 2**j0+l1:] = np.identity(-l1)
+
+        H_hat_inv = np.identity(q + 2 * nL)
+        H_hat_inv[nL:q+nL, nL:q+nL] = H_inv
+
+        M1 = (-1)**(d+1) * np.sqrt(2) / b * P @ H_hat_inv @ F_hat
+
+        # stable completion
+        M0 = self.primal_M0(j0, d, a, ML, bc)
+        M0_t = self.dual_M0(j0, d, d_t, a_t, ML_t, bc)
+        M1 = M1 - M0 @ M0_t.T @ M1
+
+        if bc and d == 2:
+            GL = np.sqrt(2) * M1[:2*d_t+1, :d_t//2]
+        else:
+            GL = np.sqrt(2) * M1[:2*(d+d_t-2)-bc, :(d+d_t-2)//2]
+
+        GL[np.abs(GL) < 1e-9] = 0.
+        return GL
+
+    def primal_B(self, j, d, d_t, a_t):
+        l1_t = -floor((a_t.size - 1) / 2)
+        l2_t = ceil((a_t.size - 1) / 2)
+        sgn = (-1)**np.abs(np.arange(1 - l2_t, 2 - l1_t))
+        b = sgn * np.flip(a_t)
+
+        B = np.zeros((2**(j+1) - d + 1, 2**j - d - d_t + 2))
+        for k in range(2**(j-1) - (d + d_t - 2) // 2):
+            B[2*k:2*k+d+2*d_t-1, k] = b
+        B += B[::-1, ::-1]
+        return B
+
+    def primal_M1(self, j, d, d_t, a_t, GL, bc):
+        B = self.primal_B(j, d, d_t, a_t)
+
+        M1 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j))
+        m, n = M1.shape
+        mL, nL = GL.shape
+        shift = (m - B.shape[0]) // 2
+        M1[:mL, :nL] = GL
+        M1[shift:m-shift, nL:n-nL] = B
+        M1[m-mL:, n-nL:] = GL[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M1
+
+    def transformation_matrix(self, J, d, d_t, a, a_t, ML, GL, bc,
+                              deriv_orders):
+        if bc and d == 2:
+            j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
+        else:
+            j0 = ceil(np.log2(d + d_t - 2) + 1)
+        self.j0.append(j0)
+
+        T = np.identity(2**J + d - 1 - 2 * bc)
+        for j in range(j0, J):
+            M0 = self.primal_M0(j, d, a, ML, bc)
+            M1 = self.primal_M1(j, d, d_t, a_t, GL, bc)
+            M = np.hstack((M0, M1))
+            n = M.shape[0]
+            T[:n, :n] = M @ T[:n, :n]
+
+        # normalization
+        G = np.zeros_like(T)
+        for nu in deriv_orders:
+            G += self.gramian_matrix(J, d, bc, nu)
+        G = T.T @ G @ T
+        D = np.diag(1 / np.sqrt(np.diag(G)))
+        T = T @ D
+
+        n = 2**j0 + d - 1 - 2 * bc
+        T_split = [T[:, :n]]
+        n_split = [n]
+        offset = n
+        for j in range(j0, J):
+            n = 2**j
+            T_split.append(T[:, offset:offset+n])
+            n_split.append(n)
+            offset += n
+        self.n_split.append(n_split)
+        return T_split
+
+    def gramian_matrix(self, j, d, bc, nu):
+        if nu == 0:
+            a = self.primal_refinement_coeffs(d)
+            a_corr = np.correlate(a, a, 'full')  # (2*d+1,) array
+
+            def entry(k, m):
+                shift = 2 * k - m
+                if abs(shift) > d:
+                    return 0
+                return a_corr[shift+d]
+            A = np.array([[entry(k, m) for m in range(-d + 1, d)]
+                          for k in range(-d + 1, d)])
+            w, v = np.linalg.eig(A)
+            idx = np.argmax(w)
+            assert np.isclose(w[idx], 2.)
+            g = v[:, idx]
+            g /= g.sum()  # integrals of phi(x)*phi(x-k)
+
+            G = np.zeros((2**j + d - 1, 2**j + d - 1))
+            for k in range(2**j - d + 1):
+                G[k+d-1, k:k+2*d-1] = g
+            if bc:
+                G = G[1:-1, 1:-1]
+
+            ML = self.primal_ML(d, bc)
+            M0 = self.primal_M0(j, d, a, ML, bc)
+            m = 2 * d - 2 - bc
+            n = m + 2 * d - 2
+            U = M0[:m, :m]
+            L = M0[m:n, :m]
+            lhs = np.identity(m**2) - np.kron(U.T, U.T)
+            rhs = (U.T @ G[:m, m:n] @ L
+                   + L.T @ G[m:n, :m] @ U
+                   + L.T @ G[m:n, m:n] @ L).reshape(-1, order='F')
+            GL = np.linalg.solve(lhs, rhs).reshape((m, m), order='F')
+            G[:m, :m] = GL
+            G[-m:, -m:] = GL[::-1, ::-1]
+            return G
+
+        d0 = d - nu
+        assert d0 >= 1
+
+        if d0 == 1:
+            G = np.identity(2**j)
+        else:
+            G = self.gramian_matrix(j, d0, False, 0)
+
+        for d in range(d0 + 1, d0 + nu + 1):
+            for i in range(d - 2):
+                c = (d - 1) / (i + 1)
+                G[i, :] *= c
+                G[:, i] *= c
+                G[-i-1, :] *= c
+                G[:, -i-1] *= c
+            n = G.shape[0]
+            Gd = np.zeros((n + 1, n + 1))
+            Gd[:-1, :-1] += G
+            Gd[:-1, 1:] -= G
+            Gd[1:, :-1] -= G
+            Gd[1:, 1:] += G
+            G = 2**(2*j) * Gd
+        if bc:
+            G = G[1:-1, 1:-1]
+        return G
+
+    def construct_1d_interpolation_matrices(self, V):
+        interp_1d = []
+
+        # this code is correct but can be made more beautiful
+        # by replacing x_fct with self.id
+        x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
+        # compute self.M, x_int will be overwritten below
+        x_int = fd.interpolate(x_fct[0], V.sub(0))
+        self.M = x_int.vector().size()
+
+        comm = self.comm
+
+        u, v = fd.TrialFunction(V.sub(0)), fd.TestFunction(V.sub(0))
+        mass_temp = fd.assemble(u * v * fd.dx)
+        self.lg_map_fe = mass_temp.petscmat.getLGMap()[0]
+
+        for dim in range(self.dim):
+            order = self.orders[dim]
+            level = self.levels[dim]
+            T = self.mat[dim]
+            bc = self.boundary_regularities[dim]
+            knots = self.knots[dim]
+            m = 2**level + order - 1
+
+            interp_sub = []
+            for T_sub in T:
+                n = T_sub.shape[1]
+
+                # owned part of global problem
+                local_n = n // comm.size + int(comm.rank < (n % comm.size))
+                I = PETSc.Mat().create(comm=self.comm)
+                I.setType(PETSc.Mat.Type.AIJ)
+                lsize = x_int.vector().local_size()
+                gsize = x_int.vector().size()
+                I.setSizes(((lsize, gsize), (local_n, n)))
+
+                I.setUp()
+                x_int = fd.interpolate(x_fct[dim], V.sub(0))
+                x = x_int.vector().get_local()
+                for idx in range(n):
+                    coeffs = np.zeros(m, dtype=float)
+
+                    # impose boundary regularity
+                    coeffs[bc:m-bc] = T_sub[:, idx]
+                    degree = order - 1  # splev uses degree, not order
+                    tck = (knots, coeffs, degree)
+
+                    values = splev(x, tck, der=0, ext=1)
+                    rows = np.where(values != 0)[0].astype(np.int32)
+                    values = values[rows]
+                    rows_is = PETSc.IS().createGeneral(rows)
+                    global_rows_is = self.lg_map_fe.applyIS(rows_is)
+                    rows = global_rows_is.array
+                    I.setValues(rows, [idx], values)
+
+                I.assemble()  # lazy strategy for kron
+                interp_sub.append(I)
+            interp_1d.append(interp_sub)
+
+        # from IPython import embed; embed()
+        return interp_1d
+
+    def construct_kronecker_matrix(self, interp_1d):
+        IFW = PETSc.Mat().create(self.comm)
+        IFW.setType(PETSc.Mat.Type.AIJ)
+
+        comm = self.comm
+        # owned part of global problem
+        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size))
+        (lsize, gsize) = interp_1d[0][0].getSizes()[0]
+        IFW.setSizes(((lsize, gsize), (local_N, self.N)))
+
+        # guess sparsity pattern
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
+            nnz_ = 1
+            for interp_sub in interp_1d:
+                nnz_ *= len(interp_sub[-1].getRow(row)[0]) * len(interp_sub)
+            self.IFWnnz = max(self.IFWnnz, nnz_)
+        IFW.setPreallocationNNZ(self.IFWnnz)
+        IFW.setUp()
+
+        interp_1d = list(product(*interp_1d))
+        for row in range(lsize):
+            offset = 0
+            row = self.lg_map_fe.apply([row])[0]
+            for blocks in interp_1d:
+                M = [[A.getRow(row)[0],
+                      A.getRow(row)[1], A.getSize()[1]] for A in blocks]
+                M = reduce(self.vectorkron, M)
+                columns, values, length = M
+                if len(columns):
+                    columns += offset
+                IFW.setValues([row], columns, values)
+                offset += length
+
+        IFW.assemble()
+        return IFW
+
+    def visualize_control(self, q, filename="control"):
+        if self.dim != 2:
+            raise ValueError("Only 2D visualization is supported.")
+
+        supp_1d = []
+        nx_1d = []
+        for dim in range(self.dim):
+            d = self.orders[dim]
+            d_t = self.dual_orders[dim]
+            j0 = self.j0[dim]
+            J = self.levels[dim]
+            bc = self.boundary_regularities[dim]
+            n = self.n_split[dim]
+            m = (d + d_t - 2) // 2  # number of boundary wavelets
+            supp_split = []
+            nx = []
+
+            supp = []
+            for k in range(n[0]):
+                supp.append((max(k+bc-d+1, 0),
+                             min(k+bc+1, 2**j0)))
+            supp_split.append(supp)
+            nx.append(2**j0)
+
+            for j in range(j0, J):
+                supp = []
+                if bc and d == 2:
+                    for k in range(d_t // 2):
+                        supp.append((0, d_t + 1))
+                    for k in range(d_t // 2, 2**j - d_t // 2):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - d_t // 2, 2**j):
+                        supp.append((2**j - (d_t + 1), 2**j))
+                else:
+                    for k in range(m):
+                        supp.append((0, d + d_t - 2))
+                    for k in range(m, 2**j - m):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - m, 2**j):
+                        supp.append((2**j - (d + d_t - 2), 2**j))
+                supp_split.append(supp)
+                nx.append(2**j)
+            supp_1d.append(supp_split)
+            nx_1d.append(nx)
+
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+        fig_rows, fig_cols = len(supp_1d[1]), len(supp_1d[0])
+        figs = []
+        axs = []
+        ims = []
+        for _ in self.free_dims:
+            fig, ax = plt.subplots(fig_rows, fig_cols)
+            figs.append(fig)
+            axs.append(ax)
+            ims.append(None)
+
+        v_sq = q.vec_ro().array**2
+        extent = [self.bbox[0][0], self.bbox[0][1],
+                  self.bbox[1][0], self.bbox[1][1]]
+        k = 0
+        for j in range(fig_cols):
+            supp_x = supp_1d[0][j]
+            for i in range(fig_rows):
+                supp_y = supp_1d[1][i]
+                data = [np.zeros((nx_1d[1][i], nx_1d[0][j]))
+                        for _ in self.free_dims]
+
+                for xmin, xmax in supp_x:
+                    for ymin, ymax in supp_y:
+                        for d in range(self.dfree):
+                            data[d][ymin:ymax, xmin:xmax] += v_sq[k]
+                            k += 1
+
+                for d in range(self.dfree):
+                    ax = axs[d][i, j]
+                    data_ = np.sqrt(data[d][::-1, :])
+                    data_[data_ < 1e-12] = 1e-12
+                    ims[d] = ax.imshow(data_, extent=extent, cmap="binary",
+                                       norm=colors.LogNorm(vmin=1e-3, vmax=1))
+                    ax.add_patch(plt.Circle((-2, 0), 0.5, color='k', lw=0.5,
+                                            fill=False))
+                    if i == 0:
+                        j0 = self.j0[0]
+                        ax.xaxis.set_label_position('top')
+                        if j == 0:
+                            ax.set_xlabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_xlabel(rf"$W_{j0+j-1}$")
+                    if j == 0:
+                        j0 = self.j0[1]
+                        if i == 0:
+                            ax.set_ylabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_ylabel(rf"$W_{j0+i-1}$")
+
+        for d in range(self.dfree):
+            fig = figs[d]
+            ax = axs[d]
+            im = ims[d]
+            plt.setp(ax, xticks=[], yticks=[])
+            fig.colorbar(im, ax=ax)
+            fig.savefig(filename + str(self.free_dims[d]) + ".png", dpi=150,
+                        bbox_inches="tight")
+
+    def thresholding(self, q):
+        v_sq = q.vec_ro().array**2
+
+        mask = np.full_like(v_sq, False, dtype=bool)
+        c = v_sq.sum() * (1 - self.tol**2)
+        ind_sorted = np.argsort(-v_sq)
+        sum = 0.
+        for i in range(v_sq.size):
+            ii = ind_sorted[i]
+            sum += v_sq[ii]
+            mask[ii] = True
+            if sum > c:
+                break
+        n_sf = reduce(lambda x, y: x * y,
+                      [n_split[0] for n_split in self.n_split]) * self.dfree
+        mask[:n_sf] = True  # keep all scaling functions
+        indices = np.where(~mask)[0].astype(np.int32)
+        q.vec_wo().setValues(indices, np.zeros_like(indices))
+        q.vec_wo().assemble()
+        # print("Filtered {:.2%} entries".format(indices.size / v_sq.size))
+
+
 class ControlVector(ROL.Vector):
     """
     A ControlVector is a variable in the ControlSpace.
@@ -706,7 +1423,11 @@ class ControlVector(ROL.Vector):
         Maps this vector into the dual space.
         Overwrites the content.
         """
-        self.inner_product.riesz_map(self, self)
+        if self.inner_product:
+            self.inner_product.riesz_map(self, self)
+        if isinstance(self.controlspace, WaveletControlSpace) and \
+           self.controlspace.tol:
+            self.controlspace.thresholding(self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
@@ -743,7 +1464,10 @@ class ControlVector(ROL.Vector):
 
     def dot(self, v):
         """Inner product between self and v."""
-        return self.inner_product.eval(self, v)
+        if self.inner_product:
+            return self.inner_product.eval(self, v)
+        else:
+            return self.vec_ro().dot(v.vec_ro())
 
     def norm(self):
         return self.dot(self)**0.5
