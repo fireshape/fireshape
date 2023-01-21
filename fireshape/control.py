@@ -663,7 +663,8 @@ class WaveletControlSpace(BsplineControlSpace):
     """ControlSpace based on cartesian tensorized B-spline wavelets."""
 
     def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
-                 homogeneous_bc=None, deriv_orders=[0, 1], norm_equiv=False):
+                 homogeneous_bc=None, deriv_orders=[0, 1], norm_equiv=False,
+                 tol=None):
         homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
             else homogeneous_bc
         self.dual_orders = dual_orders
@@ -686,7 +687,6 @@ class WaveletControlSpace(BsplineControlSpace):
                                            deriv_orders)
             self.mat.append(T)
 
-        self.norm_equiv = norm_equiv
         if norm_equiv:
             self.boundary_regularities = homogeneous_bc
             self.dim = len(bbox)  # geometric dimension
@@ -718,6 +718,10 @@ class WaveletControlSpace(BsplineControlSpace):
         else:
             super().__init__(mesh, bbox, orders, levels, fixed_dims,
                              homogeneous_bc)
+
+        self.free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
+        self.dfree = len(self.free_dims)
+        self.tol = tol
 
     def primal_refinement_coeffs(self, d):
         l1 = -floor(d / 2)
@@ -777,8 +781,8 @@ class WaveletControlSpace(BsplineControlSpace):
             res = 0
             for n in range(K):
                 for i in range(2 * n + 1):
-                    res += 2**(1 - d_t - 2 * n) * (-1)**(n + i)\
-                           * binom(d_t, k + floor(d_t / 2) - i + n)\
+                    res += 2**(1 - d_t - 2 * n) * (-1)**(n + i) \
+                           * binom(d_t, k + floor(d_t / 2) - i + n) \
                            * binom(K - 1 + n, n) * binom(2 * n, i)
             return res
         a_t = np.array([entry(k) for k in range(l1_t, l2_t + 1)])
@@ -879,7 +883,7 @@ class WaveletControlSpace(BsplineControlSpace):
                 for k in range(n + 1):
                     D1[n, k] = binom(n, k) * alpha0[n-k]
                     D2[n, k] = binom(n, k) * k0**(n-k) * (-1)**k
-                    D3[n, k] = factorial(k)\
+                    D3[n, k] = factorial(k) \
                         * divided_diff(lambda x: x**n, np.arange(k + 1))
             D_t = D1 @ D2 @ D3
             rhs = np.empty((d_t, d + 3 * d_t - 3))
@@ -1285,22 +1289,19 @@ class WaveletControlSpace(BsplineControlSpace):
             supp_1d.append(supp_split)
             nx_1d.append(nx)
 
-        v = q.vec_ro().array**2
-        free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
-        dfree = len(free_dims)
-
         import matplotlib.pyplot as plt
         import matplotlib.colors as colors
         fig_rows, fig_cols = len(supp_1d[1]), len(supp_1d[0])
         figs = []
         axs = []
         ims = []
-        for _ in free_dims:
+        for _ in self.free_dims:
             fig, ax = plt.subplots(fig_rows, fig_cols)
             figs.append(fig)
             axs.append(ax)
             ims.append(None)
 
+        v_sq = q.vec_ro().array**2
         extent = [self.bbox[0][0], self.bbox[0][1],
                   self.bbox[1][0], self.bbox[1][1]]
         k = 0
@@ -1309,22 +1310,22 @@ class WaveletControlSpace(BsplineControlSpace):
             for i in range(fig_rows):
                 supp_y = supp_1d[1][i]
                 data = [np.zeros((nx_1d[1][i], nx_1d[0][j]))
-                        for _ in free_dims]
+                        for _ in self.free_dims]
 
                 for xmin, xmax in supp_x:
                     for ymin, ymax in supp_y:
-                        for d in range(dfree):
-                            data[d][ymin:ymax, xmin:xmax] += v[k]
+                        for d in range(self.dfree):
+                            data[d][ymin:ymax, xmin:xmax] += v_sq[k]
                             k += 1
 
-                for d in range(dfree):
+                for d in range(self.dfree):
                     ax = axs[d][i, j]
                     data_ = np.sqrt(data[d][::-1, :])
                     data_[data_ < 1e-12] = 1e-12
-                    ims[d] = ax.imshow(data_, extent=extent, cmap="gray",
+                    ims[d] = ax.imshow(data_, extent=extent, cmap="binary",
                                        norm=colors.LogNorm(vmin=1e-3, vmax=1))
-                    # ax.add_patch(plt.Circle((-2, 0), 0.5, color='w', lw=0.5,
-                    #                         fill=False))
+                    ax.add_patch(plt.Circle((-2, 0), 0.5, color='k', lw=0.5,
+                                            fill=False))
                     if i == 0:
                         j0 = self.j0[0]
                         ax.xaxis.set_label_position('top')
@@ -1339,14 +1340,35 @@ class WaveletControlSpace(BsplineControlSpace):
                         else:
                             ax.set_ylabel(rf"$W_{j0+i-1}$")
 
-        for d in range(dfree):
+        for d in range(self.dfree):
             fig = figs[d]
             ax = axs[d]
             im = ims[d]
             plt.setp(ax, xticks=[], yticks=[])
             fig.colorbar(im, ax=ax)
-            fig.savefig(filename + str(free_dims[d]) + ".png", dpi=150,
+            fig.savefig(filename + str(self.free_dims[d]) + ".png", dpi=150,
                         bbox_inches="tight")
+
+    def thresholding(self, q):
+        v_sq = q.vec_ro().array**2
+
+        mask = np.full_like(v_sq, False, dtype=bool)
+        c = v_sq.sum() * (1 - self.tol**2)
+        ind_sorted = np.argsort(-v_sq)
+        sum = 0.
+        for i in range(v_sq.size):
+            ii = ind_sorted[i]
+            sum += v_sq[ii]
+            mask[ii] = True
+            if sum > c:
+                break
+        n_sf = reduce(lambda x, y: x * y,
+                      [n_split[0] for n_split in self.n_split]) * self.dfree
+        mask[:n_sf] = True  # keep all scaling functions
+        indices = np.where(~mask)[0].astype(np.int32)
+        q.vec_wo().setValues(indices, np.zeros_like(indices))
+        q.vec_wo().assemble()
+        # print("Filtered {:.2%} entries".format(indices.size / v_sq.size))
 
 
 class ControlVector(ROL.Vector):
@@ -1403,6 +1425,9 @@ class ControlVector(ROL.Vector):
         """
         if self.inner_product:
             self.inner_product.riesz_map(self, self)
+        if isinstance(self.controlspace, WaveletControlSpace) and \
+           self.controlspace.tol:
+            self.controlspace.thresholding(self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):

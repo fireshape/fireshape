@@ -13,8 +13,8 @@ dual_orders = [3, 3]
 levels = [6, 6]
 norm_equiv = True
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
-                           norm_equiv=norm_equiv)
-inner = fs.H1InnerProduct(Q) if not norm_equiv else None
+                           norm_equiv=norm_equiv, tol=1e-1)
+inner = None if norm_equiv else fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # Setup PDE constraint
@@ -33,8 +33,13 @@ J = fs.ReducedObjective(J_, e)
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
-c = 1 / g.norm()
-J = c * J  # normalize gradient in first optimization step
+
+if norm_equiv:
+    c = 1 / g.norm()
+    J = c * J  # normalize gradient in first optimization step
+else:
+    from math import sqrt
+    c = 1 / sqrt(g.vec_ro().dot(g.vec_ro()))
 
 g.scale(c)
 Q.visualize_control(g)
