@@ -148,6 +148,7 @@ class FeControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.is_DG = False
         self.alternative_control_element = alternative_control_element
+        self.use_interpolator = False
 
         """
         ControlSpace for discontinuous coordinate fields
@@ -166,8 +167,8 @@ class FeControlSpace(ControlSpace):
                                       self.V_r).callable().handle
         
         if alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5, dim = 2)
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5)
+            self.Ip = fd.Projector(fd.TestFunction(self.V_c), self.V_r).project
 
         if alternative_control_element == "CG5": # For comparison with Argyris to demonstrate issue
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree = 5, dim = 2)
@@ -176,9 +177,11 @@ class FeControlSpace(ControlSpace):
         if alternative_control_element == "DG5": # For comparison with Argyris to demonstrate issue
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "DG", degree = 5, dim = 2)
             self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
+        
+        self.use_interpolator = self.is_DG or (alternative_control_element is not None)
 
     def restrict(self, residual, out):
-        if self.is_DG:
+        if self.use_interpolator:
             with residual.dat.vec as w:
                 self.Ip.multTranspose(w, out.vec_wo())
         else:
@@ -187,14 +190,14 @@ class FeControlSpace(ControlSpace):
                     vecres.copy(vecout)
 
     def interpolate(self, vector, out):
-        if self.is_DG:
+        if self.use_interpolator:
             with out.dat.vec as w:
                 self.Ip.mult(vector.vec_ro(), w)
         else:
             out.assign(vector.fun)
 
     def get_zero_vec(self):
-        if self.is_DG:
+        if self.use_interpolator:
             fun = fd.Function(self.V_c)
         else:
             fun = fd.Function(self.V_r)
