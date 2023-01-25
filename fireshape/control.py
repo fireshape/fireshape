@@ -161,14 +161,20 @@ class FeControlSpace(ControlSpace):
         """
         if element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r,
-                                              "CG", element._degree)
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
-                                      self.V_r).callable().handle
-        
-        if alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5)
-            self.Ip = fd.Projector(fd.TestFunction(self.V_c), self.V_r).project
+        self.use_interpolator = self.is_DG or (alternative_control_element is not None)
+        if self.use_interpolator:
+            if self.is_DG:
+                self.V_c = fd.VectorFunctionSpace(self.mesh_r,
+                                                "CG", element._degree)
+                self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
+                                        self.V_r).callable().handle
+            
+            elif alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
+                self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5)
+                self.Ip = fd.Interpolator(fd.TestFunction(self.V_c), self.V_r).callable().handle
+
+            else:
+                raise NotImplementedError("Provided alternative control element is not supported.")
 
         if alternative_control_element == "CG5": # For comparison with Argyris to demonstrate issue
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree = 5, dim = 2)
@@ -178,7 +184,7 @@ class FeControlSpace(ControlSpace):
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "DG", degree = 5, dim = 2)
             self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
         
-        self.use_interpolator = self.is_DG or (alternative_control_element is not None)
+        
 
     def restrict(self, residual, out):
         if self.use_interpolator:
