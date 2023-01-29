@@ -211,7 +211,7 @@ class FeControlSpace(ControlSpace):
         return fun
 
     def get_space_for_inner(self):
-        if self.is_DG:
+        if self.use_interpolator:
             return (self.V_c, None)
         return (self.V_r, None)
 
