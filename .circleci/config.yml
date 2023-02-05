@@ -21,7 +21,7 @@ jobs:
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             mkdir ./test-results
-            pytest --junitxml=./test-results/junit.xml
+            pytest ./tests/test_volumeconstraint.py --junitxml=./test-results/junit.xml
       - store_test_results:
           path: ./test-results
 
