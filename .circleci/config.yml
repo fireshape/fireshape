@@ -8,8 +8,23 @@ jobs:
 
     steps:
       - checkout
-      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; mkdir test-results; pytest --junitxml=test-results/junit.xml
+      - run:
+          name: run lint
+          command: |
+            . /home/firedrake/firedrake/bin/activate
+            export PYTHONPATH=$(pwd):$PYTHONPATH
+            make lint
+      - run:
+          name: run tests
+          command: |
+            . /home/firedrake/firedrake/bin/activate
+            export PYTHONPATH=$(pwd):$PYTHONPATH
+            mkdir test-results
+            pytest ./tests/test_L2tracking.py --junitxml=/home/test-results/junit.xml
       - store_test_results:
-          path: test-results
-      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; make examples
-      - run: . /home/firedrake/firedrake/bin/activate; export PYTHONPATH=$(pwd):$PYTHONPATH; make lint
+          path: /home/test-results
+      - run:
+          name: run examples
+            . /home/firedrake/firedrake/bin/activate
+            export PYTHONPATH=$(pwd):$PYTHONPATH
+            make examples
