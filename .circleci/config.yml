@@ -19,10 +19,10 @@ jobs:
           command: |
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
-            mkdir /home/circleci/dep/test-results
-            pytest ./tests/test_L2tracking.py --junitxml=/home/circleci/dep/test-results/junit.xml
+            mkdir /home/test-results
+            pytest ./tests/test_L2tracking.py --junitxml=/home/test-results/junit.xml
       - store_test_results:
-          path: /home/circleci/dep/test-results
+          path: /home/test-results
 
       - run:
           name: run examples
