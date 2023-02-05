@@ -23,8 +23,10 @@ jobs:
             pytest ./tests/test_L2tracking.py --junitxml=/home/test-results/junit.xml
       - store_test_results:
           path: /home/test-results
+
       - run:
           name: run examples
+          command: |
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             make examples
