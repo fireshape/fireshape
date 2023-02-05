@@ -6,6 +6,7 @@ jobs:
 
     working_directory: ~/repo
 
+    parallelism: 10
     steps:
       - checkout
       - run:
@@ -21,7 +22,8 @@ jobs:
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             mkdir ./test-results
-            pytest --junitxml=./test-results/junit.xml
+            pip install pytest-circleci-parallelized
+            pytest --circleci-parallelize --junitxml=./test-results/junit.xml
       - store_test_results:
           path: ./test-results
 
