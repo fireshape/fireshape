@@ -14,13 +14,14 @@ jobs:
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             make lint
+
       - run:
           name: run tests
           command: |
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             mkdir ./test-results
-            pytest ./tests/test_L2tracking.py --junitxml=./test-results/junit.xml
+            pytest --junitxml=./test-results/junit.xml
       - store_test_results:
           path: ./test-results
 
