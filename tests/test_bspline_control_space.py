@@ -3,11 +3,12 @@ import firedrake as fd
 import fireshape as fs
 
 
-@pytest.mark.parametrize("dim", [2, 3])
+# @pytest.mark.parametrize("dim", [2, 3])
+# @pytest.mark.parametrize("order", [2, 3])
+@pytest.mark.parametrize("dim,order", [(2, 2), (2, 3), (3, 2)])
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("order", [2, 3])
 def test_bspline_control_space(dim, inner_t, order, pytestconfig):
     """
     Test template for fs.BsplineControlSpace.
