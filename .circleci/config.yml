@@ -3,10 +3,7 @@ jobs:
   build:
     docker:
       - image: fireshape/firedrake4tests:latest
-
     working_directory: ~/repo
-
-    parallelism: 10
     steps:
       - checkout
       - run:
@@ -15,7 +12,22 @@ jobs:
             . /home/firedrake/firedrake/bin/activate
             export PYTHONPATH=$(pwd):$PYTHONPATH
             make lint
+      - run:
+          name: run examples
+          command: |
+            . /home/firedrake/firedrake/bin/activate
+            export PYTHONPATH=$(pwd):$PYTHONPATH
+            make examples
 
+  test:
+    docker:
+      - image: fireshape/firedrake4tests:latest
+
+    working_directory: ~/repo
+
+    parallelism: 10
+    steps:
+      - checkout
       - run:
           name: run tests
           command: |
@@ -27,9 +39,11 @@ jobs:
       - store_test_results:
           path: ./test-results
 
-      - run:
-          name: run examples
-          command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
-            make examples
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
