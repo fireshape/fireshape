@@ -22,7 +22,7 @@ def test_bspline_control_space(dim, inner_t, order, pytestconfig):
         orders = [order] * 2
         levels = [4, 4]
     elif dim == 3:
-        mesh = fd.UnitBallMesh()
+        mesh = fd.utility_meshes.UnitBallMesh()
         bbox = [(-3, 3), (-3, 3), (-3, 3)]
         orders = [order] * 3
         levels = [2, 2, 2]
