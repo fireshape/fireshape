@@ -1,4 +1,4 @@
-FROM fireshapeproject/firedrake:latest
+FROM firedrakeproject/firedrake:latest
 # build on fully fledged firedrake
 
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
