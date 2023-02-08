@@ -8,7 +8,7 @@ on:
   pull_request:
   # build every week to stay up-to-date with firedrake
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: '0 0 * * 1'
 
 concurrency:
   # Cancels jobs running if new commits are pushed
@@ -22,6 +22,7 @@ jobs:
   docker_firedrake4tests:
     name: "Build firedrake4tests Docker container"
     # The type of runner that tests will run on
+    if: ${{ github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -45,6 +46,7 @@ jobs:
   docker_fireshape:
     name: "Build fireshape Docker container"
     # The type of runner that tests will run on
+    if: ${{ github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
