@@ -45,5 +45,5 @@ For developers:
     cd fireshape
     pip install -e .
 
-## Installation
+## Docker images
 Fireshape is also available as a [docker image](https://hub.docker.com/r/fireshape/fireshape).
