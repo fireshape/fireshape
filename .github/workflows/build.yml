@@ -16,8 +16,8 @@ jobs:
 
   #build: #eventually add job here if we want to also test installation
 
-  docker_fireshape4tests:
-    name: "Build fireshape4tests Docker container"
+  docker_firedrake4tests:
+    name: "Build firedrake4tests Docker container"
     # The type of runner that tests will run on
     runs-on: ubuntu-latest
     steps:
@@ -36,8 +36,8 @@ jobs:
         with:
           push: true
           no-cache: true
-          file: docker/Dockerfile.fireshape4tests
-          tags: firedrakeproject/fireshape4tests:latest
+          file: docker/Dockerfile.firedrake4tests
+          tags: firedrakeproject/firedrake4tests:latest
 
   docker_fireshape:
     name: "Build fireshape Docker container"
