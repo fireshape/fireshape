@@ -8,7 +8,8 @@
 ## Documentation
 The documentation is available [here](https://fireshape.readthedocs.io/en/latest/index.html#).
 
-We have recently written a manuscript about Fireshape. It is available [here](https://arxiv.org/abs/2005.07264).
+We have also published an Open Access paper about Fireshape. It is available
+[here](https://doi.org/10.1007/s00158-020-02813-y).
 
 ## Requirements
 
