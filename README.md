@@ -1,5 +1,10 @@
 # Fireshape - Shape Optimization with Firedrake
 
+
+[![CircleCI](https://circleci.com/gh/fireshape/fireshape.svg?style=shield)](https://circleci.com/gh/fireshape/fireshape)
+[![Actions Docker images](https://github.com/fireshape/fireshape/actions/workflows/build.yml/badge.svg)](https://github.com/fireshape/fireshape/actions/workflows/build.yml)
+[![Read the Docs](https://readthedocs.org/projects/fireshape/badge/?version=latest)](https://fireshape.readthedocs.io/en/latest/)
+
 ## Documentation
 The documentation is available [here](https://fireshape.readthedocs.io/en/latest/index.html#).
 
