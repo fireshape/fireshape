@@ -1,0 +1,9 @@
+FROM fireshapeproject/fireshape4tests:latest
+
+MAINTAINER Alberto Paganini <admp1@le.ac.uk>
+
+USER root
+
+# Now install fireshape
+USER firedrake
+RUN . /home/firedrake/firedrake/bin/activate; pip install git+https://github.com/fireshape/fireshape.git
