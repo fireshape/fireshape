@@ -37,7 +37,7 @@ jobs:
           push: true
           no-cache: true
           file: docker/Dockerfile.firedrake4tests
-          tags: firedrakeproject/firedrake4tests:latest
+          tags: fireshape/firedrake4tests:latest
 
   docker_fireshape:
     name: "Build fireshape Docker container"
@@ -60,4 +60,4 @@ jobs:
           push: true
           no-cache: true
           file: docker/Dockerfile.fireshape
-          tags: firedrakeproject/fireshape:latest
+          tags: fireshape/fireshape:latest
