@@ -1,5 +1,5 @@
 FROM firedrakeproject/firedrake-vanilla:latest
-#FROM firedrakeproject/firedrake:latest
+# keep as light as possible for CircleCI
 
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 
@@ -9,6 +9,7 @@ RUN apt-get update \
     && apt-get -y install gmsh patchelf \
     && rm -rf /var/lib/apt/lists/*
 
+# Now install fireshape
 USER firedrake
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install wheel --upgrade
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install scipy

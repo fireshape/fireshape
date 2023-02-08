@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
 
-  #build: #eventually add here if we want to also test installation
+  #build: #eventually add job here if we want to also test installation
 
   docker_fireshape4tests:
     name: "Build fireshape4tests Docker container"
@@ -42,7 +42,6 @@ jobs:
   docker_fireshape:
     name: "Build fireshape Docker container"
     # The type of runner that tests will run on
-    needs: docker_fireshape4tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
