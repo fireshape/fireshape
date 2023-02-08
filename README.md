@@ -35,12 +35,15 @@ Then install the _Rapid Optimization Library_ along with `roltrilinos`.
 
 Now you are ready to install fireshape.
 
-For users: 
+For users:
 
     pip3 install git+https://github.com/fireshape/fireshape.git
 
 For developers:
-    
+
     git clone git@github.com:fireshape/fireshape.git
     cd fireshape
     pip install -e .
+
+## Installation
+Fireshape is also available as a [docker image](https://hub.docker.com/r/fireshape/fireshape).
