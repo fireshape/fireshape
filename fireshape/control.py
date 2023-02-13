@@ -163,28 +163,22 @@ class FeControlSpace(ControlSpace):
             self.is_DG = True
         self.use_interpolator = self.is_DG or (alternative_control_element is not None)
         if self.use_interpolator:
-            if self.is_DG:
-                self.V_c = fd.VectorFunctionSpace(self.mesh_r,
-                                                "CG", element._degree)
-                self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
-                                        self.V_r).callable().handle
-            
-            elif alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
+            if alternative_control_element == "Argyris": # Argyris element, not working due to unimplemented dual
                 self.V_c = fd.VectorFunctionSpace(self.mesh_r, "Argyris", degree = 5)
-                self.Ip = fd.Interpolator(fd.TestFunction(self.V_c), self.V_r).callable().handle
+
+            elif alternative_control_element == "CG5": # For comparison with Argyris to demonstrate issue
+                self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree = 5, dim = 2)
+            
+            elif alternative_control_element == "DG5": # For comparison with Argyris to demonstrate issue
+                self.V_c = fd.VectorFunctionSpace(self.mesh_r, "DG", degree = 5, dim = 2)
+
+            elif alternative_control_element is None and self.is_DG:
+                self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", element._degree)
 
             else:
                 raise NotImplementedError("Provided alternative control element is not supported.")
-
-        if alternative_control_element == "CG5": # For comparison with Argyris to demonstrate issue
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree = 5, dim = 2)
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
-
-        if alternative_control_element == "DG5": # For comparison with Argyris to demonstrate issue
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "DG", degree = 5, dim = 2)
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle
-        
-        
+            
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle # create interpolator
 
     def restrict(self, residual, out):
         if self.use_interpolator:
