@@ -666,8 +666,7 @@ class WaveletControlSpace(BsplineControlSpace):
     """ControlSpace based on cartesian tensorized B-spline wavelets."""
 
     def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
-                 homogeneous_bc=None, deriv_orders=[0, 1], norm_equiv=False,
-                 tol=None):
+                 homogeneous_bc=None, tol=None):
         homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
             else homogeneous_bc
         self.dual_orders = dual_orders
@@ -686,41 +685,11 @@ class WaveletControlSpace(BsplineControlSpace):
             ML = self.primal_ML(d, bc)
             ML_t = self.dual_ML(d, d_t, a, a_t, ML, bc)
             GL = self.primal_GL(d, d_t, a, a_t, ML, ML_t, bc)
-            T = self.transformation_matrix(J, d, d_t, a, a_t, ML, GL, bc,
-                                           deriv_orders)
+            T = self.transformation_matrix(J, d, d_t, a, a_t, ML, GL, bc)
             self.mat.append(T)
 
-        if norm_equiv:
-            self.boundary_regularities = homogeneous_bc
-            self.dim = len(bbox)  # geometric dimension
-            self.bbox = bbox
-            self.orders = orders
-            self.levels = levels
-            if isinstance(fixed_dims, int):
-                fixed_dims = [fixed_dims]
-            self.fixed_dims = fixed_dims
-            self.construct_knots()
-            self.comm = mesh.mpi_comm()
-            maxdegree = max(self.orders) - 1
-
-            # standard construction of ControlSpace
-            self.mesh_r = mesh
-            element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
-            self.V_r = fd.FunctionSpace(self.mesh_r, element)
-            X = fd.SpatialCoordinate(self.mesh_r)
-            self.id = fd.Function(self.V_r).interpolate(X)
-            self.T = fd.Function(self.V_r, name="T")
-            self.T.assign(self.id)
-            self.mesh_m = fd.Mesh(self.T)
-            self.V_m = fd.FunctionSpace(self.mesh_m, element)
-
-            assert self.dim == self.mesh_r.geometric_dimension()
-
-            # assemble correct interpolation matrix
-            self.FullIFW = self.build_interpolation_matrix(self.V_r)
-        else:
-            super().__init__(mesh, bbox, orders, levels, fixed_dims,
-                             homogeneous_bc)
+        super().__init__(mesh, bbox, orders, levels, fixed_dims,
+                         homogeneous_bc)
 
         self.free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
         self.dfree = len(self.free_dims)
@@ -1045,8 +1014,7 @@ class WaveletControlSpace(BsplineControlSpace):
 
         return 1 / np.sqrt(2) * M1
 
-    def transformation_matrix(self, J, d, d_t, a, a_t, ML, GL, bc,
-                              deriv_orders):
+    def transformation_matrix(self, J, d, d_t, a, a_t, ML, GL, bc):
         if bc and d == 2:
             j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
         else:
@@ -1060,14 +1028,6 @@ class WaveletControlSpace(BsplineControlSpace):
             M = np.hstack((M0, M1))
             n = M.shape[0]
             T[:n, :n] = M @ T[:n, :n]
-
-        # normalization
-        G = np.zeros_like(T)
-        for nu in deriv_orders:
-            G += self.gramian_matrix(J, d, bc, nu)
-        G = T.T @ G @ T
-        D = np.diag(1 / np.sqrt(np.diag(G)))
-        T = T @ D
 
         n = 2**j0 + d - 1 - 2 * bc
         T_split = [T[:, :n]]
@@ -1245,6 +1205,16 @@ class WaveletControlSpace(BsplineControlSpace):
         IFW.assemble()
         return IFW
 
+    def assign_inner_product(self, inner_product):
+        # normalize basis functions
+        A = inner_product.A
+        D = A.getDiagonal()
+        D.sqrtabs()
+        D = 1 / D
+        self.I_control.diagonalScale(R=D)
+        self.FullIFW.diagonalScale(R=D)
+        A.diagonalScale(L=D, R=D)
+
     def visualize_control(self, q, filename="control"):
         if self.dim != 2:
             raise ValueError("Only 2D visualization is supported.")
@@ -1327,8 +1297,6 @@ class WaveletControlSpace(BsplineControlSpace):
                     data_[data_ < 1e-12] = 1e-12
                     ims[d] = ax.imshow(data_, extent=extent, cmap="binary",
                                        norm=colors.LogNorm(vmin=1e-3, vmax=1))
-                    ax.add_patch(plt.Circle((-2, 0), 0.5, color='k', lw=0.5,
-                                            fill=False))
                     if i == 0:
                         j0 = self.j0[0]
                         ax.xaxis.set_label_position('top')
@@ -1353,6 +1321,7 @@ class WaveletControlSpace(BsplineControlSpace):
                         bbox_inches="tight")
 
     def thresholding(self, q):
+        # remove wavelet coefficients with small magnitudes
         v_sq = q.vec_ro().array**2
 
         mask = np.full_like(v_sq, False, dtype=bool)
@@ -1426,11 +1395,13 @@ class ControlVector(ROL.Vector):
         Maps this vector into the dual space.
         Overwrites the content.
         """
-        if self.inner_product:
+        if isinstance(self.controlspace, WaveletControlSpace):
+            if self.inner_product:
+                self.inner_product.riesz_map(self, self)
+            if self.controlspace.tol:
+                self.controlspace.thresholding(self)
+        else:
             self.inner_product.riesz_map(self, self)
-        if isinstance(self.controlspace, WaveletControlSpace) and \
-           self.controlspace.tol:
-            self.controlspace.thresholding(self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
