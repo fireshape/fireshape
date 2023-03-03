@@ -178,7 +178,7 @@ class FeControlSpace(ControlSpace):
             else:
                 raise NotImplementedError("Provided alternative control element is not supported.")
             
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_r), self.V_c).callable().handle # create interpolator
+            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c), self.V_r).callable().handle # create interpolator
 
     def restrict(self, residual, out):
         if self.use_interpolator:
