@@ -356,8 +356,8 @@ class BsplineControlSpace(ControlSpace):
         self.comm = mesh.mpi_comm()
         # create temporary self.mesh_r and self.V_r to assemble innerproduct
         if self.dim == 2:
-            nx = len(self.knots[0]) - 1
-            ny = len(self.knots[1]) - 1
+            nx = 2**levels[0]
+            ny = 2**levels[1]
             Lx = self.bbox[0][1] - self.bbox[0][0]
             Ly = self.bbox[1][1] - self.bbox[1][0]
             meshloc = fd.RectangleMesh(nx, ny, Lx, Ly, quadrilateral=True,
@@ -369,9 +369,9 @@ class BsplineControlSpace(ControlSpace):
 
         elif self.dim == 3:
             # maybe use extruded meshes, quadrilateral not available
-            nx = len(self.knots[0]) - 1
-            ny = len(self.knots[1]) - 1
-            nz = len(self.knots[2]) - 1
+            nx = 2**levels[0]
+            ny = 2**levels[1]
+            nz = 2**levels[2]
             Lx = self.bbox[0][1] - self.bbox[0][0]
             Ly = self.bbox[1][1] - self.bbox[1][0]
             Lz = self.bbox[2][1] - self.bbox[2][0]
@@ -383,15 +383,18 @@ class BsplineControlSpace(ControlSpace):
             # inner_product.fixed_bids = [1,2,3,4,5,6]
 
         self.mesh_r = meshloc
-        maxdegree = max(self.orders) - 1
+        if self.dim == 2:
+            degree = max(self.orders) - 1
+        elif self.dim == 3:
+            degree = reduce(lambda x, y: x + y, self.orders) - 3
 
         # Bspline control space
-        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", maxdegree)
+        self.V_control = fd.VectorFunctionSpace(self.mesh_r, "CG", degree)
         self.I_control = self.build_interpolation_matrix(self.V_control)
 
         # standard construction of ControlSpace
         self.mesh_r = mesh
-        element = fd.VectorElement("CG", mesh.ufl_cell(), maxdegree)
+        element = fd.VectorElement("CG", mesh.ufl_cell(), degree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
