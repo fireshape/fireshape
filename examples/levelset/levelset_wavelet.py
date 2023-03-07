@@ -12,7 +12,7 @@ levels = [5, 5]
 norm_equiv = True
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
                            homogeneous_bc=[False, False], tol=0.1)
-inner = fs.BiharmonicInnerProduct(Q)
+inner = fs.H2InnerProduct(Q)
 if norm_equiv:
     Q.assign_inner_product(inner)
     q = fs.ControlVector(Q, None)
