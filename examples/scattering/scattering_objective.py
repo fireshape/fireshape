@@ -2,8 +2,7 @@ import firedrake as fd
 from fireshape import PDEconstrainedObjective
 import numpy as np
 from scattering_PDEconstraint import PMLSolver
-from utils import generate_mesh, plot_mesh, plot_field, plot_vector_field,\
-                  plot_far_field
+from utils import generate_mesh
 
 
 class FarFieldObjective(PDEconstrainedObjective):
@@ -85,17 +84,15 @@ class FarFieldObjective(PDEconstrainedObjective):
             mesh = fd.Mesh("target.msh", name="target")
         else:
             obstacle = {
-                "shape": "circle",
-                "center": (0.1, 0.),
-                "scale": 0.4
+                "shape": "kite",
+                "shift": (0.15, 0.),
+                "scale": 0.3
             }
             mesh = generate_mesh(obstacle, layer, R0, R1, 3, name="target")
-        plot_mesh(mesh, self.Q.bbox, "target")
 
         solver = PMLSolver(mesh, self.k, self.dirs, a1, b1)
         solver.solve()
         u_target = solver.solutions
-        plot_field(u_target[0], layer, "u_target")
         g = self.far_field(u_target, R0, R1)
         return g
 
@@ -131,7 +128,7 @@ class FarFieldObjective(PDEconstrainedObjective):
             u_inf = []
             for i in range(self.n):
                 self.x_hat.assign(self.xs[i])
-                u_inf.append((fd.assemble(form[0]), fd.assemble(form[0])))
+                u_inf.append((fd.assemble(form[0]), fd.assemble(form[1])))
             far_fields.append(u_inf)
         return far_fields
 
@@ -152,21 +149,3 @@ class FarFieldObjective(PDEconstrainedObjective):
         """Solve the PDE constraint."""
         self.e.solve()
         self.u_inf = self.far_field(self.solutions, self.R0, self.R1)
-
-    def derivative(self, out):
-        """
-        Get the derivative from pyadjoint.
-        """
-        deriv = self.Jred.derivative()
-        out.from_first_derivative(deriv)
-
-        plot_field(self.solutions[0], self.layer, "u")
-        plot_far_field(self.u_inf[0], self.g[0], "u_inf")
-        plot_vector_field(deriv, self.layer, self.Q.bbox, "deriv")
-
-    def gradient(self, g, x, tol):
-        super().gradient(g, x, tol)
-
-        T = fd.Function(self.Q.T)
-        g.to_coordinatefield(T)
-        plot_vector_field(T, self.layer, self.Q.bbox, "grad")

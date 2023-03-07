@@ -2,7 +2,7 @@ import firedrake as fd
 import fireshape as fs
 import ROL
 import numpy as np
-from utils import generate_mesh, plot_mesh
+from utils import generate_mesh
 from scattering_PDEconstraint import PMLSolver
 from scattering_objective import FarFieldObjective
 
@@ -26,17 +26,22 @@ else:
 
 # Setup problem
 bbox = [(-1, 1), (-1, 1)]
-orders = [3, 3]
+primal_orders = [3, 3]
+dual_orders = [3, 3]
 levels = [5, 5]
-Q = fs.BsplineControlSpace(mesh, bbox, orders, levels,
-                           boundary_regularities=[1, 1])
-inner = fs.H1InnerProduct(Q)
-q = fs.ControlVector(Q, inner)
-plot_mesh(mesh, bbox, "mesh")
+norm_equiv = True
+Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
+                           tol=0.1)
+inner = fs.H2InnerProduct(Q)
+if norm_equiv:
+    Q.assign_inner_product(inner)
+    q = fs.ControlVector(Q, None)
+else:
+    q = fs.ControlVector(Q, inner)
 
 # Setup PDE constraint
 k = 5
-n_wave = 4
+n_wave = 2
 theta = 2 * np.pi / n_wave * np.arange(n_wave)
 dirs = [(np.cos(t), np.sin(t)) for t in theta]
 mesh_m = Q.mesh_m
@@ -48,11 +53,19 @@ out = fd.File("u.pvd")
 
 # Create PDE-constrained objective functional
 J = FarFieldObjective(e, R0, R1, layer, Q,
-                      cb=lambda: out.write(e.solutions[0].sub(0)))
+                      cb=lambda: out.write(e.solutions[0]))
 J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
-J.checkGradient(q, g, 7, 1)
+
+if norm_equiv:
+    c = 1 / g.norm()
+else:
+    from math import sqrt
+    c = 1 / sqrt(g.vec_ro().dot(g.vec_ro()))
+
+g.scale(c)
+Q.visualize_control(g)
 
 # ROL parameters
 params_dict = {
@@ -71,11 +84,12 @@ params_dict = {
         }
     },
     'Status Test': {
-        'Gradient Tolerance': 1e-2,
-        'Step Tolerance': 1e-3,
-        'Iteration Limit': 15
+        'Gradient Tolerance': 1e-3,
+        'Step Tolerance': 1e-4,
+        'Iteration Limit': 30
     }
 }
+
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)
 solver = ROL.OptimizationSolver(problem, params)

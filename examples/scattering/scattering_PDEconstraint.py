@@ -18,7 +18,7 @@ class PMLSolver(PdeConstraint):
 
         self.d = fd.Constant((0, 0))  # placeholder for incident direction
         kdx = k * fd.dot(self.d, X)
-        u_i = fd.as_vector((fd.cos(kdx), fd.sin(kdx)))  # incident field
+        self.u_i = fd.as_vector((fd.cos(kdx), fd.sin(kdx)))  # incident field
 
         # Subdomains
         metadata = {"quadrature_degree": 4}
@@ -73,7 +73,7 @@ class PMLSolver(PdeConstraint):
                 - k**2 * inner(u, v, c=c3_y)) * dx_A_y\
             + (inner(ux, vx, c=c1_xy) + inner(uy, vy, c=c2_xy)
                 - k**2 * inner(u, v, c=c3_xy)) * dx_A_xy
-        self.L = fd.replace(self.a, {u: u_i})
+        self.L = fd.replace(self.a, {u: self.u_i})
 
         # Boundary conditions
         self.ds = []
@@ -83,7 +83,7 @@ class PMLSolver(PdeConstraint):
             d = fd.Constant(d)
             self.d.assign(d)
             self.ds.append(d)
-            self.bcs.append([bc_obs, fd.DirichletBC(self.V, u_i, 5)])
+            self.bcs.append([bc_obs, fd.DirichletBC(self.V, self.u_i, 5)])
 
         self.solutions = []
         for i in range(self.n_wave):
@@ -94,3 +94,4 @@ class PMLSolver(PdeConstraint):
         for i in range(self.n_wave):
             self.d.assign(self.ds[i])  # incident direction
             fd.solve(self.a == self.L, self.solutions[i], bcs=self.bcs[i])
+            self.solutions[i].interpolate(self.solutions[i] - self.u_i)

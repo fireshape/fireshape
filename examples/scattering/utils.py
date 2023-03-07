@@ -79,7 +79,7 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
     # define obstacle
     shape = obstacle.get("shape", "circle")
     if shape == "circle":
-        x, y = obstacle.get("center", (0, 0))
+        x, y = obstacle.get("shift", (0, 0))
         r = obstacle.get("scale", 1)
         p0 = gmsh.model.geo.addPoint(x, y, 0, 1)
         p1 = gmsh.model.geo.addPoint(x + r, y, 0, 1)
@@ -93,9 +93,9 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
         cs.append(gmsh.model.geo.addCircleArc(p4, p0, p1))
 
     elif shape == "kite":
-        x, y = obstacle.get("center", (0, 0))
+        x, y = obstacle.get("shift", (0, 0))
         scale = obstacle.get("scale", 1)
-        n = obstacle.get("nodes", 100)  # number of boundary nodes
+        n = obstacle.get("nodes", 50)  # number of boundary nodes
         ts = np.linspace(0, 2 * np.pi, n, endpoint=False)
         xs = scale * (np.cos(ts) + 0.65 * np.cos(2 * ts) - 0.65) + x
         ys = scale * 1.5 * np.sin(ts) + y
