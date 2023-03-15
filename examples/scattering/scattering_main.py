@@ -22,7 +22,8 @@ else:
         "shape": "circle",
         "scale": 0.4,
     }
-    mesh = generate_mesh(obstacle, layer, R0, R1, 1, name="mesh")
+    refine = 1
+    mesh = generate_mesh(obstacle, layer, R0, R1, refine, name="mesh")
 
 # Setup problem
 bbox = [(-1, 1), (-1, 1)]
@@ -30,8 +31,9 @@ primal_orders = [3, 3]
 dual_orders = [3, 3]
 levels = [5, 5]
 norm_equiv = True
+tol = 0.1
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
-                           tol=0.1)
+                           tol=tol)
 inner = fs.H2InnerProduct(Q)
 if norm_equiv:
     Q.assign_inner_product(inner)

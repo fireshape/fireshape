@@ -109,6 +109,19 @@ def generate_mesh(obstacle, layer, R0, R1, level, name="mesh"):
             cs.append(gmsh.model.geo.addLine(ps[i], ps[i + 1]))
         cs.append(gmsh.model.geo.addLine(ps[n - 1], ps[0]))
 
+    elif shape == "square":
+        x, y = obstacle.get("shift", (0, 0))
+        L = obstacle.get("scale", 1)
+        p0 = gmsh.model.geo.addPoint(x + L/2, y + L/2, 0, 1)
+        p1 = gmsh.model.geo.addPoint(x - L/2, y + L/2, 0, 1)
+        p2 = gmsh.model.geo.addPoint(x - L/2, y - L/2, 0, 1)
+        p3 = gmsh.model.geo.addPoint(x + L/2, y - L/2, 0, 1)
+        cs = []  # tags of boundary curves
+        cs.append(gmsh.model.geo.addLine(p0, p1))
+        cs.append(gmsh.model.geo.addLine(p1, p2))
+        cs.append(gmsh.model.geo.addLine(p2, p3))
+        cs.append(gmsh.model.geo.addLine(p3, p0))
+
     else:
         print("Unsupported shape.")
         raise NotImplementedError

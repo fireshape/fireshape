@@ -88,7 +88,9 @@ class FarFieldObjective(PDEconstrainedObjective):
                 "shift": (0.15, 0.),
                 "scale": 0.3
             }
-            mesh = generate_mesh(obstacle, layer, R0, R1, 3, name="target")
+            refine = 3
+            mesh = generate_mesh(obstacle, layer, R0, R1, refine,
+                                 name="target")
 
         solver = PMLSolver(mesh, self.k, self.dirs, a1, b1)
         solver.solve()
