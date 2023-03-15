@@ -667,10 +667,31 @@ class WaveletControlSpace(BsplineControlSpace):
 
     def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
                  homogeneous_bc=None, tol=None):
+        """
+        bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
+              of a Cartesian grid that extends around the shape to be
+              optimised
+        orders: describe the orders (one integer per geometric dimension)
+                of the tensor-product B-spline wavelet basis. A univariate
+                wavelet has order "o" if it is a piecewise polynomial of
+                degree "o-1".
+        dual_orders: describe the orders (one integer per geometric dimension)
+                     of the dual basis.
+        levels: describe the subdivision levels (one integers per
+                geometric dimension) used to construct the knots of
+                univariate B-splines
+        fixed_dims: dimensions in which the deformation should be zero
+        homogeneous_bc: impose homogeneous boundary condition on wavelets
+                        for each dimension
+                        [True,..,True] : vanish on the boundary
+                        [False,..,False] : nonzero on the boundary
+        tol: threshold for selecting basis functions
+        """
         homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
             else homogeneous_bc
         self.dual_orders = dual_orders
 
+        # construct transformation matrices for univariate wavelets
         self.j0 = []
         self.mat = []
         self.n_split = []
@@ -696,12 +717,20 @@ class WaveletControlSpace(BsplineControlSpace):
         self.tol = tol
 
     def primal_refinement_coeffs(self, d):
+        """
+        Compute the refinement coeffcients for the primal scaling function
+        on real line.
+        """
         l1 = -floor(d / 2)
         l2 = ceil(d / 2)
         a = 2**(1-d) * np.array([binom(d, k - l1) for k in range(l1, l2 + 1)])
         return a
 
     def primal_ML(self, d, bc):
+        """
+        Compute the block of refinement matrix for primal left boundary
+        scaling functions.
+        """
         knots = np.concatenate((np.zeros(d - 1), np.arange(3 * d - 3)))
         x = np.arange(2 * d - 2)
 
@@ -726,6 +755,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return ML
 
     def primal_A(self, j, d, a):
+        """
+        Compute the block of refinement matrix for primal inner scaling
+        functions at level j.
+        """
         n = a.size
         A = np.zeros((2**(j+1) - d + 1, 2**j - d + 1))
         for k in range(A.shape[1]):
@@ -733,6 +766,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return A
 
     def primal_M0(self, j, d, a, ML, bc):
+        """
+        Construct the refinement matrix for primal scaling functions
+        at level j.
+        """
         A = self.primal_A(j, d, a)
 
         M0 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
@@ -745,6 +782,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return 1 / np.sqrt(2) * M0
 
     def dual_refinement_coeffs(self, d, d_t):
+        """
+        Compute the refinement coeffcients for the dual scaling function
+        on real line.
+        """
         l1_t = -floor(d / 2) - d_t + 1
         l2_t = ceil(d / 2) + d_t - 1
         K = (d + d_t) // 2
@@ -761,6 +802,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return a_t
 
     def dual_ML(self, d, d_t, a, a_t, ML, bc):
+        """
+        Compute the block of refinement matrix for dual left boundary
+        scaling functions.
+        """
         l1 = -floor((a.size - 1) / 2)
         l2 = ceil((a.size - 1) / 2)
         l1_t = -floor((a_t.size - 1) / 2)
@@ -888,6 +933,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return ML_t
 
     def dual_A(self, j, d, d_t, a_t, bc):
+        """
+        Compute the block of refinement matrix for dual inner scaling
+        functions at level j.
+        """
         n = a_t.size
         if bc and d == 2:
             A_t = np.zeros((2**(j+1) - 2 * d_t - 3,
@@ -900,6 +949,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return A_t
 
     def dual_M0(self, j, d, d_t, a_t, ML_t, bc):
+        """
+        Construct the refinement matrix for dual scaling functions
+        at level j.
+        """
         A_t = self.dual_A(j, d, d_t, a_t, bc)
 
         M0_t = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
@@ -913,6 +966,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return 1 / np.sqrt(2) * M0_t
 
     def primal_GL(self, d, d_t, a, a_t, ML, ML_t, bc):
+        """
+        Compute the block of refinement matrix for primal left boundary
+        wavelets.
+        """
         if bc and d == 2:
             j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
         else:
@@ -990,6 +1047,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return GL
 
     def primal_B(self, j, d, d_t, a_t):
+        """
+        Compute the block of refinement matrix for primal inner wavelets
+        at level j.
+        """
         l1_t = -floor((a_t.size - 1) / 2)
         l2_t = ceil((a_t.size - 1) / 2)
         sgn = (-1)**np.abs(np.arange(1 - l2_t, 2 - l1_t))
@@ -1002,6 +1063,9 @@ class WaveletControlSpace(BsplineControlSpace):
         return B
 
     def primal_M1(self, j, d, d_t, a_t, GL, bc):
+        """
+        Construct the refinement matrix for primal wavelets at level j.
+        """
         B = self.primal_B(j, d, d_t, a_t)
 
         M1 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j))
@@ -1015,6 +1079,10 @@ class WaveletControlSpace(BsplineControlSpace):
         return 1 / np.sqrt(2) * M1
 
     def transformation_matrix(self, J, d, d_t, a, a_t, ML, GL, bc):
+        """
+        Construct the transformation matrix that transforms univariate
+        B-splines at level J to a multi-scale wavelet basis.
+        """
         if bc and d == 2:
             j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
         else:
@@ -1040,71 +1108,6 @@ class WaveletControlSpace(BsplineControlSpace):
             offset += n
         self.n_split.append(n_split)
         return T_split
-
-    def gramian_matrix(self, j, d, bc, nu):
-        if nu == 0:
-            a = self.primal_refinement_coeffs(d)
-            a_corr = np.correlate(a, a, 'full')  # (2*d+1,) array
-
-            def entry(k, m):
-                shift = 2 * k - m
-                if abs(shift) > d:
-                    return 0
-                return a_corr[shift+d]
-            A = np.array([[entry(k, m) for m in range(-d + 1, d)]
-                          for k in range(-d + 1, d)])
-            w, v = np.linalg.eig(A)
-            idx = np.argmax(w)
-            assert np.isclose(w[idx], 2.)
-            g = v[:, idx]
-            g /= g.sum()  # integrals of phi(x)*phi(x-k)
-
-            G = np.zeros((2**j + d - 1, 2**j + d - 1))
-            for k in range(2**j - d + 1):
-                G[k+d-1, k:k+2*d-1] = g
-            if bc:
-                G = G[1:-1, 1:-1]
-
-            ML = self.primal_ML(d, bc)
-            M0 = self.primal_M0(j, d, a, ML, bc)
-            m = 2 * d - 2 - bc
-            n = m + 2 * d - 2
-            U = M0[:m, :m]
-            L = M0[m:n, :m]
-            lhs = np.identity(m**2) - np.kron(U.T, U.T)
-            rhs = (U.T @ G[:m, m:n] @ L
-                   + L.T @ G[m:n, :m] @ U
-                   + L.T @ G[m:n, m:n] @ L).reshape(-1, order='F')
-            GL = np.linalg.solve(lhs, rhs).reshape((m, m), order='F')
-            G[:m, :m] = GL
-            G[-m:, -m:] = GL[::-1, ::-1]
-            return G
-
-        d0 = d - nu
-        assert d0 >= 1
-
-        if d0 == 1:
-            G = np.identity(2**j)
-        else:
-            G = self.gramian_matrix(j, d0, False, 0)
-
-        for d in range(d0 + 1, d0 + nu + 1):
-            for i in range(d - 2):
-                c = (d - 1) / (i + 1)
-                G[i, :] *= c
-                G[:, i] *= c
-                G[-i-1, :] *= c
-                G[:, -i-1] *= c
-            n = G.shape[0]
-            Gd = np.zeros((n + 1, n + 1))
-            Gd[:-1, :-1] += G
-            Gd[:-1, 1:] -= G
-            Gd[1:, :-1] -= G
-            Gd[1:, 1:] += G
-            G = 2**(2*j) * Gd
-        if bc:
-            G = G[1:-1, 1:-1]
-        return G
 
     def construct_1d_interpolation_matrices(self, V):
         interp_1d = []
@@ -1206,7 +1209,7 @@ class WaveletControlSpace(BsplineControlSpace):
         return IFW
 
     def assign_inner_product(self, inner_product):
-        # normalize basis functions
+        """Normalize basis functions."""
         A = inner_product.A
         D = A.getDiagonal()
         D.sqrtabs()
@@ -1216,6 +1219,7 @@ class WaveletControlSpace(BsplineControlSpace):
         A.diagonalScale(L=D, R=D)
 
     def visualize_control(self, q, filename="control"):
+        """Visualize wavelet coefficients."""
         if self.dim != 2:
             raise ValueError("Only 2D visualization is supported.")
 
@@ -1321,7 +1325,7 @@ class WaveletControlSpace(BsplineControlSpace):
                         bbox_inches="tight")
 
     def thresholding(self, q):
-        # remove wavelet coefficients with small magnitudes
+        """Remove wavelet coefficients with small magnitudes."""
         v_sq = q.vec_ro().array**2
 
         mask = np.full_like(v_sq, False, dtype=bool)

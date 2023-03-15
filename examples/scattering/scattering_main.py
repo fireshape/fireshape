@@ -35,8 +35,8 @@ tol = 0.1
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
                            tol=tol)
 inner = fs.H2InnerProduct(Q)
+Q.assign_inner_product(inner)
 if norm_equiv:
-    Q.assign_inner_product(inner)
     q = fs.ControlVector(Q, None)
 else:
     q = fs.ControlVector(Q, inner)
