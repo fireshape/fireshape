@@ -663,7 +663,9 @@ class BsplineControlSpace(ControlSpace):
 
 
 class WaveletControlSpace(BsplineControlSpace):
-    """ControlSpace based on cartesian tensorized B-spline wavelets."""
+    """
+    ControlSpace based on cartesian tensorized biorthogonal spline-wavelets.
+    """
 
     def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
                  homogeneous_bc=None, tol=None):
@@ -672,7 +674,7 @@ class WaveletControlSpace(BsplineControlSpace):
               of a Cartesian grid that extends around the shape to be
               optimised
         orders: describe the orders (one integer per geometric dimension)
-                of the tensor-product B-spline wavelet basis. A univariate
+                of the tensor-product spline-wavelet basis. A univariate
                 wavelet has order "o" if it is a piecewise polynomial of
                 degree "o-1".
         dual_orders: describe the orders (one integer per geometric dimension)
