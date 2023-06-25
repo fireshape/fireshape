@@ -14,6 +14,7 @@ import numpy as np
 # new imports for wavelets
 from itertools import product
 from math import factorial, floor, ceil
+from scipy.sparse import csr_matrix
 from scipy.special import binom
 
 
@@ -1121,65 +1122,34 @@ class WaveletControlSpace(BsplineControlSpace):
         return T_split
 
     def construct_1d_interpolation_matrices(self, V):
+        """
+        Create a nested list of sparse matrices (one sublist per geometric
+        dimension).
+
+        Each sublist contains blocks of the 1d interpolation matrix that
+        corresponds to univariate wavelets at different levels.
+        """
+        # construct 1d interpolation matrices for univariate B-spline bases
+        interp_1d_spline = super().construct_1d_interpolation_matrices(V)
+        # apply transformation matrices to obtain 1d interpolation matrices
+        # for univariate spline-wavelet bases
         interp_1d = []
-
-        # this code is correct but can be made more beautiful
-        # by replacing x_fct with self.id
-        x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
-        # compute self.M, x_int will be overwritten below
-        x_int = fd.interpolate(x_fct[0], V.sub(0))
-        self.M = x_int.vector().size()
-
-        comm = self.comm
-
-        u, v = fd.TrialFunction(V.sub(0)), fd.TestFunction(V.sub(0))
-        mass_temp = fd.assemble(u * v * fd.dx)
-        self.lg_map_fe = mass_temp.petscmat.getLGMap()[0]
-
         for dim in range(self.dim):
-            order = self.orders[dim]
-            level = self.levels[dim]
             T = self.mat[dim]
-            bc = self.boundary_regularities[dim]
-            knots = self.knots[dim]
-            m = 2**level + order - 1
-
+            I = interp_1d_spline[dim]
             interp_sub = []
             for T_sub in T:
-                n = T_sub.shape[1]
-
-                # owned part of global problem
-                local_n = n // comm.size + int(comm.rank < (n % comm.size))
-                I = PETSc.Mat().create(comm=self.comm)
-                I.setType(PETSc.Mat.Type.AIJ)
-                lsize = x_int.vector().local_size()
-                gsize = x_int.vector().size()
-                I.setSizes(((lsize, gsize), (local_n, n)))
-
-                I.setUp()
-                x_int = fd.interpolate(x_fct[dim], V.sub(0))
-                x = x_int.vector().get_local()
-                for idx in range(n):
-                    coeffs = np.zeros(m, dtype=float)
-
-                    # impose boundary regularity
-                    coeffs[bc:m-bc] = T_sub[:, idx]
-                    degree = order - 1  # splev uses degree, not order
-                    tck = (knots, coeffs, degree)
-
-                    values = splev(x, tck, der=0, ext=1)
-                    rows = np.where(values != 0)[0].astype(np.int32)
-                    values = values[rows]
-                    rows_is = PETSc.IS().createGeneral(rows)
-                    global_rows_is = self.lg_map_fe.applyIS(rows_is)
-                    rows = global_rows_is.array
-                    I.setValues(rows, [idx], values)
-
-                I.assemble()  # lazy strategy for kron
-                interp_sub.append(I)
+                T_sub_sp = csr_matrix(T_sub)
+                T_sub_petsc = \
+                    PETSc.Mat().createAIJ(
+                        size=T_sub_sp.shape,
+                        bsize=(I.getLocalSize()[1], T_sub_sp.shape[1]),
+                        csr=(T_sub_sp.indptr, T_sub_sp.indices, T_sub_sp.data),
+                        comm=self.comm)
+                tmp = PETSc.Mat()
+                I.matMult(T_sub_petsc, tmp)
+                interp_sub.append(tmp)
             interp_1d.append(interp_sub)
-
-        # from IPython import embed; embed()
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
@@ -1189,7 +1159,7 @@ class WaveletControlSpace(BsplineControlSpace):
         The implementation is based on super().construct_kronecker_matrix
         but computes the kron product of the rows of the 1d univariate
         interpolation submatrices. The resulting blocks are interpolation
-        matrices for tensorized wavelets on different levels.
+        matrices for tensorized wavelets at different levels.
         """
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
@@ -1242,7 +1212,7 @@ class WaveletControlSpace(BsplineControlSpace):
         Visualize distribution of wavelet coefficients.
 
         For each dimension of the deformation, the tensorized wavelet basis is
-        a direct sum of subspaces with wavelet bases on different levels, and
+        a direct sum of subspaces with wavelet bases at different levels, and
         a subfigure is plotted per subspace. At every point of the domain,
         the contributions from the wavelets whose supports cover that point
         are counted.
