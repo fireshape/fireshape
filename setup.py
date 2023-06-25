@@ -12,7 +12,7 @@ setup(
     author_email='wechsung@maths.ox.ac.uk',
     description='A library for shape optimization based on firedrake',
     long_description='',
-    packages=['fireshape'],
+    packages=['fireshape', 'fireshape.zoo'],
     zip_safe=False,
     install_requires=["roltrilinos", "rol", "scipy"]
 )
