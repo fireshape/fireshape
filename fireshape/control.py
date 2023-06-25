@@ -678,22 +678,31 @@ class WaveletControlSpace(BsplineControlSpace):
                 wavelet has order "o" if it is a piecewise polynomial of
                 degree "o-1".
         dual_orders: describe the orders (one integer per geometric dimension)
-                     of the dual basis.
+                     of the dual basis. For each dimension, the order "o" and
+                     the dual order "o_t" must satisfy that
+                     (o + o_t) mod 2 == 0 and o_t >= o. It is set to the same
+                     value as orders by default.
         levels: describe the subdivision levels (one integers per
                 geometric dimension) used to construct the knots of
                 univariate B-splines
         fixed_dims: dimensions in which the deformation should be zero
-        homogeneous_bc: impose homogeneous boundary condition on wavelets
-                        for each dimension
-                        [True,..,True] : vanish on the boundary
-                        [False,..,False] : nonzero on the boundary
+        homogeneous_bc: impose homogeneous Dirichlet boundary conditions on
+                        wavelets for each dimension. True for all boundaries
+                        by default.
         tol: threshold for selecting basis functions
         """
-        homogeneous_bc = [True] * len(bbox) if homogeneous_bc is None \
-            else homogeneous_bc
-        self.dual_orders = dual_orders
+        if homogeneous_bc is None:
+            # set homogeneous Dirichlet bc on all boundaries
+            homogeneous_bc = [True] * len(bbox)
+
+        if dual_orders is None:
+            # use same orders for both primal and dual wavelets
+            self.dual_orders = orders
+        else:
+            self.dual_orders = dual_orders
 
         # construct transformation matrices for univariate wavelets
+        # based on DOI:10.1007/s00025-009-0008-6
         self.j0 = []
         self.mat = []
         self.n_split = []
@@ -720,7 +729,7 @@ class WaveletControlSpace(BsplineControlSpace):
 
     def primal_refinement_coeffs(self, d):
         """
-        Compute the refinement coeffcients for the primal scaling function
+        Compute the refinement coefficients for the primal scaling function
         on real line.
         """
         l1 = -floor(d / 2)
@@ -785,7 +794,7 @@ class WaveletControlSpace(BsplineControlSpace):
 
     def dual_refinement_coeffs(self, d, d_t):
         """
-        Compute the refinement coeffcients for the dual scaling function
+        Compute the refinement coefficients for the dual scaling function
         on real line.
         """
         l1_t = -floor(d / 2) - d_t + 1
@@ -1174,6 +1183,14 @@ class WaveletControlSpace(BsplineControlSpace):
         return interp_1d
 
     def construct_kronecker_matrix(self, interp_1d):
+        """
+        Construct the block tensorized interpolation matrix.
+
+        The implementation is based on super().construct_kronecker_matrix
+        but computes the kron product of the rows of the 1d univariate
+        interpolation submatrices. The resulting blocks are interpolation
+        matrices for tensorized wavelets on different levels.
+        """
         IFW = PETSc.Mat().create(self.comm)
         IFW.setType(PETSc.Mat.Type.AIJ)
 
@@ -1221,7 +1238,15 @@ class WaveletControlSpace(BsplineControlSpace):
         A.diagonalScale(L=D, R=D)
 
     def visualize_control(self, q, filename="control"):
-        """Visualize wavelet coefficients."""
+        """
+        Visualize distribution of wavelet coefficients.
+
+        For each dimension of the deformation, the tensorized wavelet basis is
+        a direct sum of subspaces with wavelet bases on different levels, and
+        a subfigure is plotted per subspace. At every point of the domain,
+        the contributions from the wavelets whose supports cover that point
+        are counted.
+        """
         if self.dim != 2:
             raise ValueError("Only 2D visualization is supported.")
 
@@ -1238,6 +1263,7 @@ class WaveletControlSpace(BsplineControlSpace):
             supp_split = []
             nx = []
 
+            # compute supports of scaling functions
             supp = []
             for k in range(n[0]):
                 supp.append((max(k+bc-d+1, 0),
@@ -1245,6 +1271,7 @@ class WaveletControlSpace(BsplineControlSpace):
             supp_split.append(supp)
             nx.append(2**j0)
 
+            # compute supports of wavelets
             for j in range(j0, J):
                 supp = []
                 if bc and d == 2:
@@ -1291,6 +1318,8 @@ class WaveletControlSpace(BsplineControlSpace):
                 data = [np.zeros((nx_1d[1][i], nx_1d[0][j]))
                         for _ in self.free_dims]
 
+                # add squared magnitudes of coefficients
+                # to supports of corresponding wavelets
                 for xmin, xmax in supp_x:
                     for ymin, ymax in supp_y:
                         for d in range(self.dfree):
@@ -1300,8 +1329,9 @@ class WaveletControlSpace(BsplineControlSpace):
                 for d in range(self.dfree):
                     ax = axs[d][i, j]
                     data_ = np.sqrt(data[d][::-1, :])
+                    # avoid undefined values on a log scale
                     data_[data_ < 1e-12] = 1e-12
-                    ims[d] = ax.imshow(data_, extent=extent, cmap="binary",
+                    ims[d] = ax.imshow(data_, extent=extent,
                                        norm=colors.LogNorm(vmin=1e-3, vmax=1))
                     if i == 0:
                         j0 = self.j0[0]
@@ -1401,13 +1431,10 @@ class ControlVector(ROL.Vector):
         Maps this vector into the dual space.
         Overwrites the content.
         """
-        if isinstance(self.controlspace, WaveletControlSpace):
-            if self.inner_product:
-                self.inner_product.riesz_map(self, self)
-            if self.controlspace.tol:
-                self.controlspace.thresholding(self)
-        else:
-            self.inner_product.riesz_map(self, self)
+        self.inner_product.riesz_map(self, self)
+        if isinstance(self.controlspace, WaveletControlSpace) and \
+                self.controlspace.tol:
+            self.controlspace.thresholding(self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
@@ -1444,10 +1471,7 @@ class ControlVector(ROL.Vector):
 
     def dot(self, v):
         """Inner product between self and v."""
-        if self.inner_product:
-            return self.inner_product.eval(self, v)
-        else:
-            return self.vec_ro().dot(v.vec_ro())
+        return self.inner_product.eval(self, v)
 
     def norm(self):
         return self.dot(self)**0.5

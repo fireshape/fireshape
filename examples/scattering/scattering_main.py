@@ -30,16 +30,12 @@ bbox = [(-1, 1), (-1, 1)]
 primal_orders = [3, 3]
 dual_orders = [3, 3]
 levels = [5, 5]
-norm_equiv = True
 tol = 0.1
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
                            tol=tol)
-inner = fs.H2InnerProduct(Q)
+inner = fs.H1InnerProduct(Q)
 Q.assign_inner_product(inner)
-if norm_equiv:
-    q = fs.ControlVector(Q, None)
-else:
-    q = fs.ControlVector(Q, inner)
+q = fs.ControlVector(Q, inner)
 
 # Setup PDE constraint
 k = 5
@@ -60,13 +56,7 @@ J.update(q, None, 1)
 g = q.clone()
 J.gradient(g, q, None)
 
-if norm_equiv:
-    c = 1 / g.norm()
-else:
-    from math import sqrt
-    c = 1 / sqrt(g.vec_ro().dot(g.vec_ro()))
-
-g.scale(c)
+g.scale(1 / g.norm())
 Q.visualize_control(g)
 
 # ROL parameters

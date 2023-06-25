@@ -352,18 +352,3 @@ class SurfaceInnerProduct(InnerProduct):
         outvec *= 0.
         outvec.setValues(self.global_free_is_col.array, res.array)
         outvec.assemble()
-
-
-class H2InnerProduct(UflInnerProduct):
-    """Inner product on H1. It involves stiffness and mass matrices."""
-
-    def get_weak_form(self, V):
-        u = fd.TrialFunction(V)
-        v = fd.TestFunction(V)
-        a = fd.inner(fd.grad(fd.grad(u)), fd.grad(fd.grad(v))) * fd.dx \
-            + fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
-            + fd.inner(u, v) * fd.dx
-        return a
-
-    def get_nullspace(self, V):
-        return None

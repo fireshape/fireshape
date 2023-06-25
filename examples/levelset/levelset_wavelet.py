@@ -5,19 +5,15 @@ import ROL
 
 mesh = fs.DiskMesh(0.1)
 
-bbox = [(-2, 2), (-2, 2)]
+bbox = [(-1.01, 1.01), (-1.01, 1.01)]
 primal_orders = [3, 3]
 dual_orders = [3, 3]
-levels = [5, 5]
-norm_equiv = True
+levels = [4, 4]
 Q = fs.WaveletControlSpace(mesh, bbox, primal_orders, dual_orders, levels,
-                           homogeneous_bc=[False, False], tol=0.1)
-inner = fs.H2InnerProduct(Q)
-if norm_equiv:
-    Q.assign_inner_product(inner)
-    q = fs.ControlVector(Q, None)
-else:
-    q = fs.ControlVector(Q, inner)
+                           homogeneous_bc=[False, False])
+inner = fs.H1InnerProduct(Q)
+Q.assign_inner_product(inner)
+q = fs.ControlVector(Q, inner)
 
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)
@@ -32,13 +28,7 @@ g = q.clone()
 J.gradient(g, q, None)
 J.checkGradient(q, g, 4, 1)
 
-if norm_equiv:
-    c = 1 / g.norm()
-else:
-    from math import sqrt
-    c = 1 / sqrt(g.vec_ro().dot(g.vec_ro()))
-
-g.scale(c)
+g.scale(1 / g.norm())
 Q.visualize_control(g)
 
 params_dict = {
