@@ -208,7 +208,8 @@ class PDEconstrainedObjective(Objective):
                 # in order to do this we need to "record a tape of the forward
                 # solve", pyadjoint will then figure out all necessary
                 # adjoints.
-                import firedrake_adjoint as fda
+                import firedrake.adjoint as fda
+                fda.continue_annotation()
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 # ensure we are annotating
@@ -281,7 +282,8 @@ class ReducedObjective(ShapeObjective):
                 # in order to do this we need to "record a tape of the forward
                 # solve", pyadjoint will then figure out all necessary
                 # adjoints.
-                import firedrake_adjoint as fda
+                import firedrake.adjoint as fda
+                fda.continue_annotation()
                 tape = fda.get_working_tape()
                 tape.clear_tape()
                 # ensure we are annotating
