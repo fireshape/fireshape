@@ -16,7 +16,7 @@ def handle_taping():
 @pytest.fixture(autouse=True, scope="function")
 def handle_exit_annotation():
     yield
-    # Since importing firedrake_adjoint modifies a global variable, we need to
+    # Since importing firedrake.adjoint modifies a global variable, we need to
     # pause annotations at the end of the module
     annotate = annotate_tape()
     if annotate:
