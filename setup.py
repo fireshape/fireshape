@@ -2,7 +2,7 @@ from setuptools import setup
 try:
     import firedrake # noqa
     import firedrake.adjoint # noqa
-    import ROL
+    import ROL # noqa
 except ImportError:
     raise Exception("Firedrake needs to be installed and activated."
                     "Please visit firedrakeproject.org ."
