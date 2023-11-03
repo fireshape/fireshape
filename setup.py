@@ -16,6 +16,7 @@ setup(
     long_description='',
     packages=['fireshape', 'fireshape.zoo'],
     zip_safe=False,
-    install_requires=["scipy"] # avoid reinstalling ROL (and fail) on mac
-    #install_requires=["roltrilinos", "rol", "scipy"]
+    install_requires=["scipy"]
+    # avoid reinstalling ROL (and fail) on mac
+    # install_requires=["roltrilinos", "rol", "scipy"]
 )
