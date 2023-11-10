@@ -164,7 +164,14 @@ class UflInnerProduct(InnerProduct):
         if self.interpolated:
             self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
-            self.ls.solve(out.fun, v.fun)
+            # this is a quick fix, the concept of cofunction
+            # should be applied throught fireshpae wheneve we
+            # evaluate the shape derivative
+            v_ = fd.Cofunction(v.fun.ufl_function_space().dual())
+            with v.fun.dat.vec as vec_fct:
+                with v_.dat.vec as vec_cofct:
+                    vec_fct.copy(vec_cofct)
+            self.ls.solve(out.fun, v_)
 
 
 class H1InnerProduct(UflInnerProduct):
