@@ -4,7 +4,7 @@ import fireshape as fs
 
 
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            fs.FeMultiGridControlSpace,
+                                            #fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 def test_checkpointing(controlspace_t):
     mesh = fd.UnitSquareMesh(5, 5)

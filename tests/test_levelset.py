@@ -10,7 +10,7 @@ import ROL
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            fs.FeMultiGridControlSpace,
+                                            #fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 @pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
                                            "w_ext_fixed_fim"])

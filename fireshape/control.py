@@ -231,6 +231,8 @@ class FeMultiGridControlSpace(ControlSpace):
     """
 
     def __init__(self, mesh_r, refinements=1, order=1):
+        print("FEMultiGridControlSpace is currently not supported")
+        assert(False)
         mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
