@@ -691,15 +691,16 @@ class ControlVector(ROL.Vector):
         if self.boundary_extension is not None:
             # this could be written more elegantly
             residual_smoothed = fe_deriv.copy(deepcopy=True)
+            V = fe_deriv.ufl_function_space()
             p1 = fe_deriv
             p1 *= -1
-            p1_ = fd.Cofunction(p1.ufl_function_space().dual())
+            p1_ = fd.Cofunction(V.dual())
             with p1.dat.vec as vec_fct:
                 with p1_.dat.vec as vec_cofct:
                     vec_fct.copy(vec_cofct)
             self.boundary_extension.solve_homogeneous_adjoint(
                 p1_, residual_smoothed)
-            residual_smoothed_ = fd.Cofunction(residual_smoothed.ufl_function_space().dual())
+            residual_smoothed_ = fd.Cofunction(V.dual())
             self.boundary_extension.apply_adjoint_action(
                 residual_smoothed, residual_smoothed_)
             residual_smoothed_ -= p1_
