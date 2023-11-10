@@ -689,15 +689,21 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
+            # this could be written more elegantly
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             p1 = fe_deriv
             p1 *= -1
+            p1_ = fd.Cofunction(p1.ufl_function_space().dual())
+            with p1.dat.vec as vec_fct:
+                with p1_.dat.vec as vec_cofct:
+                    vec_fct.copy(vec_cofct)
             self.boundary_extension.solve_homogeneous_adjoint(
-                p1, residual_smoothed)
+                p1_, residual_smoothed)
+            residual_smoothed_ = fd.Cofunction(residual_smoothed.ufl_function_space().dual())
             self.boundary_extension.apply_adjoint_action(
-                residual_smoothed, residual_smoothed)
-            residual_smoothed -= p1
-            self.controlspace.restrict(residual_smoothed, self)
+                residual_smoothed, residual_smoothed_)
+            residual_smoothed_ -= p1_
+            self.controlspace.restrict(residual_smoothed_, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
 
