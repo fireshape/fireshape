@@ -167,11 +167,11 @@ class UflInnerProduct(InnerProduct):
             # this is a quick fix, the concept of cofunction
             # should be applied throught fireshpae wheneve we
             # evaluate the shape derivative
-            v_ = fd.Cofunction(v.fun.ufl_function_space().dual())
-            with v.fun.dat.vec as vec_fct:
-                with v_.dat.vec as vec_cofct:
-                    vec_fct.copy(vec_cofct)
-            self.ls.solve(out.fun, v_)
+            #v_ = fd.Cofunction(v.fun.ufl_function_space().dual())
+            #with v.fun.dat.vec as vec_fct:
+            #    with v_.dat.vec as vec_cofct:
+            #        vec_fct.copy(vec_cofct)
+            self.ls.solve(out.fun, v.cofun)
 
 
 class H1InnerProduct(UflInnerProduct):

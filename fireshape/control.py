@@ -29,6 +29,7 @@ class ControlSpace(object):
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
         self.V_m is the Firedrake vectorial Lagrangian finite element
             space on mesh_m
+        self.V_m_dual is the dual of self.V_m
         self.inner_product is the inner product of the ControlSpace
 
     Key idea: solve state and adjoint equations on mesh_m. Then, evaluate
@@ -36,18 +37,18 @@ class ControlSpace(object):
     restrict to ControlSpace, compute the update (using inner_product),
     and interpolate it into V_r to update mesh_m.
 
-    Note: transplant to V_r means creating an function in V_r and using the
-    values of the directional shape derivative as coefficients. Since
+    Note: transplant to V_r means creating a cofunction in V_r_dual and using
+    the values of the directional shape derivative as coefficients. Since
     Lagrangian finite elements are parametric, no transformation matrix is
     required by this operation.
     """
 
     def restrict(self, residual, out):
         """
-        Restrict from self.V_r into ControlSpace
+        Restrict from self.V_r_dual into ControlSpace
 
         Input:
-        residual: fd.Function, is a variable in the dual of self.V_r
+        residual: fd.Cofunction, is a variable in the dual of self.V_r_dual
         out: ControlVector, is a variable in the dual of ControlSpace
              (overwritten with result)
         """
@@ -138,6 +139,7 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
@@ -146,6 +148,7 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m_dual = self.V_m.dual()
         self.is_DG = False
 
         """
@@ -161,6 +164,7 @@ class FeControlSpace(ControlSpace):
             self.is_DG = True
             self.V_c = fd.VectorFunctionSpace(self.mesh_r,
                                               "CG", element._degree)
+            self.V_c_dual = self.V_c.dual()
             self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
                                       self.V_r).callable().handle
 
@@ -170,7 +174,7 @@ class FeControlSpace(ControlSpace):
                 self.Ip.multTranspose(w, out.vec_wo())
         else:
             with residual.dat.vec as vecres:
-                with out.fun.dat.vec as vecout:
+                with out.cofun.dat.vec as vecout:
                     vecres.copy(vecout)
 
     def interpolate(self, vector, out):
@@ -185,6 +189,14 @@ class FeControlSpace(ControlSpace):
             fun = fd.Function(self.V_c)
         else:
             fun = fd.Function(self.V_r)
+        fun *= 0.
+        return fun
+
+    def get_zero_covec(self):
+        if self.is_DG:
+            fun = fd.Cofunction(self.V_c_dual)
+        else:
+            fun = fd.Cofunction(self.V_r_dual)
         fun *= 0.
         return fun
 
@@ -684,11 +696,15 @@ class ControlVector(ROL.Vector):
         self.data = data
         if isinstance(data, fd.Function):
             self.fun = data
+            self.cofun = controlspace.get_zero_covec()
         else:
             self.fun = None
+            self.cofun = None
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
+            print("This hasn't been cofunction-fixed, yet")
+            assert(False)
             # this could be written more elegantly
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             V = fe_deriv.ufl_function_space()
