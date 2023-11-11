@@ -33,6 +33,12 @@ Then install the _Rapid Optimization Library_ along with `roltrilinos`.
     pip3 install --no-cache-dir roltrilinos
     pip3 install --no-cache-dir ROL
 
+On Mac, installing ROL from PyPi will fail. Instead, clone pyrol, add its submodules, and install it locally using
+
+    git clone -b rol-2.0-checkpointing https://github.com/APaganini/pyrol.git
+    git submodule update --init
+    python -m pip install pyrol/
+
 Now you are ready to install fireshape.
 
 For users:
@@ -42,8 +48,7 @@ For users:
 For developers:
 
     git clone git@github.com:fireshape/fireshape.git
-    cd fireshape
-    pip install -e .
+    python -m pip install -e fireshape/
 
 ## Docker images
 Fireshape is also available as a [docker image](https://hub.docker.com/r/fireshape/fireshape).

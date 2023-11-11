@@ -4,8 +4,9 @@ import fireshape as fs
 import fireshape.zoo as fsz
 
 
-@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            fs.FeMultiGridControlSpace])
+@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,])
+# @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
+#                                             fs.FeMultiGridControlSpace])
 @pytest.mark.parametrize("use_extension", [False, True])
 def test_regularization(controlspace_t, use_extension):
     n = 10

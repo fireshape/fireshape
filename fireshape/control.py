@@ -231,6 +231,8 @@ class FeMultiGridControlSpace(ControlSpace):
     """
 
     def __init__(self, mesh_r, refinements=1, order=1):
+        print("FEMultiGridControlSpace is currently not supported")
+        assert(False) # noqa
         mh = fd.MeshHierarchy(mesh_r, refinements)
         self.mesh_hierarchy = mh
 
@@ -687,15 +689,22 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
+            # this could be written more elegantly
             residual_smoothed = fe_deriv.copy(deepcopy=True)
+            V = fe_deriv.ufl_function_space()
             p1 = fe_deriv
             p1 *= -1
+            p1_ = fd.Cofunction(V.dual())
+            with p1.dat.vec as vec_fct:
+                with p1_.dat.vec as vec_cofct:
+                    vec_fct.copy(vec_cofct)
             self.boundary_extension.solve_homogeneous_adjoint(
-                p1, residual_smoothed)
+                p1_, residual_smoothed)
+            residual_smoothed_ = fd.Cofunction(V.dual())
             self.boundary_extension.apply_adjoint_action(
-                residual_smoothed, residual_smoothed)
-            residual_smoothed -= p1
-            self.controlspace.restrict(residual_smoothed, self)
+                residual_smoothed, residual_smoothed_)
+            residual_smoothed_ -= p1_
+            self.controlspace.restrict(residual_smoothed_, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
 

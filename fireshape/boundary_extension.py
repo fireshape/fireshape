@@ -12,7 +12,7 @@ class ElasticityExtension(object):
         self.zero = fd.Constant(V.mesh().topological_dimension() * (0,))
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        self.zero_fun = fd.Function(V)
+        self.zero_fun = fd.Cofunction(V.dual())
         self.a = 1e-2 * \
             fd.inner(u, v) * fd.dx + fd.inner(fd.sym(fd.grad(u)),
                                               fd.sym(fd.grad(v))) * fd.dx
