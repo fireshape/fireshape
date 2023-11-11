@@ -173,9 +173,7 @@ class FeControlSpace(ControlSpace):
             with residual.dat.vec as w:
                 self.Ip.multTranspose(w, out.vec_wo())
         else:
-            with residual.dat.vec as vecres:
-                with out.cofun.dat.vec as vecout:
-                    vecres.copy(vecout)
+            out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         if self.is_DG:

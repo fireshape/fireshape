@@ -87,10 +87,9 @@ class ShapeObjective(Objective):
         Construct a shape functional.
 
         Preallocate vectors for directional derivatives with respect to
-        perturbations in self.V_m, for their clone on self.V_r, and for
-        the directional derivative wrt perturbations in ControlSpace (so
-        that they are not created every time the derivative is evaluated).
-        Note that self.deriv_r is updated whenever self.deriv_m is.
+        perturbations in self.V_m so that they are not created every time
+        the derivative is evaluated (the same is done for the counterpart
+        in self.V_r_dual in Objective.__init__).
         """
         super().__init__(*args, **kwargs)
         self.deriv_m = fd.Cofunction(self.V_m_dual)
@@ -100,7 +99,7 @@ class ShapeObjective(Objective):
         Assemble partial directional derivative wrt ControlSpace perturbations.
 
         First, assemble directional derivative (wrt FEspace V_m) and
-        store it in self.deriv_m. This automatically updates self.deriv_r,
+        store it in self.deriv_m. Then pass the values to self.deriv_r,
         which is then converted to the directional derivative wrt
         ControlSpace perturbations using ControlSpace.restrict .
         """
