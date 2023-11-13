@@ -751,10 +751,17 @@ class ControlVector(ROL.Vector):
     def plus(self, v):
         vec = self.vec_wo()
         vec += v.vec_ro()
+        if self.cofun is not None:
+            with self.cofun.dat.vec_wo as cofun_vec:
+                with v.cofun.dat.vec_ro as summand_vec:
+                    cofun_vec += summand_vec
 
     def scale(self, alpha):
         vec = self.vec_wo()
         vec *= alpha
+        if self.cofun is not None:
+            with self.cofun.dat.vec_wo as vec:
+                vec *= alpha
 
     def clone(self):
         """
