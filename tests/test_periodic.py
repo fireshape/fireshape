@@ -11,7 +11,7 @@ import numpy as np
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
 @pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
+                                           "w_ext_fixed_dim"])
 def test_periodic(dim, inner_t, use_extension, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for PeriodicControlSpace."""
@@ -75,7 +75,7 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
 
     if use_extension == "w_ext":
         ext = fs.ElasticityExtension(Q.V_r)
-    if use_extension == "w_ext_fixed_dim":
+    elif use_extension == "w_ext_fixed_dim":
         ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
     else:
         ext = None
