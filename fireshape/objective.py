@@ -201,7 +201,13 @@ class PDEconstrainedObjective(Objective):
         """
         Get the derivative from pyadjoint.
         """
-        out.from_first_derivative(self.Jred.derivative())
+        dJ = self.Jred.derivative()
+        # Pyadjoint returns a function instead of a cofunction
+        # because it assumes it is computing the gradient
+        with dJ.dat.vec as vec_dJ:
+            with self.deriv_r.dat.vec as vec_r:
+                vec_dJ.copy(vec_r)
+        out.from_first_derivative(self.deriv_r)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
@@ -274,8 +280,13 @@ class ReducedObjective(ShapeObjective):
         """
         Get the derivative from pyadjoint.
         """
-
-        out.from_first_derivative(self.Jred.derivative())
+        dJ = self.Jred.derivative()
+        # Pyadjoint returns a function instead of a cofunction
+        # because it assumes it is computing the gradient
+        with dJ.dat.vec as vec_dJ:
+            with self.deriv_r.dat.vec as vec_r:
+                vec_dJ.copy(vec_r)
+        out.from_first_derivative(self.deriv_r)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
