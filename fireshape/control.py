@@ -392,12 +392,14 @@ class BsplineControlSpace(ControlSpace):
         self.mesh_r = mesh
         element = fd.VectorElement("CG", mesh.ufl_cell(), degree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.V_r_dual = self.V_r.dual()
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m_dual = self.V_m.dual()
 
         assert self.dim == self.mesh_r.geometric_dimension()
 
