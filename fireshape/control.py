@@ -637,7 +637,6 @@ class BsplineControlSpace(ControlSpace):
             self.FullIFW.multTranspose(w, out.vec_wo())
 
     def interpolate(self, vector, out):
-            # add correction to residual_smoothed
         with out.dat.vec as w:
             self.FullIFW.mult(vector.vec_ro(), w)
 
@@ -704,21 +703,7 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            # this could be written more elegantly
-            #residual_smoothed = fe_deriv.copy(deepcopy=True)
-            #V = fe_deriv.ufl_function_space()
-            #p1 = fe_deriv
-            #p1 *= -1
-            #p1_ = fd.Cofunction(V.dual())
-            #with p1.dat.vec as vec_fct:
-            #    with p1_.dat.vec as vec_cofct:
-            #        vec_fct.copy(vec_cofct)
-            #self.boundary_extension.solve_homogeneous_adjoint(
-            #    p1_, residual_smoothed)
-            #residual_smoothed_ = fd.Cofunction(V.dual())
-            #self.boundary_extension.apply_adjoint_action(
-            #    residual_smoothed, residual_smoothed_)
-            #residual_smoothed_ -= p1_
+            # residual_smoothed_ -= p1_
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             # Elasticity-lift -fe_deriv with homogeneous DirBC
             p1 = fe_deriv
