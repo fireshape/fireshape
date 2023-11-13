@@ -74,9 +74,8 @@ class ControlSpace(object):
 
         # Check if the new control is different from the last one.  ROL is
         # sometimes a bit strange in that it calls update on the same value
-        # more than once, in that case we don't want to solve the PDE over
-        # again.
-
+        # more than once, in that case we don't want to solve the PDE again.
+        #import ipdb; ipdb.set_trace()
         if not hasattr(self, 'lastq') or self.lastq is None:
             self.lastq = q.clone()
             self.lastq.set(q)
@@ -165,20 +164,20 @@ class FeControlSpace(ControlSpace):
             self.V_c = fd.VectorFunctionSpace(self.mesh_r,
                                               "CG", element._degree)
             self.V_c_dual = self.V_c.dual()
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
-                                      self.V_r).callable().handle
+            # create interpolator from V_c onto large space V_r
+            testfct_V_c = fd.TestFunction(self.V_c)
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
         if self.is_DG:
-            with residual.dat.vec as w:
-                self.Ip.multTranspose(w, out.vec_wo())
+            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
         else:
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         if self.is_DG:
-            with out.dat.vec as w:
-                self.Ip.mult(vector.vec_ro(), w)
+            # inject fom V_c into V_r
+            self.Ip.interpolate(vector.fun, output=out)
         else:
             out.assign(vector.fun)
 
@@ -703,12 +702,13 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            # residual_smoothed_ -= p1_
+            import ipdb; ipdb.set_trace()
+            # deep-copy value of fe_deriv
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             # Elasticity-lift -fe_deriv with homogeneous DirBC
             p1 = fe_deriv
             p1 *= -1
-            p1_lifted = fd.Function(self.controlspace.V_r)
+            p1_lifted = fd.Function(self.boundary_extension.V)
             self.boundary_extension.solve_homogeneous_adjoint(
                 p1, p1_lifted)
             # evaluate elasticity-eqn-form with trialfct=p1_lifted (no BCs)
@@ -717,6 +717,9 @@ class ControlVector(ROL.Vector):
             # add correction to residual_smoothed
             residual_smoothed -= p1
             self.controlspace.restrict(residual_smoothed, self)
+            #import ipdb; ipdb.set_trace()
+            #rhs_smooth = self.boundary_extension.smoothen_residual(fe_deriv)
+            #self.controlspace.restrict(rhs_smooth, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
 
