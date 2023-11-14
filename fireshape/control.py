@@ -701,7 +701,7 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            if self.controlspace.is_DG:
+            if getattr(self.controlspace, "is_DG", False):
                 raise NotImplementedError("boundary_extension is not"
                       + " supported for discontinous meshes") # noqa
 
