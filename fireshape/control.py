@@ -48,7 +48,7 @@ class ControlSpace(object):
         Restrict from self.V_r_dual into ControlSpace
 
         Input:
-        residual: fd.Cofunction, is a variable in the dual of self.V_r_dual
+        residual: fd.Cofunction, is a variable in self.V_r_dual
         out: ControlVector, is a variable in the dual of ControlSpace
              (overwritten with result)
         """
@@ -752,16 +752,13 @@ class ControlVector(ROL.Vector):
         vec = self.vec_wo()
         vec += v.vec_ro()
         if self.cofun is not None:
-            with self.cofun.dat.vec_wo as cofun_vec:
-                with v.cofun.dat.vec_ro as summand_vec:
-                    cofun_vec += summand_vec
+            self.cofun += v.cofun
 
     def scale(self, alpha):
         vec = self.vec_wo()
         vec *= alpha
         if self.cofun is not None:
-            with self.cofun.dat.vec_wo as vec:
-                vec *= alpha
+            self.cofun *= alpha
 
     def clone(self):
         """
