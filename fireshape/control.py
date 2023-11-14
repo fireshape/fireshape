@@ -75,7 +75,6 @@ class ControlSpace(object):
         # Check if the new control is different from the last one.  ROL is
         # sometimes a bit strange in that it calls update on the same value
         # more than once, in that case we don't want to solve the PDE again.
-        #import ipdb; ipdb.set_trace()
         if not hasattr(self, 'lastq') or self.lastq is None:
             self.lastq = q.clone()
             self.lastq.set(q)
@@ -704,7 +703,8 @@ class ControlVector(ROL.Vector):
         if self.boundary_extension is not None:
             if self.controlspace.is_DG:
                 raise NotImplementedError("boundary_extension is not"
-                      +" supported for discontinous meshes")
+                      + " supported for discontinous meshes") # noqa
+
             # deep-copy value of fe_deriv
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             # Elasticity-lift -fe_deriv with homogeneous DirBC
