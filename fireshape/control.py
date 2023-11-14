@@ -702,7 +702,9 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            import ipdb; ipdb.set_trace()
+            if self.controlspace.is_DG:
+                raise NotImplementedError("boundary_extension is not"
+                      +" supported for discontinous meshes")
             # deep-copy value of fe_deriv
             residual_smoothed = fe_deriv.copy(deepcopy=True)
             # Elasticity-lift -fe_deriv with homogeneous DirBC
@@ -717,9 +719,6 @@ class ControlVector(ROL.Vector):
             # add correction to residual_smoothed
             residual_smoothed -= p1
             self.controlspace.restrict(residual_smoothed, self)
-            #import ipdb; ipdb.set_trace()
-            #rhs_smooth = self.boundary_extension.smoothen_residual(fe_deriv)
-            #self.controlspace.restrict(rhs_smooth, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
 
