@@ -40,7 +40,10 @@ class ElasticityExtension(object):
         self.ls_ext.solve(out, self.zero_fun)
 
     def solve_homogeneous_adjoint(self, rhs, out):
+        """Elasticity-lift rhs with homogeneous DirichletBC."""
         for i in self.fixed_dims:
+            # not sure this is doing anything, but it looks like
+            # an attempt to set rhs.sub(i) = 0 on fixed dimensions
             temp = rhs.sub(i)
             temp *= 0
         self.ls_adj.solve(out, rhs)

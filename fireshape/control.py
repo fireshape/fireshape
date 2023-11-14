@@ -29,6 +29,7 @@ class ControlSpace(object):
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
         self.V_m is the Firedrake vectorial Lagrangian finite element
             space on mesh_m
+        self.V_m_dual is the dual of self.V_m
         self.inner_product is the inner product of the ControlSpace
 
     Key idea: solve state and adjoint equations on mesh_m. Then, evaluate
@@ -36,18 +37,18 @@ class ControlSpace(object):
     restrict to ControlSpace, compute the update (using inner_product),
     and interpolate it into V_r to update mesh_m.
 
-    Note: transplant to V_r means creating an function in V_r and using the
-    values of the directional shape derivative as coefficients. Since
+    Note: transplant to V_r means creating a cofunction in V_r_dual and using
+    the values of the directional shape derivative as coefficients. Since
     Lagrangian finite elements are parametric, no transformation matrix is
     required by this operation.
     """
 
     def restrict(self, residual, out):
         """
-        Restrict from self.V_r into ControlSpace
+        Restrict from self.V_r_dual into ControlSpace
 
         Input:
-        residual: fd.Function, is a variable in the dual of self.V_r
+        residual: fd.Cofunction, is a variable in self.V_r_dual
         out: ControlVector, is a variable in the dual of ControlSpace
              (overwritten with result)
         """
@@ -73,9 +74,7 @@ class ControlSpace(object):
 
         # Check if the new control is different from the last one.  ROL is
         # sometimes a bit strange in that it calls update on the same value
-        # more than once, in that case we don't want to solve the PDE over
-        # again.
-
+        # more than once, in that case we don't want to solve the PDE again.
         if not hasattr(self, 'lastq') or self.lastq is None:
             self.lastq = q.clone()
             self.lastq.set(q)
@@ -138,6 +137,7 @@ class FeControlSpace(ControlSpace):
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
@@ -146,6 +146,7 @@ class FeControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m_dual = self.V_m.dual()
         self.is_DG = False
 
         """
@@ -161,22 +162,21 @@ class FeControlSpace(ControlSpace):
             self.is_DG = True
             self.V_c = fd.VectorFunctionSpace(self.mesh_r,
                                               "CG", element._degree)
-            self.Ip = fd.Interpolator(fd.TestFunction(self.V_c),
-                                      self.V_r).callable().handle
+            self.V_c_dual = self.V_c.dual()
+            # create interpolator from V_c onto large space V_r
+            testfct_V_c = fd.TestFunction(self.V_c)
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
         if self.is_DG:
-            with residual.dat.vec as w:
-                self.Ip.multTranspose(w, out.vec_wo())
+            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
         else:
-            with residual.dat.vec as vecres:
-                with out.fun.dat.vec as vecout:
-                    vecres.copy(vecout)
+            out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         if self.is_DG:
-            with out.dat.vec as w:
-                self.Ip.mult(vector.vec_ro(), w)
+            # inject fom V_c into V_r
+            self.Ip.interpolate(vector.fun, output=out)
         else:
             out.assign(vector.fun)
 
@@ -185,6 +185,14 @@ class FeControlSpace(ControlSpace):
             fun = fd.Function(self.V_c)
         else:
             fun = fd.Function(self.V_r)
+        fun *= 0.
+        return fun
+
+    def get_zero_covec(self):
+        if self.is_DG:
+            fun = fd.Cofunction(self.V_c_dual)
+        else:
+            fun = fd.Cofunction(self.V_r_dual)
         fun *= 0.
         return fun
 
@@ -382,12 +390,14 @@ class BsplineControlSpace(ControlSpace):
         self.mesh_r = mesh
         element = fd.VectorElement("CG", mesh.ufl_cell(), degree)
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.V_r_dual = self.V_r.dual()
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m_dual = self.V_m.dual()
 
         assert self.dim == self.mesh_r.geometric_dimension()
 
@@ -684,27 +694,31 @@ class ControlVector(ROL.Vector):
         self.data = data
         if isinstance(data, fd.Function):
             self.fun = data
+            self.cofun = controlspace.get_zero_covec()
         else:
             self.fun = None
+            self.cofun = None
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            # this could be written more elegantly
+            if getattr(self.controlspace, "is_DG", False):
+                raise NotImplementedError("boundary_extension is not"
+                      + " supported for discontinous meshes") # noqa
+
+            # deep-copy value of fe_deriv
             residual_smoothed = fe_deriv.copy(deepcopy=True)
-            V = fe_deriv.ufl_function_space()
+            # Elasticity-lift -fe_deriv with homogeneous DirBC
             p1 = fe_deriv
             p1 *= -1
-            p1_ = fd.Cofunction(V.dual())
-            with p1.dat.vec as vec_fct:
-                with p1_.dat.vec as vec_cofct:
-                    vec_fct.copy(vec_cofct)
+            p1_lifted = fd.Function(self.boundary_extension.V)
             self.boundary_extension.solve_homogeneous_adjoint(
-                p1_, residual_smoothed)
-            residual_smoothed_ = fd.Cofunction(V.dual())
+                p1, p1_lifted)
+            # evaluate elasticity-eqn-form with trialfct=p1_lifted (no BCs)
             self.boundary_extension.apply_adjoint_action(
-                residual_smoothed, residual_smoothed_)
-            residual_smoothed_ -= p1_
-            self.controlspace.restrict(residual_smoothed_, self)
+                p1_lifted, residual_smoothed)
+            # add correction to residual_smoothed
+            residual_smoothed -= p1
+            self.controlspace.restrict(residual_smoothed, self)
         else:
             self.controlspace.restrict(fe_deriv, self)
 
@@ -737,10 +751,14 @@ class ControlVector(ROL.Vector):
     def plus(self, v):
         vec = self.vec_wo()
         vec += v.vec_ro()
+        if self.cofun is not None:
+            self.cofun += v.cofun
 
     def scale(self, alpha):
         vec = self.vec_wo()
         vec *= alpha
+        if self.cofun is not None:
+            self.cofun *= alpha
 
     def clone(self):
         """

@@ -75,7 +75,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
 
     if use_extension == "w_ext":
         ext = fs.ElasticityExtension(Q.V_r)
-    if use_extension == "w_ext_fixed_dim":
+    elif use_extension == "w_ext_fixed_dim":
         ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
     else:
         ext = None

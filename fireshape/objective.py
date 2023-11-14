@@ -20,11 +20,13 @@ class Objective(ROL.Objective):
         super().__init__()
         self.Q = Q  # ControlSpace
         self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
+        self.V_r_dual = Q.V_r_dual
         self.V_m = Q.V_m  # clone of V_r of physical mesh
+        self.V_m_dual = Q.V_m_dual
         self.mesh_m = self.V_m.mesh()  # physical mesh
         self.cb = cb
         self.scale = scale
-        self.deriv_r = fd.Function(self.V_r)
+        self.deriv_r = fd.Cofunction(self.V_r_dual)
         if quadrature_degree is not None:
             self.params = {"quadrature_degree": quadrature_degree}
         else:
@@ -85,27 +87,28 @@ class ShapeObjective(Objective):
         Construct a shape functional.
 
         Preallocate vectors for directional derivatives with respect to
-        perturbations in self.V_m, for their clone on self.V_r, and for
-        the directional derivative wrt perturbations in ControlSpace (so
-        that they are not created every time the derivative is evaluated).
-        Note that self.deriv_r is updated whenever self.deriv_m is.
+        perturbations in self.V_m so that they are not created every time
+        the derivative is evaluated (the same is done for the counterpart
+        in self.V_r_dual in Objective.__init__).
         """
         super().__init__(*args, **kwargs)
-
-        self.deriv_m = fd.Function(self.V_m, val=self.deriv_r)
+        self.deriv_m = fd.Cofunction(self.V_m_dual)
 
     def derivative(self, out):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
 
         First, assemble directional derivative (wrt FEspace V_m) and
-        store it in self.deriv_m. This automatically updates self.deriv_r,
+        store it in self.deriv_m. Then pass the values to self.deriv_r,
         which is then converted to the directional derivative wrt
-        ControSpace perturbations restrict.
+        ControlSpace perturbations using ControlSpace.restrict .
         """
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
                     form_compiler_parameters=self.params)
+        with self.deriv_m.dat.vec as vec_m:
+            with self.deriv_r.dat.vec as vec_r:
+                vec_m.copy(vec_r)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
 
@@ -198,7 +201,13 @@ class PDEconstrainedObjective(Objective):
         """
         Get the derivative from pyadjoint.
         """
-        out.from_first_derivative(self.Jred.derivative())
+        dJ = self.Jred.derivative()
+        # Pyadjoint returns a function instead of a cofunction
+        # because it assumes it is computing the gradient
+        with dJ.dat.vec as vec_dJ:
+            with self.deriv_r.dat.vec as vec_r:
+                vec_dJ.copy(vec_r)
+        out.from_first_derivative(self.deriv_r)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
@@ -271,8 +280,13 @@ class ReducedObjective(ShapeObjective):
         """
         Get the derivative from pyadjoint.
         """
-
-        out.from_first_derivative(self.Jred.derivative())
+        dJ = self.Jred.derivative()
+        # Pyadjoint returns a function instead of a cofunction
+        # because it assumes it is computing the gradient
+        with dJ.dat.vec as vec_dJ:
+            with self.deriv_r.dat.vec as vec_r:
+                vec_dJ.copy(vec_r)
+        out.from_first_derivative(self.deriv_r)
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""

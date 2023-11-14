@@ -10,9 +10,7 @@ import numpy as np
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
-def test_periodic(dim, inner_t, use_extension, pytestconfig):
+def test_periodic(dim, inner_t, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for PeriodicControlSpace."""
 
@@ -72,15 +70,7 @@ def test_periodic(dim, inner_t, use_extension, pytestconfig):
     else:
         cb = None
     J = LevelsetFct(sigma, f, Q, cb=cb)
-
-    if use_extension == "w_ext":
-        ext = fs.ElasticityExtension(Q.V_r)
-    if use_extension == "w_ext_fixed_dim":
-        ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
-    else:
-        ext = None
-
-    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+    q = fs.ControlVector(Q, inner)
 
     """
     move mesh a bit to check that we are not doing the
