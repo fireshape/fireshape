@@ -136,7 +136,6 @@ class DeformationObjective(Objective):
 
 
 class ControlObjective(Objective):
-
     """
     Similar to DeformationObjective, but in the case of a
     FeMultigridConstrolSpace might want to formulate functionals
@@ -146,18 +145,20 @@ class ControlObjective(Objective):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        (self.V_control, I) = self.Q.get_space_for_inner()
-        assert I is None
-        self.deriv_r = fd.Function(self.V_control)
+        # function used to define objective value_form,
+        # it contains the current control value, see self.update
+        self.f = fd.Function(self.Q.V_r_coarse)
+        # container for directional derivatives
+        self.deriv_r_coarse = fd.Cofunction(self.Q.V_r_coarse_dual)
 
     def derivative(self, out):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
         """
-        v = fd.TestFunction(self.V_control)
-        fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
+        v = fd.TestFunction(self.Q.V_r_coarse)
+        fd.assemble(self.derivative_form(v), tensor=self.deriv_r_coarse,
                     form_compiler_parameters=self.params)
-        out.fun.assign(self.deriv_r)
+        out.cofun.assign(self.deriv_r_coarse)
         out.scale(self.scale)
 
     def update(self, x, flag, iteration):
