@@ -226,65 +226,62 @@ class FeMultiGridControlSpace(ControlSpace):
     FEControlSpace on given mesh and StateSpace on uniformly refined mesh.
 
     Use the provided mesh to construct a Lagrangian finite element control
-    space. Then, refine the mesh `refinements`-times to construct
-    representatives of ControlVectors that are compatible with the state
-    space.
+    space. Then, create a finer mesh using `refinements`-many uniform
+    refinements and construct a representative of ControlVector that is
+    compatible with the state space.
 
     Inputs:
         refinements: type int, number of uniform refinements to perform
                      to obtain the StateSpace mesh.
-        order: type int, order of Lagrange basis functions of ControlSpace.
+        degree: type int, degree of Lagrange basis functions of ControlSpace.
 
-    Note: as of 04.03.2018, 3D is not supported by fd.MeshHierarchy.
+    Note: as of 15.11.2023, higher-order meshes are not supported, that is,
+    mesh_r has to be a polygonal mesh (mesh_m can still be of higher-order).
     """
 
-    def __init__(self, mesh_r, refinements=1, order=1):
-        print("FEMultiGridControlSpace is currently not supported")
-        assert(False) # noqa
-        mh = fd.MeshHierarchy(mesh_r, refinements)
-        self.mesh_hierarchy = mh
+    def __init__(self, mesh_r, refinements=1, degree=1):
+        # as of 15.11.2023, MeshHierarchy does not work if
+        # refinements_per_level is not a power of 2
+        n = refinements
+        n_is_power_of_2 = (n & (n-1) == 0) and n != 0
+        if not n_is_power_of_2:
+            raise NotImplementedError("refinements must be a power of 2")
+
+        # one refinement level with `refinements`-many uniform refinements
+        mh = fd.MeshHierarchy(mesh_r, 1, refinements)
 
         # Control space on coarsest mesh
-        self.mesh_r_coarse = self.mesh_hierarchy[0]
-        self.V_r_coarse = fd.VectorFunctionSpace(self.mesh_r_coarse, "CG",
-                                                 order)
+        self.V_r_coarse = fd.VectorFunctionSpace(mh[0], "CG", degree)
+        self.V_r_coarse_dual = self.V_r_coarse.dual()
 
-        # Create self.id and self.T on refined mesh.
-        element = self.V_r_coarse.ufl_element()
-
-        self.intermediate_Ts = []
-        for i in range(refinements - 1):
-            mesh = self.mesh_hierarchy[i + 1]
-            V = fd.FunctionSpace(mesh, element)
-            self.intermediate_Ts.append(fd.Function(V))
-
-        self.mesh_r = self.mesh_hierarchy[-1]
+        # Control space on refined mesh.
+        self.mesh_r = mh[-1]
         element = self.V_r_coarse.ufl_element()
         self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        self.V_r_dual = self.V_r.dual()
 
+        # Create self.id and self.T on refined mesh.
         X = fd.SpatialCoordinate(self.mesh_r)
         self.id = fd.Function(self.V_r).interpolate(X)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m_dual = self.V_m.dual()
 
     def restrict(self, residual, out):
-        Tf = residual
-        for Tinter in reversed(self.intermediate_Ts):
-            fd.restrict(Tf, Tinter)
-            Tf = Tinter
-        fd.restrict(Tf, out.fun)
+        fd.restrict(residual, out.cofun)
 
     def interpolate(self, vector, out):
-        Tc = vector.fun
-        for Tinter in self.intermediate_Ts:
-            fd.prolong(Tc, Tinter)
-            Tc = Tinter
-        fd.prolong(Tc, out)
+        fd.prolong(vector.fun, out)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
+        fun *= 0.
+        return fun
+
+    def get_zero_covec(self):
+        fun = fd.Cofunction(self.V_r_coarse_dual)
         fun *= 0.
         return fun
 

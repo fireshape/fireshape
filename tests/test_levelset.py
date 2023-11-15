@@ -10,7 +10,7 @@ import ROL
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            # fs.FeMultiGridControlSpace,
+                                            fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 @pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
                                            "w_ext_fixed_fim"])
@@ -18,7 +18,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
-    clscale = 0.1 if dim == 2 else 0.2
+    clscale = 0.2 if dim == 2 else 0.4
 
     # make the mesh a bit coarser if we are using a multigrid control space as
     # we are refining anyway
@@ -43,7 +43,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
             levels = [3, 3, 3]
         Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
     elif controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=2)
+        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=2)
     else:
         Q = controlspace_t(mesh)
 

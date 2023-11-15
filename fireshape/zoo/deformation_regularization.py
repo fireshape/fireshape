@@ -6,6 +6,7 @@ __all__ = ["DeformationRegularization", "CoarseDeformationRegularization"]
 
 
 class DeformationRegularization(fs.DeformationObjective):
+    """Tikhonov regularization term to add to objective function."""
 
     def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1.,
                  **kwargs):
@@ -37,13 +38,12 @@ class CoarseDeformationRegularization(fs.ControlObjective):
     def __init__(self, *args, l2_reg=1., sym_grad_reg=1., skew_grad_reg=1.,
                  **kwargs):
         super().__init__(*args, **kwargs)
-        self.f = fd.Function(self.Q.V_r_coarse)
         self.l2_reg = l2_reg
         self.sym_grad_reg = sym_grad_reg
         self.skew_grad_reg = skew_grad_reg
 
     def value_form(self):
-        f = self.f
+        f = self.f  # defined in ControlObjective.__init__
 
         def norm(u):
             return fd.inner(u, u) * fd.dx
