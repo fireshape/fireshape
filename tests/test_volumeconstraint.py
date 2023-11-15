@@ -12,7 +12,7 @@ import ROL
                                            "w_ext",
                                            "w_ext_fixed_fim"])
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            # fs.FeMultiGridControlSpace,
+                                            fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
@@ -44,7 +44,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
             levels = [3, 3, 3]
         Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
     elif controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, order=2)
+        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=2)
     else:
         Q = controlspace_t(mesh)
 
