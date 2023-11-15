@@ -5,7 +5,7 @@ import ROL
 
 dim = 2
 mesh = fs.DiskMesh(0.4)
-Q = fs.FeMultiGridControlSpace(mesh, refinements=4, order=2)
+Q = fs.FeMultiGridControlSpace(mesh, refinements=4, degree=2)
 # Q = fs.FeControlSpace(mesh)
 # inner = fs.SurfaceInnerProduct(Q)
 inner = fs.ElasticityInnerProduct(Q)
