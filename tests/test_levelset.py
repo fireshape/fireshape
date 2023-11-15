@@ -18,7 +18,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
-    clscale = 0.1 if dim == 2 else 0.2
+    clscale = 0.2 if dim == 2 else 0.4
 
     # make the mesh a bit coarser if we are using a multigrid control space as
     # we are refining anyway
