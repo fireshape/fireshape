@@ -44,6 +44,7 @@ class CoarseDeformationRegularization(fs.ControlObjective):
 
     def value_form(self):
         f = self.f  # defined in ControlObjective.__init__
+
         def norm(u):
             return fd.inner(u, u) * fd.dx
         val = self.l2_reg * norm(f)
