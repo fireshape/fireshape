@@ -130,13 +130,31 @@ class ControlSpace(object):
 
 
 class FeControlSpace(ControlSpace):
-    """Use self.V_r as actual ControlSpace."""
+    """
+    Use Lagrangian finite elements as ControlSpace.
 
-    def __init__(self, mesh_r):
+    The default option is to use self.V_r as actual ControlSpace.
+    If self.V_r is discontinous (e.g. periodic meshes), then create
+    a continuous subspace self.V_c (with the same polynomial degree)
+    to be used as ControlSpace (to ensure domain updates do not create
+    holes in the domain).
+
+    The user can increase the polynomial degree of mesh_r by setting
+    the variable add_to_degree_r.
+
+    If mesh_c and degree_c are provided, then use a degree_c Lagrangian
+    finite element space defined on mesh_d as ControlSpace.
+    Note: as of 15.11.2023, higher-order meshes are not supported, that is,
+    mesh_d has to be a polygonal mesh (mesh_r can still be of higher-order).
+    """
+
+    def __init__(self, mesh_r, add_to_degree_r=0, mesh_c=None, degree_c=None):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        family = element.family()
+        degree = element.degree() + add_to_degree_r
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree)
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
@@ -145,43 +163,43 @@ class FeControlSpace(ControlSpace):
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree)
         self.V_m_dual = self.V_m.dual()
-        self.is_DG = False
 
-        """
-        ControlSpace for discontinuous coordinate fields
-        (e.g.  periodic domains)
-
-        In Firedrake, periodic meshes are implemented using a discontinuous
-        field. This implies that self.V_r contains discontinuous functions.
-        To ensure domain updates do not create holes in the domain,
-        use a continuous subspace self.V_c of self.V_r as control space.
-        """
-        if element.family() == 'Discontinuous Lagrange':
-            self.is_DG = True
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r,
-                                              "CG", element._degree)
+        if mesh_c is not None and degree_c is not None:
+            self.is_decoupled = True
+            # Create decoupled FE-control space of mesh_c
+            self.V_c = fd.VectorFunctionSpace(mesh_c, "CG", degree_c)
             self.V_c_dual = self.V_c.dual()
-            # create interpolator from V_c onto large space V_r
             testfct_V_c = fd.TestFunction(self.V_c)
+            # Create interpolator from V_c into V_r
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r, allow_missing_dofs=True)
+        elif element.family() == 'Discontinuous Lagrange':
+            self.is_DG = True
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree_c)
+            self.V_c_dual = self.V_c.dual()
             self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
-        if self.is_DG:
+        if getattr(self, "is_DG", False):
+            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
+        elif getattr(self, "is_decoupled", False):
+            # it's not clear whether this is 100% correct for missing vals
             self.Ip.interpolate(residual, output=out.cofun, transpose=True)
         else:
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
-        if self.is_DG:
-            # inject fom V_c into V_r
+        if getattr(self, "is_DG", False):
             self.Ip.interpolate(vector.fun, output=out)
+        elif getattr(self, "is_decoupled", False):
+            # extend by zero
+            self.Ip.interpolate(vector.fun, output=out, default_missing_val=0.)
         else:
             out.assign(vector.fun)
 
     def get_zero_vec(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             fun = fd.Function(self.V_c)
         else:
             fun = fd.Function(self.V_r)
@@ -189,7 +207,7 @@ class FeControlSpace(ControlSpace):
         return fun
 
     def get_zero_covec(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             fun = fd.Cofunction(self.V_c_dual)
         else:
             fun = fd.Cofunction(self.V_r_dual)
@@ -197,7 +215,7 @@ class FeControlSpace(ControlSpace):
         return fun
 
     def get_space_for_inner(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             return (self.V_c, None)
         return (self.V_r, None)
 
@@ -698,9 +716,9 @@ class ControlVector(ROL.Vector):
 
     def from_first_derivative(self, fe_deriv):
         if self.boundary_extension is not None:
-            if getattr(self.controlspace, "is_DG", False):
+            if getattr(self.controlspace, "Ip", False):
                 raise NotImplementedError("boundary_extension is not"
-                      + " supported for discontinous meshes") # noqa
+                      + " supported for discontinous/decoupled meshes") # noqa
 
             # deep-copy value of fe_deriv
             residual_smoothed = fe_deriv.copy(deepcopy=True)
