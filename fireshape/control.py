@@ -173,11 +173,14 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             testfct_V_c = fd.TestFunction(self.V_c)
             # Create interpolator from V_c into V_r
-            self.Ip = fd.Interpolator(testfct_V_c, self.V_r, allow_missing_dofs=True)
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
+                                      allow_missing_dofs=True)
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree_c)
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree)
             self.V_c_dual = self.V_c.dual()
+            testfct_V_c = fd.TestFunction(self.V_c)
+            # Create interpolator from V_c into V_r
             self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
