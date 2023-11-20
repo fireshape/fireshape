@@ -166,7 +166,9 @@ class FeControlSpace(ControlSpace):
         self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree)
         self.V_m_dual = self.V_m.dual()
 
-        if mesh_c is not None and degree_c is not None:
+        if mesh_c is not None:
+            if degree_c is None:
+                raise ValueError('You need to specify degree_c')
             self.is_decoupled = True
             # Create decoupled FE-control space of mesh_c
             self.V_c = fd.VectorFunctionSpace(mesh_c, "CG", degree_c)
