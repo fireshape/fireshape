@@ -155,6 +155,7 @@ class CmControlSpace(ControlSpace):
         self.P = fd.FunctionSpace(self.mesh_r, family, degree)
         self.P_dual = self.P.dual()
 
+        self.tape = fda.Tape()
 
     def restrict(self, residual, out):
         """
@@ -167,9 +168,19 @@ class CmControlSpace(ControlSpace):
         """
 
         # TODO: need to tape on a different tape
+        old_tape = fda.get_working_tape()
+        old_annotation = fda.annotate_tape()
+
+        fda.set_working_tape(self.tape)
+        fda.continue_annotation()
+
         Jhh = fd.assemble(residual)
         Jhh_hat = fda.ReducedFunctional(Jhh, fda.Control(out.fun))
         out = Jhh_hat.derivative()
+
+        fda.set_working_tape(old_tape)
+        if not old_annotation:
+            fda.pause_annotation()
 
     def interpolate(self, vector, out):
         """
@@ -181,8 +192,19 @@ class CmControlSpace(ControlSpace):
              the result
         """
         # TODO: in general since all of these represent symbolic expressions
-        # could move them all into contructor, dphi, phi, n, normal, J, Jit ... 
+        # could move them all into contructor, dphi, phi, n, normal, J, Jit ...
 
+        # grab previous value
+        # swap to new tape
+        # annotate
+        # swap to old tape
+        # pause or continue as necessary
+
+        old_tape = fda.get_working_tape()
+        old_annotation = fda.annotate_tape()
+
+        fda.set_working_tape(self.tape)
+        fda.continue_annotation()
 
         v = fd.TestFunction(self.V_r)
         u = fd.TrialFunction(self.V_r)
@@ -213,6 +235,10 @@ class CmControlSpace(ControlSpace):
             dphi.interpolate(dphi + dt * u0)
 
         out.assign(dphi)
+
+        fda.set_working_tape(old_tape)
+        if not old_annotation:
+            fda.pause_annotation()
 
     def get_zero_vec(self):
         fun = fd.Function(self.P)
