@@ -1,9 +1,10 @@
 from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
+import firedrake.adjoint as fda
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace", "ControlVector", "CmControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -127,6 +128,123 @@ class ControlSpace(object):
         Load a vector from a file
         """
         raise NotImplementedError
+
+
+class CmControlSpace(ControlSpace):
+    def __init__(self, mesh_r, indicator):
+        # Create mesh_r and V_r
+        self.mesh_r = mesh_r
+        self.I = indicator
+
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        family = element.family()
+        degree = element.degree()
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree)
+        self.V_r_dual = self.V_r.dual()
+
+        # Create self.id and self.T, self.mesh_m, and self.V_m.
+        self.X = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(self.X, self.V_r)
+        self.T = fd.Function(self.V_r, name="T")
+        self.T.assign(self.id)
+        self.mesh_m = fd.Mesh(self.T)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree)
+        self.V_m_dual = self.V_m.dual()
+
+        # Scalar function space to hold the control vector p0
+        self.P = fd.FunctionSpace(self.mesh_r, family, degree)
+        self.P_dual = self.P.dual()
+
+
+    def restrict(self, residual, out):
+        """
+        Restrict from self.V_r_dual into ControlSpace
+
+        Input:
+        residual: fd.Cofunction, is a variable in self.V_r_dual
+        out: ControlVector, is a variable in the dual of ControlSpace
+             (overwritten with result)
+        """
+
+        # TODO: need to tape on a different tape
+        Jhh = fd.assemble(residual)
+        Jhh_hat = fda.ReducedFunctional(Jhh, fda.Control(out.fun))
+        out = Jhh_hat.derivative()
+
+    def interpolate(self, vector, out):
+        """
+        Interpolate from ControlSpace into self.V_r
+
+        Input:
+        vector: ControlVector, is a variable in ControlSpace
+        out: fd.Function, is a variable in self.V_r, is overwritten with
+             the result
+        """
+        # TODO: in general since all of these represent symbolic expressions
+        # could move them all into contructor, dphi, phi, n, normal, J, Jit ... 
+
+
+        v = fd.TestFunction(self.V_r)
+        u = fd.TrialFunction(self.V_r)
+
+        dphi = fd.Function(self.V_r, name="dphi")
+        phi = self.X + dphi
+
+        # TODO: move n and normal into constructor
+        n = fd.FacetNormal(self.mesh_r)
+        normal = self.I("+")*n("+") + self.I("-")*n("-")
+
+        p0 = vector.fun
+        J = fd.grad(phi)
+        Jit = fd.inv(J.T)
+        a = (fd.inner(u, v) + fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))) \
+            * fd.det(J) * fd.dx
+
+        # TODO: move ds(11) into variable?
+        L = fd.inner(Jit("+") * normal, p0("+") * v("+")) * fd.dS(11)
+        # TODO: move bcs into constructor
+        bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
+        u0 = fd.Function(self.V_r, name="u0")
+
+        nstep = 100
+        dt = 1/nstep
+        for _ in range(nstep):
+            fd.solve(a == L, u0, bcs=bcs)
+            dphi.interpolate(dphi + dt * u0)
+
+        out.assign(dphi)
+
+    def get_zero_vec(self):
+        fun = fd.Function(self.P)
+        fun *= 0.
+        return fun
+
+    def get_zero_covec(self):
+        fun = fd.Cofunction(self.P_dual)
+        fun *= 0.
+        return fun
+
+    def get_space_for_inner(self):
+        return (self.V_r, None)
+
+    def store(self, vec, filename="control"):
+        """
+        Store the vector to a file to be reused in a later computation.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
+            chk.store(vec.fun, name=filename)
+
+    def load(self, vec, filename="control"):
+        """
+        Load a vector from a file.
+        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
+        decomposition are identical between store and load.
+        """
+        with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
+            chk.load(vec.fun, name=filename)
 
 
 class FeControlSpace(ControlSpace):
