@@ -154,6 +154,35 @@ class CmControlSpace(ControlSpace):
         # Scalar function space to hold the control vector p0
         self.P = fd.FunctionSpace(self.mesh_r, family, degree)
         self.P_dual = self.P.dual()
+        
+        v = fd.TestFunction(self.V_r)
+        u = fd.TrialFunction(self.V_r)
+
+        self.dphi = fd.Function(self.V_r, name="dphi")
+        phi = self.X + dphi
+
+        n = fd.FacetNormal(self.mesh_r)
+        normal = self.I("+")*n("+") + self.I("-")*n("-")
+
+        self.p0 = fd.Function(self.P)
+        J = fd.grad(phi)
+        Jit = fd.inv(J.T)
+        self.a = (fd.inner(u, v) + fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))) \
+            * fd.det(J) * fd.dx
+
+        # TODO: move ds(11) into variable?
+        self.L = fd.inner(Jit("+") * normal, p0("+") * v("+")) * fd.dS(11)
+        
+        # TODO: move bcs into constructor
+        self.bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
+        self.u0 = fd.Function(self.V_r, name="u0")
+        self.residual = fd.Cofunction(self.V_r_dual)
+
+        # move into constructor
+        self.nstep = 100
+        self.dt = 1/nstep
+
+        self.taped = False
 
         self.tape = fda.Tape()
 
@@ -166,21 +195,27 @@ class CmControlSpace(ControlSpace):
         out: ControlVector, is a variable in the dual of ControlSpace
              (overwritten with result)
         """
-
-        # TODO: need to tape on a different tape
+        
         old_tape = fda.get_working_tape()
         old_annotation = fda.annotate_tape()
-
         fda.set_working_tape(self.tape)
-        fda.continue_annotation()
 
-        Jhh = fd.assemble(residual)
-        Jhh_hat = fda.ReducedFunctional(Jhh, fda.Control(out.fun))
-        out = Jhh_hat.derivative()
+        if not self.taped:
+            fda.continue_annotation()
+
+            self.run_forward()
+            Jhh = self.residual(self.dphi)
+            Jhh_hat = fda.ReducedFunctional(Jhh, [fda.Control(self.residual), fda.Control(self.p0)])
+            fda.pause_annotation()
+
+            taped = True
+
+        Jhh_hat([self.residual, self.p0])
+        out = Jhh_hat.derivative()[1]
 
         fda.set_working_tape(old_tape)
-        if not old_annotation:
-            fda.pause_annotation()
+        if old_annotation:
+            fda.continue_annotation()
 
     def interpolate(self, vector, out):
         """
@@ -191,54 +226,14 @@ class CmControlSpace(ControlSpace):
         out: fd.Function, is a variable in self.V_r, is overwritten with
              the result
         """
-        # TODO: in general since all of these represent symbolic expressions
-        # could move them all into contructor, dphi, phi, n, normal, J, Jit ...
+        self.p0.assign(vector.fun)
+        self.run_forward()
+        out.assign(self.dphi)
 
-        # grab previous value
-        # swap to new tape
-        # annotate
-        # swap to old tape
-        # pause or continue as necessary
-
-        old_tape = fda.get_working_tape()
-        old_annotation = fda.annotate_tape()
-
-        fda.set_working_tape(self.tape)
-        fda.continue_annotation()
-
-        v = fd.TestFunction(self.V_r)
-        u = fd.TrialFunction(self.V_r)
-
-        dphi = fd.Function(self.V_r, name="dphi")
-        phi = self.X + dphi
-
-        # TODO: move n and normal into constructor
-        n = fd.FacetNormal(self.mesh_r)
-        normal = self.I("+")*n("+") + self.I("-")*n("-")
-
-        p0 = vector.fun
-        J = fd.grad(phi)
-        Jit = fd.inv(J.T)
-        a = (fd.inner(u, v) + fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))) \
-            * fd.det(J) * fd.dx
-
-        # TODO: move ds(11) into variable?
-        L = fd.inner(Jit("+") * normal, p0("+") * v("+")) * fd.dS(11)
-        # TODO: move bcs into constructor
-        bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
-        u0 = fd.Function(self.V_r, name="u0")
-
-        nstep = 100
-        dt = 1/nstep
-        for _ in range(nstep):
-            fd.solve(a == L, u0, bcs=bcs)
-            dphi.interpolate(dphi + dt * u0)
-
-        out.assign(dphi)
-
-        fda.set_working_tape(old_tape)
-        if not old_annotation:
-            fda.pause_annotation()
+    def run_forward(self):
+        for _ in range(self.nstep):
+            fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
+            self.dphi.interpolate(self.dphi + self.dt * self.u0)
 
     def get_zero_vec(self):
         fun = fd.Function(self.P)
