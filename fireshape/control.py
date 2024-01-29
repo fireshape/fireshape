@@ -159,7 +159,7 @@ class CmControlSpace(ControlSpace):
         u = fd.TrialFunction(self.V_r)
 
         self.dphi = fd.Function(self.V_r, name="dphi")
-        phi = self.X + dphi
+        phi = self.X + self.dphi
 
         n = fd.FacetNormal(self.mesh_r)
         normal = self.I("+")*n("+") + self.I("-")*n("-")
@@ -171,7 +171,7 @@ class CmControlSpace(ControlSpace):
             * fd.det(J) * fd.dx
 
         # TODO: move ds(11) into variable?
-        self.L = fd.inner(Jit("+") * normal, p0("+") * v("+")) * fd.dS(11)
+        self.L = fd.inner(Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(11)
         
         # TODO: move bcs into constructor
         self.bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
@@ -180,7 +180,7 @@ class CmControlSpace(ControlSpace):
 
         # move into constructor
         self.nstep = 100
-        self.dt = 1/nstep
+        self.dt = 1/self.nstep
 
         self.taped = False
 
@@ -200,22 +200,28 @@ class CmControlSpace(ControlSpace):
         old_annotation = fda.annotate_tape()
         fda.set_working_tape(self.tape)
 
+        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
+        self.residual.assign(residual) # not sure if this is needed also
+
         if not self.taped:
             fda.continue_annotation()
 
             self.run_forward()
-            Jhh = self.residual(self.dphi)
+            Jhh = fd.assemble(self.residual(self.dphi)) # derivative of this wrt phi is residual, we want derivative of residual wrt to p0 
             Jhh_hat = fda.ReducedFunctional(Jhh, [fda.Control(self.residual), fda.Control(self.p0)])
             fda.pause_annotation()
 
-            taped = True
+            self.taped = True
 
-        Jhh_hat([self.residual, self.p0])
-        out = Jhh_hat.derivative()[1]
+        Jhh_hat([residual, out.fun])
+            
+        out.cofun = Jhh_hat.derivative()[0]
 
         fda.set_working_tape(old_tape)
         if old_annotation:
             fda.continue_annotation()
+        else:
+            fda.pause_annotation()
 
     def interpolate(self, vector, out):
         """
