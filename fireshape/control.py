@@ -215,7 +215,8 @@ class CmControlSpace(ControlSpace):
 
         Jhh_hat([residual, out.fun])
             
-        out.cofun = Jhh_hat.derivative()[0]
+        out.cofun = fd.assemble(Jhh_hat.derivative()[0])
+        # out.cofun.assign(fd.assemble(Jhh_hat.derivative()[0]))
 
         fda.set_working_tape(old_tape)
         if old_annotation:
