@@ -4,17 +4,20 @@ import ROL
 from levelsetfunctional import LevelsetFunctional
 
 # setup problem
-mesh = fd.Mesh("square_in_square.msh")
+mesh = fd.Mesh("/home/prem/src/github/fireshape/examples/levelset_cm/square_in_square.msh")
 
 S = fd.FunctionSpace(mesh, "DG", 0)
 I = fd.Function(S, name="indicator")
 x = fd.SpatialCoordinate(mesh)
-I.interpolate(fd.conditional(x[0] < 1, fd.conditional(x[0] > 0,
+
+I.interpolate(fd.conditional(x[0] < 1, 
+              fd.conditional(x[0] > 0,
               fd.conditional(x[1] > 0,
               fd.conditional(x[1] < 1, 1, 0), 0), 0), 0))
 
 Q = fs.CmControlSpace(mesh, I)
-inner = fs.LaplaceInnerProduct(Q)
+# inner = fs.LaplaceInnerProduct(Q)
+inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 

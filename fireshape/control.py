@@ -152,7 +152,7 @@ class CmControlSpace(ControlSpace):
         self.V_m_dual = self.V_m.dual()
 
         # Scalar function space to hold the control vector p0
-        self.P = fd.FunctionSpace(self.mesh_r, family, degree)
+        self.P = fd.FunctionSpace(self.mesh_r, "CG", 1)
         self.P_dual = self.P.dual()
         
         v = fd.TestFunction(self.V_r)
@@ -207,15 +207,22 @@ class CmControlSpace(ControlSpace):
             fda.continue_annotation()
 
             self.run_forward()
-            Jhh = fd.assemble(self.residual(self.dphi)) # derivative of this wrt phi is residual, we want derivative of residual wrt to p0 
-            Jhh_hat = fda.ReducedFunctional(Jhh, [fda.Control(self.residual), fda.Control(self.p0)])
+            # Jhh = fd.assemble(self.residual(self.dphi)) # derivative of this wrt phi is residual, we want derivative of residual wrt to p0 
+            self.Jhh_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
+
             fda.pause_annotation()
 
             self.taped = True
 
-        Jhh_hat([residual, out.fun])
-            
-        out.cofun = fd.assemble(Jhh_hat.derivative()[0])
+        self.Jhh_hat([self.p0])
+        self.Jhh_hat.derivative(adj_input=self.residual)[0].dat.copy(out.data.dat)
+        # out.cofun.assign(self.Jhh_hat.derivative(adj_input=self.residual)[0])
+
+        # with self.Jhh_hat.derivative(adj_input=residual)[0].dat.vec_ro as v:
+        #     v.copy(out.data.dat.vec_wo())
+        # with self.Jhh_hat.derivative(adj_input=residual) as derivative:
+        #     derivative.copy(out.vec_wo())
+        #     # out.cofun.assign(self.Jhh_hat.derivative(adj_input=residual)[0])
         # out.cofun.assign(fd.assemble(Jhh_hat.derivative()[0]))
 
         fda.set_working_tape(old_tape)
@@ -253,7 +260,7 @@ class CmControlSpace(ControlSpace):
         return fun
 
     def get_space_for_inner(self):
-        return (self.V_r, None)
+        return (self.P, None)
 
     def store(self, vec, filename="control"):
         """

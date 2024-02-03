@@ -1,6 +1,7 @@
 import firedrake as fd
 import numpy as np
 from firedrake.petsc import PETSc
+from icecream import ic
 
 
 class InnerProduct(object):
@@ -164,6 +165,9 @@ class UflInnerProduct(InnerProduct):
         if self.interpolated:
             self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
+            ic(out.fun._function_space)
+            ic(v.cofun._function_space)
+            ic(self.A.getSize())
             self.ls.solve(out.fun, v.cofun)
 
 
@@ -185,6 +189,7 @@ class LaplaceInnerProduct(UflInnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
 
     def get_weak_form(self, V):
+        ic(V.ufl_function_space())
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx
@@ -192,7 +197,10 @@ class LaplaceInnerProduct(UflInnerProduct):
     def get_nullspace(self, V):
         """This nullspace contains constant functions."""
         dim = V.value_size
-        if dim == 2:
+        if dim == 1:
+            n1 = fd.Function(V).interpolate(fd.Constant((1.0)))
+            res = [n1]
+        elif dim == 2:
             n1 = fd.Function(V).interpolate(fd.Constant((1.0, 0.0)))
             n2 = fd.Function(V).interpolate(fd.Constant((0.0, 1.0)))
             res = [n1, n2]
