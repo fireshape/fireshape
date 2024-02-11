@@ -2,6 +2,8 @@ from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
 import firedrake.adjoint as fda
+from icecream import ic
+ic.configureOutput(includeContext=True) 
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector", "CmControlSpace"]
@@ -139,7 +141,7 @@ class CmControlSpace(ControlSpace):
         element = self.mesh_r.coordinates.function_space().ufl_element()
         family = element.family()
         degree = element.degree()
-        self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree)
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1)
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
@@ -148,7 +150,7 @@ class CmControlSpace(ControlSpace):
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
         self.V_m_dual = self.V_m.dual()
 
         # Scalar function space to hold the control vector p0
@@ -165,13 +167,13 @@ class CmControlSpace(ControlSpace):
         normal = self.I("+")*n("+") + self.I("-")*n("-")
 
         self.p0 = fd.Function(self.P)
-        J = fd.grad(phi)
-        Jit = fd.inv(J.T)
-        self.a = (fd.inner(u, v) + fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))) \
-            * fd.det(J) * fd.dx
+        self.J = fd.grad(phi)
+        self.Jit = fd.inv(self.J.T)
+        self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
+            * fd.det(self.J) * fd.dx
 
         # TODO: move ds(11) into variable?
-        self.L = fd.inner(Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(11)
+        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(11)
         
         # TODO: move bcs into constructor
         self.bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
@@ -179,7 +181,7 @@ class CmControlSpace(ControlSpace):
         self.residual = fd.Cofunction(self.V_r_dual)
 
         # move into constructor
-        self.nstep = 100
+        self.nstep = 100 # TODO: experiment to find optimal nstep or feed through as parameter
         self.dt = 1/self.nstep
 
         self.taped = False
@@ -200,8 +202,9 @@ class CmControlSpace(ControlSpace):
         old_annotation = fda.annotate_tape()
         fda.set_working_tape(self.tape)
 
-        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
-        self.residual.assign(residual) # not sure if this is needed also
+        # TODO: Test if below should be commented or not
+        # self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
+        # self.residual.assign(residual) # not sure if this is needed also
 
         if not self.taped:
             fda.continue_annotation()
@@ -215,7 +218,10 @@ class CmControlSpace(ControlSpace):
             self.taped = True
 
         self.Jhh_hat([self.p0])
-        self.Jhh_hat.derivative(adj_input=self.residual)[0].dat.copy(out.data.dat)
+        k = self.Jhh_hat.derivative(adj_input=residual)[0]
+        # ic(k.dat.data.min(), k.dat.data.max())
+        # k.dat.copy(out.data.dat)
+        k.dat.copy(out.cofun.dat)
         # out.cofun.assign(self.Jhh_hat.derivative(adj_input=self.residual)[0])
 
         # with self.Jhh_hat.derivative(adj_input=residual)[0].dat.vec_ro as v:
@@ -230,6 +236,8 @@ class CmControlSpace(ControlSpace):
             fda.continue_annotation()
         else:
             fda.pause_annotation()
+
+        # self.tape.visualise("test.dot")
 
     def interpolate(self, vector, out):
         """
@@ -247,6 +255,7 @@ class CmControlSpace(ControlSpace):
     def run_forward(self):
         for _ in range(self.nstep):
             fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
+            # ic(self.u0.dat.data.min(), self.u0.dat.data.max())
             self.dphi.interpolate(self.dphi + self.dt * self.u0)
 
     def get_zero_vec(self):
