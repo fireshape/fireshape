@@ -165,9 +165,9 @@ class UflInnerProduct(InnerProduct):
         if self.interpolated:
             self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
-            ic(out.fun._function_space)
-            ic(v.cofun._function_space)
-            ic(self.A.getSize())
+            # ic(out.fun._function_space)
+            # ic(v.cofun._function_space)
+            # ic(self.A.getSize())
             self.ls.solve(out.fun, v.cofun)
 
 
@@ -189,7 +189,7 @@ class LaplaceInnerProduct(UflInnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
 
     def get_weak_form(self, V):
-        ic(V.ufl_function_space())
+        # ic(V.ufl_function_space())
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         return fd.inner(fd.grad(u), fd.grad(v)) * fd.dx

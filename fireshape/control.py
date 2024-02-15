@@ -133,7 +133,7 @@ class ControlSpace(object):
 
 
 class CmControlSpace(ControlSpace):
-    def __init__(self, mesh_r, indicator):
+    def __init__(self, mesh_r, mesh_m, indicator):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
         self.I = indicator
@@ -149,7 +149,7 @@ class CmControlSpace(ControlSpace):
         self.id = fd.interpolate(self.X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        self.mesh_m = mesh_m
         self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
         self.V_m_dual = self.V_m.dual()
 
@@ -181,7 +181,7 @@ class CmControlSpace(ControlSpace):
         self.residual = fd.Cofunction(self.V_r_dual)
 
         # move into constructor
-        self.nstep = 100 # TODO: experiment to find optimal nstep or feed through as parameter
+        self.nstep = 25 # TODO: experiment to find optimal nstep or feed through as parameter
         self.dt = 1/self.nstep
 
         self.taped = False
@@ -203,7 +203,7 @@ class CmControlSpace(ControlSpace):
         fda.set_working_tape(self.tape)
 
         # TODO: Test if below should be commented or not
-        # self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
+        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
         # self.residual.assign(residual) # not sure if this is needed also
 
         if not self.taped:
