@@ -57,20 +57,17 @@ params_dict = {
     }
 }
 
+# Problem Optimising
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q)
 solver = ROL.OptimizationSolver(problem, params)
 solver.solve()
 
+
+# # Gradient Checking
 # g = q.clone()
 # J.gradient(g, q, None)
 # q.plus(g)
 # J.update(q, None, 1)
-
 # J.gradient(g, q, None)
 # res = J.checkGradient(q, g, 5, 1)
-# print(res)
-# errors = [l[-1] for l in res]
-# print(errors)
-# (errors[-1] < 0.11 * errors[-2])
-# q.scale(0)

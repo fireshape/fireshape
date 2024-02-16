@@ -138,36 +138,39 @@ class CmControlSpace(ControlSpace):
 
         self.mesh_c = mesh_c
         self.mesh_r = mesh_r
-
         self.I = indicator
 
-        # element = self.mesh_r.coordinates.function_space().ufl_element()
-        # family = element.family()
-        # degree = element.degree()
-        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1)
+
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1, name="V_r")
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
-        self.X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.interpolate(self.X, self.V_r)
+        self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-
-        self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1, name="V_m")
         self.V_m_dual = self.V_m.dual()
 
-        # Scalar function space to hold the control vector p0
-        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1)
-        self.P_dual = self.P.dual()
-        
-        v = fd.TestFunction(self.V_r)
-        u = fd.TrialFunction(self.V_r)
 
-        self.dphi = fd.Function(self.V_r, name="dphi")
+        self.V_c = fd.VectorFunctionSpace(self.mesh_c, "CG", 1, name="V_c")
+        self.V_c_dual = self.V_c.dual()
+        testfct_V_c = fd.TestFunction(self.V_c); # only used to create interpolator
+        # Interpolator
+        self.Ip = fd.Interpolator(testfct_V_c, self.V_r, allow_missing_dofs=True)
+
+        # Scalar function space to hold the control vector p0
+        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")
+        self.P_dual = self.P.dual()
+
+        v = fd.TestFunction(self.V_c)
+        u = fd.TrialFunction(self.V_c)
+
+        self.dphi = fd.Function(self.V_c, name="dphi")
+        self.X = fd.SpatialCoordinate(self.mesh_c)
         phi = self.X + self.dphi
 
-        n = fd.FacetNormal(self.mesh_r)
+        n = fd.FacetNormal(self.mesh_c)
         normal = self.I("+")*n("+") + self.I("-")*n("-")
 
         self.p0 = fd.Function(self.P)
@@ -180,13 +183,13 @@ class CmControlSpace(ControlSpace):
         self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(11)
         
         # TODO: move bcs into constructor
-        self.bcs = [fd.DirichletBC(self.V_r, fd.Constant((0, 0)), "on_boundary")]
-        self.u0 = fd.Function(self.V_r, name="u0")
-        self.residual = fd.Cofunction(self.V_r_dual)
+        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
+        self.u0 = fd.Function(self.V_c, name="u0")
+        self.residual = fd.Cofunction(self.V_c_dual)
 
         # move into constructor
         self.nstep = 25 # TODO: experiment to find optimal nstep or feed through as parameter
-        self.dt = 1/self.nstep
+        self.dt = 1 / self.nstep
 
         self.taped = False
 
@@ -201,13 +204,16 @@ class CmControlSpace(ControlSpace):
         out: ControlVector, is a variable in the dual of ControlSpace
              (overwritten with result)
         """
+
+        # Interpolate cofunction in V_r_dual into V_c_dual
+        self.Ip.interpolate(residual, output=self.residual, transpose=True)
+        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
         
         old_tape = fda.get_working_tape()
         old_annotation = fda.annotate_tape()
         fda.set_working_tape(self.tape)
 
         # TODO: Test if below should be commented or not
-        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
         # self.residual.assign(residual) # not sure if this is needed also
 
         if not self.taped:
@@ -222,26 +228,14 @@ class CmControlSpace(ControlSpace):
             self.taped = True
 
         self.Jhh_hat([self.p0])
-        k = self.Jhh_hat.derivative(adj_input=residual)[0]
-        # ic(k.dat.data.min(), k.dat.data.max())
-        # k.dat.copy(out.data.dat)
+        k = self.Jhh_hat.derivative(adj_input=self.residual)[0]
         k.dat.copy(out.cofun.dat)
-        # out.cofun.assign(self.Jhh_hat.derivative(adj_input=self.residual)[0])
-
-        # with self.Jhh_hat.derivative(adj_input=residual)[0].dat.vec_ro as v:
-        #     v.copy(out.data.dat.vec_wo())
-        # with self.Jhh_hat.derivative(adj_input=residual) as derivative:
-        #     derivative.copy(out.vec_wo())
-        #     # out.cofun.assign(self.Jhh_hat.derivative(adj_input=residual)[0])
-        # out.cofun.assign(fd.assemble(Jhh_hat.derivative()[0]))
 
         fda.set_working_tape(old_tape)
         if old_annotation:
             fda.continue_annotation()
         else:
             fda.pause_annotation()
-
-        # self.tape.visualise("test.dot")
 
     def interpolate(self, vector, out):
         """
@@ -254,7 +248,8 @@ class CmControlSpace(ControlSpace):
         """
         self.p0.assign(vector.fun)
         self.run_forward()
-        out.assign(self.dphi)
+        self.Ip.interpolate(self.dphi, output=out)
+        # out.assign(self.dphi)
 
     def run_forward(self):
         for _ in range(self.nstep):
