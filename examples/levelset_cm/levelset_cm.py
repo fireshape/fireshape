@@ -3,24 +3,26 @@ import fireshape as fs
 import ROL
 from levelsetfunctional import LevelsetFunctional
 # setup problem
-mesh = fd.Mesh("square_in_square.msh")
+mesh_c = fd.Mesh("square_in_square.msh")
 
-S = fd.FunctionSpace(mesh, "DG", 0)
+S = fd.FunctionSpace(mesh_c, "DG", 0)
 I = fd.Function(S, name="indicator")
-x = fd.SpatialCoordinate(mesh)
+x = fd.SpatialCoordinate(mesh_c)
 
 I.interpolate(fd.conditional(x[0] < 1, fd.conditional(x[0] > 0, fd.conditional(x[1] > 0, fd.conditional(x[1] < 1, 1, 0), 0), 0), 0))
 
-mesh_m = fd.UnitSquareMesh(30, 30)
+mesh_r = fd.UnitSquareMesh(30, 30)
 
-Q = fs.CmControlSpace(mesh, mesh_m, I)
+Q = fs.CmControlSpace(mesh_c, mesh_r, I)
 # inner = fs.LaplaceInnerProduct(Q)
+
 inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
+
 # watchpoints.watch(q.fun)
 
 # save shape evolution in file domain.pvd
-out = fd.File("standard.pvd")
+out = fd.File("domain.pvd")
 
 # TODO: Remove below indicator and fix how to plot in general
 # Just creating this so I can actually plot it onto the output to see how shape changes
@@ -55,20 +57,20 @@ params_dict = {
     }
 }
 
-# params = ROL.ParameterList(params_dict, "Parameters")
-# problem = ROL.OptimizationProblem(J, q)
-# solver = ROL.OptimizationSolver(problem, params)
-# solver.solve()
+params = ROL.ParameterList(params_dict, "Parameters")
+problem = ROL.OptimizationProblem(J, q)
+solver = ROL.OptimizationSolver(problem, params)
+solver.solve()
 
-g = q.clone()
-J.gradient(g, q, None)
-q.plus(g)
-J.update(q, None, 1)
+# g = q.clone()
+# J.gradient(g, q, None)
+# q.plus(g)
+# J.update(q, None, 1)
 
-J.gradient(g, q, None)
-res = J.checkGradient(q, g, 5, 1)
-print(res)
-errors = [l[-1] for l in res]
-print(errors)
+# J.gradient(g, q, None)
+# res = J.checkGradient(q, g, 5, 1)
+# print(res)
+# errors = [l[-1] for l in res]
+# print(errors)
 # (errors[-1] < 0.11 * errors[-2])
 # q.scale(0)

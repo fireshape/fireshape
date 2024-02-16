@@ -133,14 +133,17 @@ class ControlSpace(object):
 
 
 class CmControlSpace(ControlSpace):
-    def __init__(self, mesh_r, mesh_m, indicator):
+    def __init__(self, mesh_c, mesh_r, indicator):
         # Create mesh_r and V_r
+
+        self.mesh_c = mesh_c
         self.mesh_r = mesh_r
+
         self.I = indicator
 
-        element = self.mesh_r.coordinates.function_space().ufl_element()
-        family = element.family()
-        degree = element.degree()
+        # element = self.mesh_r.coordinates.function_space().ufl_element()
+        # family = element.family()
+        # degree = element.degree()
         self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1)
         self.V_r_dual = self.V_r.dual()
 
@@ -149,12 +152,13 @@ class CmControlSpace(ControlSpace):
         self.id = fd.interpolate(self.X, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
-        self.mesh_m = mesh_m
+        self.mesh_m = fd.Mesh(self.T)
+
         self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1)
         self.V_m_dual = self.V_m.dual()
 
         # Scalar function space to hold the control vector p0
-        self.P = fd.FunctionSpace(self.mesh_r, "CG", 1)
+        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1)
         self.P_dual = self.P.dual()
         
         v = fd.TestFunction(self.V_r)
