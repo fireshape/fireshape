@@ -65,10 +65,6 @@ params_dict = {
 # solver.solve()
 
 
-
-
-
-# for e in eps:
 x = q.clone()
 x.fun.assign(1)
 
@@ -77,7 +73,6 @@ x.fun.assign(1)
 d = q.clone()
 # place 1s into d
 d.fun.assign(1) # this is irrelevant because of line 86
-
 
 # update mesh using control vector (x = 1) to take derivative around x
 J.update(x, None, -1)
@@ -105,14 +100,16 @@ for t in eps:
     d2 = d.clone()
     d2.set(d)
 
+    # x2 = x + dt
     d2.scale(t)
     x2.plus(d2)
+
     J.update(x2, None, -1)
-    # J(x + td)
+    # a = J(x + td)
     a = J.value(None, None)
 
     J.update(x, None, -1)
-    # J(x)
+    # b = J(x)
     b = J.value(None, None)
 
     print((a - b) / t)
