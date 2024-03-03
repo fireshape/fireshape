@@ -1,6 +1,7 @@
 from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
+from firedrake.__future__ import interpolate
 import firedrake.adjoint as fda
 from icecream import ic
 ic.configureOutput(includeContext=True) 
@@ -207,7 +208,6 @@ class CmControlSpace(ControlSpace):
 
         # Interpolate cofunction in V_r_dual into V_c_dual
         self.Ip.interpolate(residual, output=self.residual, transpose=True)
-        self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
         
         old_tape = fda.get_working_tape()
         old_annotation = fda.annotate_tape()
@@ -218,6 +218,8 @@ class CmControlSpace(ControlSpace):
 
         if not self.taped:
             fda.continue_annotation()
+
+            self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
 
             self.run_forward()
             # Jhh = fd.assemble(self.residual(self.dphi)) # derivative of this wrt phi is residual, we want derivative of residual wrt to p0 
@@ -252,6 +254,7 @@ class CmControlSpace(ControlSpace):
         # out.assign(self.dphi)
 
     def run_forward(self):
+        self.dphi.zero()
         for _ in range(self.nstep):
             fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
             # ic(self.u0.dat.data.min(), self.u0.dat.data.max())
