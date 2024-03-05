@@ -184,6 +184,19 @@ class H1InnerProduct(UflInnerProduct):
     def get_nullspace(self, V):
         return None
 
+class L2InnerProduct(UflInnerProduct):
+    """Inner product on H10. It comprises only the stiffness matrix."""
+
+    def get_weak_form(self, V):
+        # ic(V.ufl_function_space())
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+        return fd.inner(u, v) * fd.dx
+
+    def get_nullspace(self, V):
+        """This nullspace contains constant functions."""
+        return None
+
 
 class LaplaceInnerProduct(UflInnerProduct):
     """Inner product on H10. It comprises only the stiffness matrix."""
