@@ -181,12 +181,15 @@ class CmControlSpace(ControlSpace):
             * fd.det(self.J) * fd.dx
 
         # TODO: move ds(11) into variable?
-        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(11)
+        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(4)
         
         # TODO: move bcs into constructor
         self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
         self.u0 = fd.Function(self.V_c, name="u0")
         self.residual = fd.Cofunction(self.V_c_dual)
+
+        problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
+        self.solver = fd.LinearVariationalSolver(problem)
 
         # move into constructor
         self.nstep = 25 # TODO: experiment to find optimal nstep or feed through as parameter
@@ -255,8 +258,10 @@ class CmControlSpace(ControlSpace):
 
     def run_forward(self):
         self.dphi.zero()
+        # replace with linearvariationalsolver in init
         for _ in range(self.nstep):
-            fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
+            # fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
+            self.solver.solve()
             # ic(self.u0.dat.data.min(), self.u0.dat.data.max())
             self.dphi.interpolate(self.dphi + self.dt * self.u0)
 
