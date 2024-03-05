@@ -128,7 +128,53 @@ class StokesSolver(FluidSolver):
                 "ksp_atol": 1e-15,
             }
         else:
+            ksp_params = {
+            # First up we select the unassembled matrix type::
+
+                "mat_type": "matfree",
+
+            # Now we configure the solver, using GMRES using the diagonal part of
+            # the Schur complement factorisation to approximate the inverse.  We'll
+            # also monitor the convergence of the residual, and ask PETSc to view
+            # the configured Krylov solver object.::
+
+                "ksp_type": "gmres",
+                # "ksp_monitor_true_residual": None,
+                # "ksp_view": None,
+                "pc_type": "fieldsplit",
+                "pc_fieldsplit_type": "schur",
+                "pc_fieldsplit_schur_fact_type": "diag",
+
+            # Next we configure the solvers for the blocks.  For the velocity block,
+            # we use an :class:`.AssembledPC` and approximate the inverse of the
+            # vector laplacian using a single multigrid V-cycle.::
+
+                "fieldsplit_0_ksp_type": "preonly",
+                "fieldsplit_0_pc_type": "python",
+                "fieldsplit_0_pc_python_type": "firedrake.AssembledPC",
+                "fieldsplit_0_assembled_pc_type": "lu",
+
+            # For the Schur complement block, we approximate the inverse of the
+            # schur complement with a pressure mass inverse.  For constant viscosity
+            # this works well.  For variable, but low-contrast viscosity, one should
+            # use a viscosity-weighted mass-matrix.  This is achievable by passing a
+            # dictionary with "mu" associated with the viscosity into solve.  The
+            # MassInvPC will choose a default value of 1.0 if not set.  For high viscosity
+            # contrasts, this preconditioner is mesh-dependent and should be replaced
+            # by some form of approximate commutator.::
+
+                "fieldsplit_1_ksp_type": "preonly",
+                "fieldsplit_1_pc_type": "python",
+                "fieldsplit_1_pc_python_type": "firedrake.MassInvPC",
+
+            # The mass inverse is dense, and therefore approximated with an incomplete
+            # LU factorization, which we configure now::
+
+                "fieldsplit_1_Mp_mat_type": "aij",
+                "fieldsplit_1_Mp_pc_type": "ilu"
+            }
+
             # reuse initial guess!
-            raise NotImplementedError("Iterative solver has not been "
-                                      "implemented.")
+            # raise NotImplementedError("Iterative solver has not been "
+            #                           "implemented.")
         return ksp_params
