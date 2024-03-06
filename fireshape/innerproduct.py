@@ -67,7 +67,9 @@ class UflInnerProduct(InnerProduct):
         # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
         if len(self.fixed_bids) > 0:
             dim = V.value_size
-            if dim == 2:
+            if dim == 1:
+                zerovector = fd.Constant((0))
+            elif dim == 2:
                 zerovector = fd.Constant((0, 0))
             elif dim == 3:
                 zerovector = fd.Constant((0, 0, 0))
