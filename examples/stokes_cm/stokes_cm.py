@@ -68,13 +68,13 @@ params_dict = {
             'Subproblem Step Type': 'Line Search',
             'Penalty Parameter Growth Factor': 2.,
             'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 20
+            'Subproblem Iteration Limit': 40
         }
     },
     'Status Test': {
         'Gradient Tolerance': 1e-4,
         'Step Tolerance': 1e-5,
-        'Iteration Limit': 4
+        'Iteration Limit': 10
     }
 }
 params = ROL.ParameterList(params_dict, "Parameters")
