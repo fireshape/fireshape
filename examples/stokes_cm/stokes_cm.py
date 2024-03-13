@@ -27,7 +27,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4], direct=False)
 e.solve()
-out = fd.File("stoke_hole.pvd")
+out = fd.File("stoke_hole_higher_limits.pvd")
 
 
 def cb(*args):
