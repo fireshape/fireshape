@@ -15,7 +15,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4])
 e.solve()
-out = fd.File("u.pvd")
+out = fd.File("higher_limits.pvd")
 
 
 def cb(*args):
@@ -56,13 +56,13 @@ params_dict = {
             'Subproblem Step Type': 'Line Search',
             'Penalty Parameter Growth Factor': 2.,
             'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 20
+            'Subproblem Iteration Limit': 50
         }
     },
     'Status Test': {
         'Gradient Tolerance': 1e-4,
         'Step Tolerance': 1e-5,
-        'Iteration Limit': 4
+        'Iteration Limit': 10
     }
 }
 params = ROL.ParameterList(params_dict, "Parameters")
