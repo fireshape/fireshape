@@ -27,7 +27,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4], direct=False)
 e.solve()
-out = fd.File("stoke_hole_higher_limits.pvd")
+out = fd.File("no_deformation.pvd")
 
 
 def cb(*args):
@@ -39,9 +39,8 @@ cb()
 Je = fsz.EnergyObjective(e, Q, cb=cb)
 Jr = 1e-2 * fs.ReducedObjective(Je, e)
 Js = fsz.MoYoSpectralConstraint(10., fd.Constant(0.7), Q)
-Jd = 1e-3 * fsz.DeformationRegularization(Q, l2_reg=1e-2, sym_grad_reg=1e0,
-                                          skew_grad_reg=1e-2)
-J = Jr + Jd + Js
+# Jd = 1e-3 * fsz.DeformationRegularization(Q, l2_reg=1e-2, sym_grad_reg=1e0, skew_grad_reg=1e-2)
+J = Jr + Js
 q = fs.ControlVector(Q, inner)
 g = q.clone()
 
@@ -68,7 +67,7 @@ params_dict = {
             'Subproblem Step Type': 'Line Search',
             'Penalty Parameter Growth Factor': 2.,
             'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 40
+            'Subproblem Iteration Limit': 50
         }
     },
     'Status Test': {
