@@ -4,7 +4,7 @@ import fireshape.zoo as fsz
 
 import ROL
 
-mesh_c = fd.Mesh("stoke_control.msh")
+mesh_c = fd.Mesh("stoke_control_no_extension.msh")
 mesh_r = fd.Mesh("stoke_hole.msh")
 
 # Q = fs.FeControlSpace(mesh)
@@ -27,7 +27,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4], direct=False)
 e.solve()
-out = fd.File("no_deformation.pvd")
+out = fd.File("no_extension.pvd")
 
 
 def cb(*args):
