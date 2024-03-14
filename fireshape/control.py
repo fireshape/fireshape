@@ -3,6 +3,7 @@ import ROL
 import firedrake as fd
 from firedrake.__future__ import interpolate
 import firedrake.adjoint as fda
+from firedrake.petsc import PETSc
 from icecream import ic
 ic.configureOutput(includeContext=True) 
 
@@ -199,6 +200,7 @@ class CmControlSpace(ControlSpace):
 
         self.tape = fda.Tape()
 
+    @PETSc.Log.EventDecorator("restrict")
     def restrict(self, residual, out):
         """
         Restrict from self.V_r_dual into ControlSpace
@@ -242,6 +244,7 @@ class CmControlSpace(ControlSpace):
         else:
             fda.pause_annotation()
 
+    @PETSc.Log.EventDecorator("interpolate")
     def interpolate(self, vector, out):
         """
         Interpolate from ControlSpace into self.V_r

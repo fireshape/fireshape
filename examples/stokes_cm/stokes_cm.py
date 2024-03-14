@@ -4,7 +4,7 @@ import fireshape.zoo as fsz
 
 import ROL
 
-mesh_c = fd.Mesh("stoke_control_no_extension.msh")
+mesh_c = fd.Mesh("stoke_control.msh")
 mesh_r = fd.Mesh("stoke_hole.msh")
 
 # Q = fs.FeControlSpace(mesh)
@@ -27,7 +27,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4], direct=False)
 e.solve()
-out = fd.File("no_extension.pvd")
+out = fd.File("profiling.pvd")
 
 
 def cb(*args):
@@ -67,13 +67,13 @@ params_dict = {
             'Subproblem Step Type': 'Line Search',
             'Penalty Parameter Growth Factor': 2.,
             'Print Intermediate Optimization History': True,
-            'Subproblem Iteration Limit': 50
+            'Subproblem Iteration Limit': 20
         }
     },
     'Status Test': {
         'Gradient Tolerance': 1e-4,
         'Step Tolerance': 1e-5,
-        'Iteration Limit': 10
+        'Iteration Limit': 5
     }
 }
 params = ROL.ParameterList(params_dict, "Parameters")
