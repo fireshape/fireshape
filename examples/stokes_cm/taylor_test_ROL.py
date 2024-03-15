@@ -43,56 +43,17 @@ Js = fsz.MoYoSpectralConstraint(10., fd.Constant(0.7), Q)
 J = Jr + Js
 q = fs.ControlVector(Q, inner)
 
-x = q.clone()
-x.fun.assign(1)
-
-# # Gradient Checking
-# creates 0 vector d of same size as q
 d = q.clone()
 # place 1s into d
-d.fun.assign(1) # this is irrelevant because of line 86
+# d.fun.assign(1) # this is irrelevant because of line 86
+x = q.clone()
+x.fun.assign(3)
 
-# update mesh using control vector (x = 1) to take derivative around x
-# updates d to contain gradient (steepest direction) (just a random direction)
 J.update(x, None, -1)
+# updates d to contain gradient (steepest direction) (just a random direction)
 J.gradient(d, x, None)
 
-# # create a zero vector to store ∇J(x)
-out = q.clone()
-
-# # put ∇J(x) into out
-J.update(x, None, -1)
-J.derivative(out)
-
-# # <∇J(x), d> 
-print("Actual")
-actual = fd.assemble(out.cofun(d.fun))
-print(actual)
-
-eps = [10**(-i) for i in range(10)]
-
-print("\nNumerical")
-for t in eps:
-    # to do numerical approximations
-    x2 = x.clone()
-    x2.set(x)
-    d2 = d.clone()
-    d2.set(d)
-
-    # x2 = x + dt
-    d2.scale(t)
-    x2.plus(d2)
-
-    J.update(x2, None, -1)
-    # a = J(x + td)
-    a = J.value(None, None)
-
-    J.update(x, None, -1)
-    # b = J(x)
-    b = J.value(None, None)
-
-
-    print(t)
-    print((a - b) / t)
-    print(actual - ((a - b) / t))
-    print()
+# update mesh using control vector (x = 1) to take derivative around x
+# J.update(x, None, -1)
+# J.gradient(d, x, None)
+J.checkGradient(x, d, 5, 1)
