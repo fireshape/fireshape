@@ -22,7 +22,7 @@ inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("multiple.pvd")
+out = fd.File("multiple_more_solves.pvd")
 
 # create objective functional
 J = LevelsetFunctional(Q, cb=lambda: out.write(Q.mesh_m.coordinates))
@@ -44,9 +44,9 @@ params_dict = {
         }
     },
     'Status Test': {
-        'Gradient Tolerance': 1e-5,
+        'Gradient Tolerance': 1e-6,
         'Step Tolerance': 1e-10,
-        'Iteration Limit': 80,
+        'Iteration Limit': 200,
     }
 }
 
