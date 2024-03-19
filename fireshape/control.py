@@ -313,6 +313,10 @@ class MultipleHelmholtzControlSpace(CmControlSpace):
         self.u0.assign(self.u1)
         self.solver2.solve()
         self.u0.assign(self.u1)
+        self.solver2.solve()
+        self.u0.assign(self.u1)
+        self.solver2.solve()
+        self.u0.assign(self.u1)
 
 
 class FeControlSpace(ControlSpace):
