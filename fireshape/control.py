@@ -8,7 +8,7 @@ from icecream import ic
 ic.configureOutput(includeContext=True) 
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "CmControlSpace"]
+           "BsplineControlSpace", "ControlVector", "CmControlSpace", "HelmholtzControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -132,16 +132,12 @@ class ControlSpace(object):
         Load a vector from a file
         """
         raise NotImplementedError
-
-
+    
 class CmControlSpace(ControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator):
-        # Create mesh_r and V_r
-
+    def __init__(self, mesh_c, mesh_r, indicator, nstep):
         self.mesh_c = mesh_c
         self.mesh_r = mesh_r
         self.I = indicator
-
 
         self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1, name="V_r")
         self.V_r_dual = self.V_r.dual()
@@ -164,53 +160,39 @@ class CmControlSpace(ControlSpace):
         # Scalar function space to hold the control vector p0
         self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")
         self.P_dual = self.P.dual()
-
-        v = fd.TestFunction(self.V_c)
-        u = fd.TrialFunction(self.V_c)
+        self.p0 = fd.Function(self.P)
 
         self.dphi = fd.Function(self.V_c, name="dphi")
         self.X = fd.SpatialCoordinate(self.mesh_c)
-        phi = self.X + self.dphi
+        self.phi = self.X + self.dphi
 
-        n = fd.FacetNormal(self.mesh_c)
-        normal = self.I("+")*n("+") + self.I("-")*n("-")
-
-        self.p0 = fd.Function(self.P)
-        self.J = fd.grad(phi)
+        self.J = fd.grad(self.phi)
         self.Jit = fd.inv(self.J.T)
-        self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
-            * fd.det(self.J) * fd.dx
 
-        # TODO: move ds(11) into variable?
-        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(4)
-        
-        # TODO: move bcs into constructor
-        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
         self.u0 = fd.Function(self.V_c, name="u0")
-        self.residual = fd.Cofunction(self.V_c_dual)
+        self.residual = fd.Cofunction(self.V_c_dual, name="residual")
 
-        problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
-        self.solver = fd.LinearVariationalSolver(problem)
+        self.setup()
 
         # move into constructor
-        self.nstep = 25 # TODO: experiment to find optimal nstep or feed through as parameter
+        self.nstep = nstep # TODO: experiment to find optimal nstep or feed through as parameter
         self.dt = 1 / self.nstep
 
         self.taped = False
-
         self.tape = fda.Tape()
 
-    @PETSc.Log.EventDecorator()
+    def run_forward(self):
+        self.dphi.zero()
+        for _ in range(self.nstep):
+            self.solve()
+            self.dphi.interpolate(self.dphi + self.dt * self.u0)
+
+    def interpolate(self, vector, out):
+        self.p0.assign(vector.fun)
+        self.run_forward()
+        self.Ip.interpolate(self.dphi, output=out)
+
     def restrict(self, residual, out):
-        """
-        Restrict from self.V_r_dual into ControlSpace
-
-        Input:
-        residual: fd.Cofunction, is a variable in self.V_r_dual
-        out: ControlVector, is a variable in the dual of ControlSpace
-             (overwritten with result)
-        """
-
         # Interpolate cofunction in V_r_dual into V_c_dual
         self.Ip.interpolate(residual, output=self.residual, transpose=True)
         
@@ -218,20 +200,15 @@ class CmControlSpace(ControlSpace):
         old_annotation = fda.annotate_tape()
         fda.set_working_tape(self.tape)
 
-        # TODO: Test if below should be commented or not
-        # self.residual.assign(residual) # not sure if this is needed also
-
         if not self.taped:
             fda.continue_annotation()
 
             self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
-
             self.run_forward()
-            # Jhh = fd.assemble(self.residual(self.dphi)) # derivative of this wrt phi is residual, we want derivative of residual wrt to p0 
+
             self.Jhh_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
 
             fda.pause_annotation()
-
             self.taped = True
 
         self.Jhh_hat([self.p0]) # This is a solve
@@ -244,31 +221,12 @@ class CmControlSpace(ControlSpace):
         else:
             fda.pause_annotation()
 
-    @PETSc.Log.EventDecorator()
-    def interpolate(self, vector, out):
-        """
-        Interpolate from ControlSpace into self.V_r
+    def setup(self):
+        raise NotImplementedError
 
-        Input:
-        vector: ControlVector, is a variable in ControlSpace
-        out: fd.Function, is a variable in self.V_r, is overwritten with
-             the result
-        """
-        self.p0.assign(vector.fun)
-        self.run_forward()
-        self.Ip.interpolate(self.dphi, output=out)
-        # out.assign(self.dphi)
-
-    @PETSc.Log.EventDecorator()
-    def run_forward(self):
-        self.dphi.zero()
-        # replace with linearvariationalsolver in init
-        for _ in range(self.nstep):
-            # fd.solve(self.a == self.L, self.u0, bcs=self.bcs)
-            self.solver.solve()
-            # ic(self.u0.dat.data.min(), self.u0.dat.data.max())
-            self.dphi.interpolate(self.dphi + self.dt * self.u0)
-
+    def solve(self):
+        raise NotImplementedError
+    
     def get_zero_vec(self):
         fun = fd.Function(self.P)
         fun *= 0.
@@ -283,23 +241,39 @@ class CmControlSpace(ControlSpace):
         return (self.P, None)
 
     def store(self, vec, filename="control"):
-        """
-        Store the vector to a file to be reused in a later computation.
-        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
-        decomposition are identical between store and load.
-
-        """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
             chk.store(vec.fun, name=filename)
 
     def load(self, vec, filename="control"):
-        """
-        Load a vector from a file.
-        DumbCheckpoint requires that the mesh, FunctionSpace and parallel
-        decomposition are identical between store and load.
-        """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
             chk.load(vec.fun, name=filename)
+
+class HelmholtzControlSpace(CmControlSpace):
+    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag):
+        self.boundary_tag = boundary_tag
+        super().__init__(mesh_c, mesh_r, indicator, nstep)
+    
+    def setup(self):
+        v = fd.TestFunction(self.V_c)
+        u = fd.TrialFunction(self.V_c)
+
+        n = fd.FacetNormal(self.mesh_c)
+        normal = self.I("+")*n("+") + self.I("-")*n("-")
+
+        self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
+            * fd.det(self.J) * fd.dx
+
+        # TODO: move ds(11) into variable?
+        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(self.boundary_tag)
+        
+        # TODO: move bcs into constructor
+        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
+
+        problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
+        self.solver = fd.LinearVariationalSolver(problem)
+
+    def solve(self):
+        self.solver.solve()
 
 
 class FeControlSpace(ControlSpace):

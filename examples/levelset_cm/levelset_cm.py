@@ -13,16 +13,16 @@ x = fd.SpatialCoordinate(mesh_c)
 
 I.interpolate(fd.conditional(x[0] < 1, fd.conditional(x[0] > 0, fd.conditional(x[1] > 0, fd.conditional(x[1] < 1, 1, 0), 0), 0), 0))
 
-mesh_r = fd.UnitSquareMesh(50, 50)
+mesh_r = fd.UnitSquareMesh(30, 30)
 
-Q = fs.CmControlSpace(mesh_c, mesh_r, I)
+Q = fs.HelmholtzControlSpace(mesh_c, mesh_r, I, 25, 11)
 inner = fs.LaplaceInnerProduct(Q)
 
 # inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("even_finer_c_and_even_finer_m_mesh.pvd")
+out = fd.File("new_control_space.pvd")
 
 # create objective functional
 J = LevelsetFunctional(Q, cb=lambda: out.write(Q.mesh_m.coordinates))
