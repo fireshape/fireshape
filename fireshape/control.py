@@ -200,7 +200,7 @@ class CmControlSpace(ControlSpace):
 
         self.tape = fda.Tape()
 
-    @PETSc.Log.EventDecorator("restrict")
+    @PETSc.Log.EventDecorator()
     def restrict(self, residual, out):
         """
         Restrict from self.V_r_dual into ControlSpace
@@ -234,7 +234,7 @@ class CmControlSpace(ControlSpace):
 
             self.taped = True
 
-        self.Jhh_hat([self.p0])
+        self.Jhh_hat([self.p0]) # This is a solve
         k = self.Jhh_hat.derivative(adj_input=self.residual)[0]
         k.dat.copy(out.cofun.dat)
 
@@ -244,7 +244,7 @@ class CmControlSpace(ControlSpace):
         else:
             fda.pause_annotation()
 
-    @PETSc.Log.EventDecorator("interpolate")
+    @PETSc.Log.EventDecorator()
     def interpolate(self, vector, out):
         """
         Interpolate from ControlSpace into self.V_r
@@ -259,6 +259,7 @@ class CmControlSpace(ControlSpace):
         self.Ip.interpolate(self.dphi, output=out)
         # out.assign(self.dphi)
 
+    @PETSc.Log.EventDecorator()
     def run_forward(self):
         self.dphi.zero()
         # replace with linearvariationalsolver in init
