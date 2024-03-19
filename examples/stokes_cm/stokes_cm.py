@@ -16,7 +16,7 @@ x = fd.SpatialCoordinate(mesh_c)
 
 I.interpolate(fd.conditional(x[0]**2 + x[1]**2 < 0.5**2, 1, 0))
 
-Q = fs.CmControlSpace(mesh_c, mesh_r, I)
+Q = fs.HelmholtzControlSpace(mesh_c, mesh_r, I, 25, 4)
 # this 1,2,3 represents the physical curve tag 
 # have added 5 here as this is the complete outside bit
 inner = fs.L2InnerProduct(Q, fixed_bids=[1, 2, 3])
@@ -27,7 +27,7 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4], direct=False)
 e.solve()
-out = fd.File("finer_mesh.pvd")
+out = fd.File("new_control_space.pvd")
 
 
 def cb(*args):
@@ -73,7 +73,7 @@ params_dict = {
     'Status Test': {
         'Gradient Tolerance': 1e-4,
         'Step Tolerance': 1e-5,
-        'Iteration Limit': 10
+        'Iteration Limit': 20
     }
 }
 params = ROL.ParameterList(params_dict, "Parameters")
