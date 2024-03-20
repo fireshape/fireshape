@@ -22,8 +22,8 @@ inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("control_saving/moved.pvd")
-out2 = fd.File("control_saving/control.pvd")
+out = fd.File("control_saving_finer/moved.pvd")
+out2 = fd.File("control_saving_finer/control.pvd")
 
 control_copy = Q.mesh_c.coordinates.copy(deepcopy=True)
 def cb():
@@ -54,7 +54,7 @@ params_dict = {
     'Status Test': {
         'Gradient Tolerance': 1e-5,
         'Step Tolerance': 1e-10,
-        'Iteration Limit': 80,
+        'Iteration Limit': 120,
     }
 }
 
