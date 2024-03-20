@@ -22,10 +22,18 @@ inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("new_control_space.pvd")
+out = fd.File("control_saving/moved.pvd")
+out2 = fd.File("control_saving/control.pvd")
+
+control_copy = Q.mesh_c.coordinates.copy(deepcopy=True)
+def cb():
+    out.write(Q.mesh_m.coordinates)
+    Q.mesh_c.coordinates.assign(Q.mesh_c.coordinates + Q.dphi)
+    out2.write(Q.mesh_c.coordinates, I)
+    Q.mesh_c.coordinates.assign(control_copy)
 
 # create objective functional
-J = LevelsetFunctional(Q, cb=lambda: out.write(Q.mesh_m.coordinates))
+J = LevelsetFunctional(Q, cb=cb)
 
 # ROL parameters
 params_dict = {
