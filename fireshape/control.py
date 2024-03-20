@@ -252,8 +252,9 @@ class CmControlSpace(ControlSpace):
             chk.load(vec.fun, name=filename)
 
 class HelmholtzControlSpace(CmControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag):
+    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag, interior_bc_tags = []):
         self.boundary_tag = boundary_tag
+        self.interior_bc_tags = interior_bc_tags
         super().__init__(mesh_c, mesh_r, indicator, nstep)
     
     def setup(self):
@@ -267,9 +268,10 @@ class HelmholtzControlSpace(CmControlSpace):
             * fd.det(self.J) * fd.dx
 
         self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(self.boundary_tag)
-        
-        # TODO: move bcs into constructor
         self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
+
+        for tag in self.interior_bc_tags:
+            self.bcs.append(fd.DirichletBC(self.V_c, fd.Constant((0, 0)), tag))
 
         problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
         self.solver = fd.LinearVariationalSolver(problem)
@@ -289,6 +291,7 @@ class MultipleHelmholtzControlSpace(CmControlSpace):
         n = fd.FacetNormal(self.mesh_c)
         normal = self.I("+")*n("+") + self.I("-")*n("-")
 
+        # ADD LENGTH SCALE TO SECOND INNER TERM here    
         self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
             * fd.det(self.J) * fd.dx
 
@@ -299,20 +302,15 @@ class MultipleHelmholtzControlSpace(CmControlSpace):
         problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
         self.solver = fd.LinearVariationalSolver(problem)
 
-        self.a2 = (fd.inner(u, v) - fd.inner(fd.grad(v), fd.grad(u))) * fd.dx
-        self.L2 = fd.inner(v, self.u0) * fd.dx
+        self.L2 = fd.inner(v, self.u0) * fd.det(self.J) * fd.dx
         
         self.u1 = fd.Function(self.V_c, name="u1")
 
-        problem2 = fd.LinearVariationalProblem(self.a2, self.L2, self.u1, bcs=self.bcs)
+        problem2 = fd.LinearVariationalProblem(self.a, self.L2, self.u1, bcs=self.bcs)
         self.solver2 = fd.LinearVariationalSolver(problem2)
 
     def solve(self):
         self.solver.solve()
-        self.solver2.solve()
-        self.u0.assign(self.u1)
-        self.solver2.solve()
-        self.u0.assign(self.u1)
         self.solver2.solve()
         self.u0.assign(self.u1)
         self.solver2.solve()
