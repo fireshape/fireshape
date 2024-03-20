@@ -22,14 +22,14 @@ inner = fs.LaplaceInnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("control_saving_finer/moved.pvd")
-out2 = fd.File("control_saving_finer/control.pvd")
+out = fd.File("control_saving_dphi/moved.pvd")
+out2 = fd.File("control_saving_dphi/control.pvd")
 
 control_copy = Q.mesh_c.coordinates.copy(deepcopy=True)
 def cb():
     out.write(Q.mesh_m.coordinates)
     Q.mesh_c.coordinates.assign(Q.mesh_c.coordinates + Q.dphi)
-    out2.write(Q.mesh_c.coordinates, I)
+    out2.write(Q.mesh_c.coordinates, I, Q.dphi)
     Q.mesh_c.coordinates.assign(control_copy)
 
 # create objective functional
