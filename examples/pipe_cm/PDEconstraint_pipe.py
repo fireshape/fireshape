@@ -52,17 +52,15 @@ class NavierStokesSolver(PdeConstraint):
         }
 
     def solve(self):
-        ic()
         super().solve()
         self.failed_to_solve = False
         u_old = self.solution.copy(deepcopy=True)
-        # try:
-        fd.solve(self.F == 0, self.solution, bcs=self.bcs,
+        try:
+            fd.solve(self.F == 0, self.solution, bcs=self.bcs,
                      solver_parameters=self.params)
-        # except fd.ConvergenceError:
-            # ic()
-            # self.failed_to_solve = True
-            # self.solution.assign(u_old)
+        except fd.ConvergenceError:
+            self.failed_to_solve = True
+            self.solution.assign(u_old)
 
 
 if __name__ == "__main__":
@@ -76,5 +74,5 @@ if __name__ == "__main__":
     e = NavierStokesSolver(mesh, viscosity)
     e.solve()
     print(e.failed_to_solve)
-    out = fd.File("temp_PDEConstrained_u2.pvd")
+    out = fd.File("temp_PDEConstrained_u.pvd")
     out.write(e.solution.split()[0])
