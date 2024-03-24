@@ -4,10 +4,12 @@ import fireshape.zoo as fsz
 import ROL
 from PDEconstraint_pipe import NavierStokesSolver
 from objective_pipe import PipeObjective
+from icecream import install
+install()
 
 # setup problem
-mesh_r = fd.Mesh("pipe.msh")
-mesh_c = fd.Mesh("pipe_control.msh")
+mesh_r = fd.Mesh("/home/prem/src/Github/fireshape/examples/pipe_cm/pipe.msh", name="mesh_r")
+mesh_c = fd.Mesh("/home/prem/src/Github/fireshape/examples/pipe_cm/pipe_control.msh", name="mesh_c")
 
 S = fd.FunctionSpace(mesh_c, "DG", 0)
 I = fd.Function(S, name="indicator")

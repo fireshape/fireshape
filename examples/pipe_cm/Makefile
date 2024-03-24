@@ -2,7 +2,7 @@ ifeq ($(GMSH),)
 GMSH := gmsh
 endif
 
-SCALE := 0.5
+SCALE := 0.3
 
 2d:
 	${GMSH} -2 -clscale ${SCALE} -format msh2 -o pipe.msh pipe2d.geo
