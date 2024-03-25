@@ -27,7 +27,7 @@ viscosity = fd.Constant(1./400.)
 e = NavierStokesSolver(Q.mesh_m, viscosity)
 
 # save state variable evolution in file u2.pvd or u3.pvd
-out = fd.File("solution/no_deformation.pvd")
+out = fd.File("solution/higher_limits.pvd")
 
 def cb():
     return out.write(e.solution.split()[0])
@@ -48,18 +48,29 @@ emul = ROL.StdVector(1)
 
 # ROL parameters
 params_dict = {
-    'General': {'Print Verbosity': 0,  # set to 1 to understand output
-                'Secant': {'Type': 'Limited-Memory BFGS',
-                           'Maximum Storage': 10}},
-    'Step': {'Type': 'Augmented Lagrangian',
-             'Augmented Lagrangian':
-             {'Subproblem Step Type': 'Trust Region',
-              'Print Intermediate Optimization History': True,
-              'Subproblem Iteration Limit': 15}},
-    'Status Test': {'Gradient Tolerance': 1e-2,
-                    'Step Tolerance': 1e-2,
-                    'Constraint Tolerance': 1e-1,
-                    'Iteration Limit': 15}}
+    "General": {
+        "Print Verbosity": 0,  # set to 1 to understand output
+        "Secant": {
+            "Type": "Limited-Memory BFGS", 
+            "Maximum Storage": 50
+        },
+    },
+    "Step": {
+        "Type": "Augmented Lagrangian",
+        "Augmented Lagrangian": {
+            "Subproblem Step Type": "Trust Region",
+            "Print Intermediate Optimization History": True,
+            "Subproblem Iteration Limit": 45,
+        },
+    },
+    "Status Test": {
+        "Gradient Tolerance": 1e-2,
+        "Step Tolerance": 1e-2,
+        "Constraint Tolerance": 1e-1,
+        "Iteration Limit": 45,
+    },
+}
+
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
