@@ -8,8 +8,8 @@ from icecream import install
 install()
 
 # setup problem
-mesh_r = fd.Mesh("/home/prem/src/Github/fireshape/examples/pipe_cm/pipe.msh", name="mesh_r")
-mesh_c = fd.Mesh("/home/prem/src/Github/fireshape/examples/pipe_cm/pipe_control.msh", name="mesh_c")
+mesh_r = fd.Mesh("pipe.msh", name="mesh_r")
+mesh_c = fd.Mesh("pipe_control.msh", name="mesh_c")
 
 S = fd.FunctionSpace(mesh_c, "DG", 0)
 I = fd.Function(S, name="indicator")
@@ -27,7 +27,7 @@ viscosity = fd.Constant(1./400.)
 e = NavierStokesSolver(Q.mesh_m, viscosity)
 
 # save state variable evolution in file u2.pvd or u3.pvd
-out = fd.File("solution/u2D.pvd")
+out = fd.File("solution/no_deformation.pvd")
 
 def cb():
     return out.write(e.solution.split()[0])
@@ -37,8 +37,8 @@ J_ = PipeObjective(e, Q, cb=cb)
 J = fs.ReducedObjective(J_, e)
 
 # add regularization to improve mesh quality
-Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
-J = J + Jq
+# Jq = fsz.MoYoSpectralConstraint(10, fd.Constant(0.5), Q)
+# J = J
 
 # Set up volume constraint
 vol = fsz.VolumeFunctional(Q)
@@ -55,11 +55,11 @@ params_dict = {
              'Augmented Lagrangian':
              {'Subproblem Step Type': 'Trust Region',
               'Print Intermediate Optimization History': True,
-              'Subproblem Iteration Limit': 10}},
+              'Subproblem Iteration Limit': 15}},
     'Status Test': {'Gradient Tolerance': 1e-2,
                     'Step Tolerance': 1e-2,
                     'Constraint Tolerance': 1e-1,
-                    'Iteration Limit': 10}}
+                    'Iteration Limit': 15}}
 params = ROL.ParameterList(params_dict, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
