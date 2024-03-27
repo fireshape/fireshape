@@ -15,15 +15,15 @@ I.interpolate(fd.conditional(x[0] < 1, fd.conditional(x[0] > 0, fd.conditional(x
 
 mesh_r = fd.UnitSquareMesh(50, 50)
 
-Q = fs.MultipleHelmholtzControlSpace(mesh_c, mesh_r, I, 25, 11)
+Q = fs.MultipleHelmholtzControlSpace(mesh_c, mesh_r, I, 25, 11, 1/3)
 inner = fs.LaplaceInnerProduct(Q)
 
 # inner = fs.H1InnerProduct(Q)
 q = fs.ControlVector(Q, inner)
 
 # save shape evolution in file domain.pvd
-out = fd.File("multiple_helmholtz/moved.pvd")
-out2 = fd.File("multiple_helmholtz/control.pvd")
+out = fd.File("alpha_scaling/moved.pvd")
+out2 = fd.File("alpha_scaling/control.pvd")
 
 control_copy = Q.mesh_c.coordinates.copy(deepcopy=True)
 

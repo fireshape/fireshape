@@ -280,8 +280,9 @@ class HelmholtzControlSpace(CmControlSpace):
         self.solver.solve()
 
 class MultipleHelmholtzControlSpace(CmControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag):
+    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag, alpha):
         self.boundary_tag = boundary_tag
+        self.alpha = alpha
         super().__init__(mesh_c, mesh_r, indicator, nstep)
     
     def setup(self):
@@ -292,7 +293,7 @@ class MultipleHelmholtzControlSpace(CmControlSpace):
         normal = self.I("+")*n("+") + self.I("-")*n("-")
 
         # ADD LENGTH SCALE TO SECOND INNER TERM here    
-        self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
+        self.a = (fd.inner(u, v) + self.alpha**2 * fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
             * fd.det(self.J) * fd.dx
 
         self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(self.boundary_tag)
