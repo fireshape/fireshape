@@ -210,71 +210,75 @@ class PDEconstrainedObjective(Objective):
                 vec_dJ.copy(vec_r)
         out.from_first_derivative(self.deriv_r)
 
-    def update(self, x, flag, iteration):
-        """Update domain and solution to state and adjoint equation."""
-        if self.Q.update_domain(x):
-            try:
-                # We use pyadjoint to calculate adjoint and shape derivatives,
-                # in order to do this we need to "record a tape of the forward
-                # solve", pyadjoint will then figure out all necessary
-                # adjoints.
-                import firedrake.adjoint as fda
+    def create_Jred(self):
+        """Cread reduced functional using pyadjiont."""
+        try:
+            # We use pyadjoint to calculate adjoint and shape derivatives,
+            # in order to do this we need to "record a tape of the forward
+            # solve", pyadjoint will then figure out all necessary
+            # adjoints.
+            import firedrake.adjoint as fda
+            fda.continue_annotation()
+            tape = fda.get_working_tape()  # probably better to create a new own tape, ask Daiane
+            tape.clear_tape()
+            # ensure we are annotating
+            from pyadjoint.tape import annotate_tape
+            safety_counter = 0
+            while not annotate_tape():
+                safety_counter += 1
                 fda.continue_annotation()
-                tape = fda.get_working_tape()
-                tape.clear_tape()
-                # ensure we are annotating
-                from pyadjoint.tape import annotate_tape
-                safety_counter = 0
-                while not annotate_tape():
-                    safety_counter += 1
-                    fda.continue_annotation()
-                    if safety_counter > 1e2:
-                        import sys
-                        sys.exit('Cannot annotate even after 100 attempts.')
-                mesh_m = self.Q.mesh_m
-                s = fd.Function(self.Q.V_m)
-                mesh_m.coordinates.assign(mesh_m.coordinates + s)
-                self.s = s
-                self.c = fda.Control(s)
-                self.solvePDE()
-                Jpyadj = self.objective_value()
-                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-                fda.pause_annotation()
-            except fd.ConvergenceError:
-                if self.cb is not None:
-                    self.cb()
-                raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
+                if safety_counter > 1e2:
+                    import sys
+                    sys.exit('Cannot annotate even after 100 attempts.')
+            mesh_m = self.Q.mesh_m
+            s = fd.Function(self.Q.V_m)
+            mesh_m.coordinates.assign(mesh_m.coordinates + s)
+            self.s = s
+            self.c = fda.Control(s)
+            self.solvePDE()
+            Jpyadj = self.objective_value()
+            self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+            fda.pause_annotation()
+        except fd.ConvergenceError:
+            print("Failed to solve the state equation for initial guess.")
+            raise
 
-
-                fda.continue_annotation()
-                tape = fda.get_working_tape()
-                tape.clear_tape()
-                # ensure we are annotating
-                from pyadjoint.tape import annotate_tape
-                safety_counter = 0
-                while not annotate_tape():
-                    safety_counter += 1
-                    fda.continue_annotation()
-                    if safety_counter > 1e2:
-                        import sys
-                        sys.exit('Cannot annotate even after 100 attempts.')
-                mesh_m = self.J.Q.mesh_m
-                s = fd.Function(self.J.V_m)
-                mesh_m.coordinates.assign(mesh_m.coordinates + s)
-                self.s = s
-                self.c = fda.Control(s)
-                self.e.solve()
-                Jpyadj = fd.assemble(self.J.value_form())
-                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-                fda.pause_annotation()
-            except fd.ConvergenceError:
-                if self.cb is not None:
-                    self.cb()
-                raise
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
+#    def update(self, x, flag, iteration):
+#        """Update domain and solution to state and adjoint equation."""
+#        if self.Q.update_domain(x):
+#            try:
+#                # We use pyadjoint to calculate adjoint and shape derivatives,
+#                # in order to do this we need to "record a tape of the forward
+#                # solve", pyadjoint will then figure out all necessary
+#                # adjoints.
+#                import firedrake.adjoint as fda
+#                fda.continue_annotation()
+#                tape = fda.get_working_tape()
+#                tape.clear_tape()
+#                # ensure we are annotating
+#                from pyadjoint.tape import annotate_tape
+#                safety_counter = 0
+#                while not annotate_tape():
+#                    safety_counter += 1
+#                    fda.continue_annotation()
+#                    if safety_counter > 1e2:
+#                        import sys
+#                        sys.exit('Cannot annotate even after 100 attempts.')
+#                mesh_m = self.Q.mesh_m
+#                s = fd.Function(self.Q.V_m)
+#                mesh_m.coordinates.assign(mesh_m.coordinates + s)
+#                self.s = s
+#                self.c = fda.Control(s)
+#                self.solvePDE()
+#                Jpyadj = self.objective_value()
+#                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
+#                fda.pause_annotation()
+#            except fd.ConvergenceError:
+#                if self.cb is not None:
+#                    self.cb()
+#                raise
+#        if iteration >= 0 and self.cb is not None:
+#            self.cb()
 
 
 class ObjectiveSum(Objective):
