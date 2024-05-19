@@ -1,10 +1,9 @@
-import ROL
 import firedrake as fd
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
 
 
-class Objective(ROL.Objective):
+class Objective:
 
     def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
                  quadrature_degree: int = None):
@@ -50,7 +49,8 @@ class Objective(ROL.Objective):
 
     def derivative(self, out):
         """
-        Derivative of the objective (element in dual of space)
+        Derivative of the objective (element in dual of space).
+        Called by self.gradient.
         """
         raise NotImplementedError
 
