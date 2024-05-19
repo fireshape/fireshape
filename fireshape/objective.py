@@ -59,16 +59,15 @@ class Objective:
         Compute Riesz representative of shape directional derivative.
         Function signature imposed by ROL.
         """
-
         self.derivative(g)
         g.apply_riesz_map()
 
-    def update(self, x, flag, iteration):
-        """Update physical domain and possibly store current iterate."""
-        self.Q.update_domain(x)
-        if iteration >= 0 and self.cb is not None:
-            self.cb()
-
+#    def update(self, x, flag, iteration):
+#        """Update physical domain and possibly store current iterate."""
+#        self.Q.update_domain(x)
+#        if iteration >= 0 and self.cb is not None:
+#            self.cb()
+#
     def __add__(self, other):
         if isinstance(other, Objective):
             return ObjectiveSum(self, other)
@@ -161,9 +160,9 @@ class ControlObjective(Objective):
         out.cofun.assign(self.deriv_r_coarse)
         out.scale(self.scale)
 
-    def update(self, x, flag, iteration):
-        self.f.assign(x.fun)
-        super().update(x, flag, iteration)
+    #def update(self, x, flag, iteration):
+    #    self.f.assign(x.fun)
+    #    super().update(x, flag, iteration)
 
 
 class PDEconstrainedObjective(Objective):
