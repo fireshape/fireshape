@@ -248,56 +248,6 @@ class PDEconstrainedObjective(Objective):
             self.cb()
 
 
-class ReducedObjective(ShapeObjective):
-    """Abstract class of reduced shape functionals."""
-    def __init__(self, J: Objective, e: PdeConstraint):
-        if not isinstance(J, ShapeObjective):
-            msg = "PDE constraints are currently only supported" \
-                  + " for shape objectives."
-            raise NotImplementedError(msg)
-
-        msg = "ReducedObjective is deprecated and may be removed" \
-              + "in the future. Use PDEconstrainedObjective instead."
-        print(msg)
-
-        super().__init__(J.Q, J.cb)
-        self.J = J
-        self.e = e
-        # stop any annotation that might be ongoing as we only need to record
-        # what's happening in e.solve()
-        from pyadjoint.tape import pause_annotation, annotate_tape
-        annotate = annotate_tape()
-        if annotate:
-            pause_annotation()
-
-    def value(self, x, tol):
-        """
-        Evaluate reduced objective.
-        Function signature imposed by ROL.
-        """
-        return self.J.value(x, tol)
-
-    def derivative(self, out):
-        """
-        Get the derivative from pyadjoint.
-        """
-        dJ = self.Jred.derivative()
-        # Pyadjoint returns a function instead of a cofunction
-        # because it assumes it is computing the gradient
-        with dJ.dat.vec as vec_dJ:
-            with self.deriv_r.dat.vec as vec_r:
-                vec_dJ.copy(vec_r)
-        out.from_first_derivative(self.deriv_r)
-
-    def update(self, x, flag, iteration):
-        """Update domain and solution to state and adjoint equation."""
-        if self.Q.update_domain(x):
-            try:
-                # We use pyadjoint to calculate adjoint and shape derivatives,
-                # in order to do this we need to "record a tape of the forward
-                # solve", pyadjoint will then figure out all necessary
-                # adjoints.
-                import firedrake.adjoint as fda
                 fda.continue_annotation()
                 tape = fda.get_working_tape()
                 tape.clear_tape()
