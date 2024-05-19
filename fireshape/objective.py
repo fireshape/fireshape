@@ -296,9 +296,9 @@ class ObjectiveSum(Objective):
         self.b.derivative(temp)
         out.plus(temp)
 
-    def update(self, *args):
-        self.a.update(*args)
-        self.b.update(*args)
+#    def update(self, *args):
+#        self.a.update(*args)
+#        self.b.update(*args)
 
 
 class ScaledObjective(Objective):
@@ -315,5 +315,5 @@ class ScaledObjective(Objective):
         self.J.derivative(out)
         out.scale(self.alpha)
 
-    def update(self, *args):
-        self.J.update(*args)
+#    def update(self, *args):
+#        self.J.update(*args)
