@@ -744,11 +744,10 @@ class ControlVector(ROL.Vector):
     """
 
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None, boundary_extension=None):
+                 data=None):
         super().__init__()
         self.controlspace = controlspace
         self.inner_product = inner_product
-        self.boundary_extension = boundary_extension
 
         if data is None:
             data = controlspace.get_zero_vec()
@@ -762,32 +761,10 @@ class ControlVector(ROL.Vector):
             self.cofun = None
 
     def from_first_derivative(self, fe_deriv):
-        if self.boundary_extension is not None:
-            if getattr(self.controlspace, "Ip", False):
-                raise NotImplementedError("boundary_extension is not"
-                      + " supported for discontinous/decoupled meshes") # noqa
-
-            # deep-copy value of fe_deriv
-            residual_smoothed = fe_deriv.copy(deepcopy=True)
-            # Elasticity-lift -fe_deriv with homogeneous DirBC
-            p1 = fe_deriv
-            p1 *= -1
-            p1_lifted = fd.Function(self.boundary_extension.V)
-            self.boundary_extension.solve_homogeneous_adjoint(
-                p1, p1_lifted)
-            # evaluate elasticity-eqn-form with trialfct=p1_lifted (no BCs)
-            self.boundary_extension.apply_adjoint_action(
-                p1_lifted, residual_smoothed)
-            # add correction to residual_smoothed
-            residual_smoothed -= p1
-            self.controlspace.restrict(residual_smoothed, self)
-        else:
-            self.controlspace.restrict(fe_deriv, self)
+        self.controlspace.restrict(fe_deriv, self)
 
     def to_coordinatefield(self, out):
         self.controlspace.interpolate(self, out)
-        if self.boundary_extension is not None:
-            self.boundary_extension.extend(out, out)
 
     def apply_riesz_map(self):
         """
@@ -828,9 +805,7 @@ class ControlVector(ROL.Vector):
 
         The name of this method is misleading, but it is dictated by ROL.
         """
-        res = ControlVector(self.controlspace, self.inner_product,
-                            boundary_extension=self.boundary_extension)
-        # res.set(self)
+        res = ControlVector(self.controlspace, self.inner_product)
         return res
 
     def dot(self, v):
