@@ -1,5 +1,4 @@
 from .innerproduct import InnerProduct
-import ROL
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
@@ -12,7 +11,7 @@ from scipy.interpolate import splev
 import numpy as np
 
 
-class ControlSpace(object):
+class ControlSpace:
     """
     ControlSpace is the space of geometric transformations.
 
@@ -71,10 +70,8 @@ class ControlSpace(object):
         """
         Update the interpolant self.T with q
         """
-
-        # Check if the new control is different from the last one.  ROL is
-        # sometimes a bit strange in that it calls update on the same value
-        # more than once, in that case we don't want to solve the PDE again.
+        # Check if the new control is different from the last one to avoid
+        # unnecessary PDE solves.
         if not hasattr(self, 'lastq') or self.lastq is None:
             self.lastq = q.clone()
             self.lastq.set(q)
@@ -98,7 +95,6 @@ class ControlSpace(object):
         It returns a fd.Function or a PETSc.Vec.
         It is only used in ControlVector.__init__.
         """
-
         raise NotImplementedError
 
     def assign_inner_product(self, inner_product):
@@ -651,7 +647,6 @@ class BsplineControlSpace(ControlSpace):
         Store the vector to a file to be reused in a later computation.
         DumbCheckpoint requires that the mesh, FunctionSpace and parallel
         decomposition are identical between store and load.
-
         """
         viewer = PETSc.Viewer().createBinary(filename, mode="w")
         viewer.view(vec.vec_ro())
@@ -666,16 +661,13 @@ class BsplineControlSpace(ControlSpace):
         vec.vec_wo().load(viewer)
 
 
-class ControlVector(ROL.Vector):
+class ControlVector:
     """
     A ControlVector is a variable in the ControlSpace.
 
     The data of a control vector is a PETSc.vec stored in self.vec.
     If this data corresponds also to a fd.Function, the firedrake wrapper
     around self.vec is stored in self.fun (otherwise, self.fun = None).
-
-    A ControlVector is a ROL.Vector and thus needs the following methods:
-    plus, scale, clone, dot, axpy, set.
     """
 
     def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
