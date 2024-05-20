@@ -8,14 +8,11 @@ import ROL
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("use_extension", ["wo_ext",
-                                           "w_ext",
-                                           "w_ext_fixed_fim"])
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
                                             fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 @pytest.mark.parametrize("dim", [2, 3])
-def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
+def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
@@ -72,15 +69,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
         raise NotImplementedError
 
     J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
-
-    if use_extension == "w_ext":
-        ext = fs.ElasticityExtension(Q.V_r)
-    elif use_extension == "w_ext_fixed_dim":
-        ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
-    else:
-        ext = None
-
-    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+    q = fs.ControlVector(Q, inner)
 
     # these tolerances are not very stringent, but solutions are correct with
     # tighter tolerances,  the combination

@@ -6,8 +6,7 @@ import fireshape.zoo as fsz
 
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
                                             fs.FeMultiGridControlSpace])
-@pytest.mark.parametrize("use_extension", [False, True])
-def test_regularization(controlspace_t, use_extension):
+def test_regularization(controlspace_t):
     n = 10
     mesh = fd.UnitSquareMesh(n, n)
 
@@ -16,14 +15,9 @@ def test_regularization(controlspace_t, use_extension):
     else:
         Q = controlspace_t(mesh)
 
-    if use_extension:
-        inner = fs.SurfaceInnerProduct(Q)
-        ext = fs.ElasticityExtension(Q.V_r)
-    else:
-        inner = fs.LaplaceInnerProduct(Q)
-        ext = None
+    inner = fs.LaplaceInnerProduct(Q)
 
-    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+    q = fs.ControlVector(Q, inner)
 
     X = fd.SpatialCoordinate(mesh)
     q.fun.interpolate(0.5 * X)

@@ -12,9 +12,7 @@ import ROL
 @pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
                                             fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
-def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
+def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
@@ -72,13 +70,8 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
 
     J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
 
-    if use_extension == "w_ext":
-        ext = fs.ElasticityExtension(Q.V_r)
-    elif use_extension == "w_ext_fixed_dim":
-        ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
-    else:
-        ext = None
-    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+    ext = None
+    q = fs.ControlVector(Q, inner)
 
     """
     move mesh a bit to check that we are not doing the

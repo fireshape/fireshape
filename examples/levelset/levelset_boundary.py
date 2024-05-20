@@ -9,7 +9,6 @@ Q = fs.FeMultiGridControlSpace(mesh, refinements=4, degree=2)
 # Q = fs.FeControlSpace(mesh)
 # inner = fs.SurfaceInnerProduct(Q)
 inner = fs.ElasticityInnerProduct(Q)
-extension = fs.ElasticityExtension(Q.V_r, direct_solve=True)
 
 
 mesh_m = Q.mesh_m
@@ -21,7 +20,7 @@ else:
     (x, y, z) = fd.SpatialCoordinate(mesh_m)
     f = (pow(x-0.5, 2))+pow(y-0.5, 2)+pow(z-0.5, 2) - 2.
 
-q = fs.ControlVector(Q, inner, boundary_extension=extension)
+q = fs.ControlVector(Q, inner)
 out = fd.File("domain.pvd")
 J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 J.cb()
