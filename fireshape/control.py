@@ -714,38 +714,6 @@ class ControlVector:
         else:
             return self.data
 
-    def plus(self, v):
-        vec = self.vec_wo()
-        vec += v.vec_ro()
-        if self.cofun is not None:
-            self.cofun += v.cofun
-
-    def scale(self, alpha):
-        vec = self.vec_wo()
-        vec *= alpha
-        if self.cofun is not None:
-            self.cofun *= alpha
-
-    def clone(self):
-        """
-        Returns a zero vector of the same size of self.
-
-        The name of this method is misleading, but it is dictated by ROL.
-        """
-        res = ControlVector(self.controlspace, self.inner_product)
-        return res
-
-    def dot(self, v):
-        """Inner product between self and v."""
-        return self.inner_product.eval(self, v)
-
-    def norm(self):
-        return self.dot(self)**0.5
-
-    def axpy(self, alpha, x):
-        vec = self.vec_wo()
-        vec.axpy(alpha, x.vec_ro())
-
     def set(self, v):
         vec = self.vec_wo()
         v.vec_ro().copy(vec)
