@@ -1,5 +1,6 @@
 import firedrake as fd
 
+
 class ElasticityExtension(object):
 
     def __init__(self, V, fixed_dims=[], direct_solve=False):
