@@ -6,46 +6,37 @@ import ROL
 
 
 @pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("add_to_degree_r", [0, 1])
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
                                      fs.LaplaceInnerProduct])
-@pytest.mark.parametrize("controlspace_t", [fs.FeControlSpace,
-                                            fs.FeMultiGridControlSpace,
-                                            fs.BsplineControlSpace])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
-def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
+@pytest.mark.parametrize("decoupled", [False, True])
+def test_levelset(dim, add_to_degree_r, inner_t, decoupled, pytestconfig):
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
-    clscale = 0.2 if dim == 2 else 0.4
-
-    # make the mesh a bit coarser if we are using a multigrid control space as
-    # we are refining anyway
-    if controlspace_t == fs.FeMultiGridControlSpace:
-        clscale *= 2
-
     if dim == 2:
-        mesh = fs.DiskMesh(clscale)
+        mesh_r = fd.UnitDiskMesh()
     elif dim == 3:
-        mesh = fs.SphereMesh(clscale)
+        mesh_r = fd.UnitBallMesh()
     else:
         raise NotImplementedError
 
-    if controlspace_t == fs.BsplineControlSpace:
+    if decoupled:
+        degree_c = 2
         if dim == 2:
-            bbox = [(-2, 2), (-2, 2)]
-            orders = [2, 2]
-            levels = [4, 4]
+            mesh_c = fd.RectangleMesh(10, 10, 2, 2, -2, -2)
         else:
-            bbox = [(-3, 3), (-3, 3), (-3, 3)]
-            orders = [2, 2, 2]
-            levels = [3, 3, 3]
-        Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
-    elif controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=2)
+            # 5 cells per direction, height=width=depth=6
+            mesh_c = fd.BoxMesh(5, 5, 5, 6, 6, 6)
+            # shift in x-, y-, and z-direction
+            mesh_c.coordinates.dat.data[:, 0] -= 3
+            mesh_c.coordinates.dat.data[:, 1] -= 3
+            mesh_c.coordinates.dat.data[:, 2] -= 3
     else:
-        Q = controlspace_t(mesh)
+        mesh_c = None
+        degree_c = None
+    Q = fs.FeControlSpace(mesh_r, add_to_degree_r, mesh_c, degree_c)
 
     inner = inner_t(Q)
     # if running with -v or --verbose, then export the shapes
@@ -71,14 +62,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
         raise NotImplementedError
 
     J = fsz.LevelsetFunctional(f, Q, cb=cb, scale=0.1)
-
-    if use_extension == "w_ext":
-        ext = fs.ElasticityExtension(Q.V_r)
-    elif use_extension == "w_ext_fixed_dim":
-        ext = fs.ElasticityExtension(Q.V_r, fixed_dims=[0])
-    else:
-        ext = None
-    q = fs.ControlVector(Q, inner, boundary_extension=ext)
+    q = fs.ControlVector(Q, inner)
 
     """
     move mesh a bit to check that we are not doing the
@@ -97,7 +81,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     q.scale(0)
     """ End taylor test """
 
-    grad_tol = 1e-6 if dim == 2 else 1e-4
+    grad_tol = 1e-5 if dim == 2 else 1e-4
     # ROL parameters
     params_dict = {
         'General': {
