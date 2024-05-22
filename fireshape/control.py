@@ -155,13 +155,31 @@ class ControlSpace:
 
 
 class FeControlSpace(ControlSpace):
-    """Use self.V_r as actual ControlSpace."""
+    """
+    Use Lagrangian finite elements as ControlSpace.
 
-    def __init__(self, mesh_r):
+    The default option is to use self.V_r as actual ControlSpace.
+    If self.V_r is discontinous (e.g. periodic meshes), then create
+    a continuous subspace self.V_c (with the same polynomial degree)
+    to be used as ControlSpace (to ensure domain updates do not create
+    holes in the domain).
+
+    The user can increase the polynomial degree of mesh_r by setting
+    the variable add_to_degree_r.
+
+    If mesh_c and degree_c are provided, then use a degree_c Lagrangian
+    finite element space defined on mesh_d as ControlSpace.
+    Note: as of 15.11.2023, higher-order meshes are not supported, that is,
+    mesh_d has to be a polygonal mesh (mesh_r can still be of higher-order).
+    """
+
+    def __init__(self, mesh_r, add_to_degree_r=0, mesh_c=None, degree_c=None):
         # Create mesh_r and V_r
         self.mesh_r = mesh_r
         element = self.mesh_r.coordinates.function_space().ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
+        family = element.family()
+        degree = element.degree() + add_to_degree_r
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree)
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
@@ -170,26 +188,26 @@ class FeControlSpace(ControlSpace):
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.FunctionSpace(self.mesh_m, element)
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree)
         self.V_m_dual = self.V_m.dual()
-        self.is_DG = False
 
-        """
-        ControlSpace for discontinuous coordinate fields
-        (e.g.  periodic domains)
-
-        In Firedrake, periodic meshes are implemented using a discontinuous
-        field. This implies that self.V_r contains discontinuous functions.
-        To ensure domain updates do not create holes in the domain,
-        use a continuous subspace self.V_c of self.V_r as control space.
-        """
-        if element.family() == 'Discontinuous Lagrange':
-            self.is_DG = True
-            self.V_c = fd.VectorFunctionSpace(self.mesh_r,
-                                              "CG", element._degree)
+        if mesh_c is not None:
+            if degree_c is None:
+                raise ValueError('You need to specify degree_c')
+            self.is_decoupled = True
+            # Create decoupled FE-control space of mesh_c
+            self.V_c = fd.VectorFunctionSpace(mesh_c, "CG", degree_c)
             self.V_c_dual = self.V_c.dual()
-            # create interpolator from V_c onto large space V_r
             testfct_V_c = fd.TestFunction(self.V_c)
+            # Create interpolator from V_c into V_r
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
+                                      allow_missing_dofs=True)
+        elif element.family() == 'Discontinuous Lagrange':
+            self.is_DG = True
+            self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree)
+            self.V_c_dual = self.V_c.dual()
+            testfct_V_c = fd.TestFunction(self.V_c)
+            # Create interpolator from V_c into V_r
             self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
         self.fun = self.get_zero_vec()
@@ -197,23 +215,27 @@ class FeControlSpace(ControlSpace):
         self.derivative = self.get_zero_covec()
 
     def restrict(self, residual):
-        if self.is_DG:
+        if getattr(self, "is_DG", False):
+            self.Ip.interpolate(residual, output=self.derivative,
+                                transpose=True)
+        elif getattr(self, "is_decoupled", False):
+            # it's not clear whether this is 100% correct for missing vals
             self.Ip.interpolate(residual, output=self.derivative,
                                 transpose=True)
         else:
-            self.derivative.assign(residual)
+            out.cofun.assign(residual)
 
     def interpolate(self, x: 'PETSc.vec'):
-        with self.fun.dat.vec_wo as fun:
-            x.copy(fun)
-        if self.is_DG:
-            # inject fom V_c into V_r
-            self.Ip.interpolate(self.fun, output=self.T)
+        if getattr(self, "is_DG", False):
+            self.Ip.interpolate(vector.fun, output=self.T)
+        elif getattr(self, "is_decoupled", False):
+            # extend by zero
+            self.Ip.interpolate(vector.fun, output=self.T, default_missing_val=0.)
         else:
             self.T.assign(self.fun)
 
     def get_zero_vec(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             fun = fd.Function(self.V_c)
         else:
             fun = fd.Function(self.V_r)
@@ -221,7 +243,7 @@ class FeControlSpace(ControlSpace):
         return fun
 
     def get_zero_covec(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             fun = fd.Cofunction(self.V_c_dual)
         else:
             fun = fd.Cofunction(self.V_r_dual)
@@ -229,7 +251,7 @@ class FeControlSpace(ControlSpace):
         return fun
 
     def get_space_for_inner(self):
-        if self.is_DG:
+        if hasattr(self, "Ip"):
             return (self.V_c, None)
         return (self.V_r, None)
 
@@ -705,3 +727,128 @@ class BsplineControlSpace(ControlSpace):
         """
         viewer = PETSc.Viewer().createBinary(filename, mode="r")
         vec.vec_wo().load(viewer)
+<<<<<<< HEAD
+=======
+
+
+class ControlVector(ROL.Vector):
+    """
+    A ControlVector is a variable in the ControlSpace.
+
+    The data of a control vector is a PETSc.vec stored in self.vec.
+    If this data corresponds also to a fd.Function, the firedrake wrapper
+    around self.vec is stored in self.fun (otherwise, self.fun = None).
+
+    A ControlVector is a ROL.Vector and thus needs the following methods:
+    plus, scale, clone, dot, axpy, set.
+    """
+
+    def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
+                 data=None, boundary_extension=None):
+        super().__init__()
+        self.controlspace = controlspace
+        self.inner_product = inner_product
+        self.boundary_extension = boundary_extension
+
+        if data is None:
+            data = controlspace.get_zero_vec()
+
+        self.data = data
+        if isinstance(data, fd.Function):
+            self.fun = data
+            self.cofun = controlspace.get_zero_covec()
+        else:
+            self.fun = None
+            self.cofun = None
+
+    def from_first_derivative(self, fe_deriv):
+        if self.boundary_extension is not None:
+            if getattr(self.controlspace, "Ip", False):
+                raise NotImplementedError("boundary_extension is not"
+                      + " supported for discontinous/decoupled meshes") # noqa
+
+            # deep-copy value of fe_deriv
+            residual_smoothed = fe_deriv.copy(deepcopy=True)
+            # Elasticity-lift -fe_deriv with homogeneous DirBC
+            p1 = fe_deriv
+            p1 *= -1
+            p1_lifted = fd.Function(self.boundary_extension.V)
+            self.boundary_extension.solve_homogeneous_adjoint(
+                p1, p1_lifted)
+            # evaluate elasticity-eqn-form with trialfct=p1_lifted (no BCs)
+            self.boundary_extension.apply_adjoint_action(
+                p1_lifted, residual_smoothed)
+            # add correction to residual_smoothed
+            residual_smoothed -= p1
+            self.controlspace.restrict(residual_smoothed, self)
+        else:
+            self.controlspace.restrict(fe_deriv, self)
+
+    def to_coordinatefield(self, out):
+        self.controlspace.interpolate(self, out)
+        if self.boundary_extension is not None:
+            self.boundary_extension.extend(out, out)
+
+    def apply_riesz_map(self):
+        """
+        Maps this vector into the dual space.
+        Overwrites the content.
+        """
+        self.inner_product.riesz_map(self, self)
+
+    def vec_ro(self):
+        if isinstance(self.data, fd.Function):
+            with self.data.dat.vec_ro as v:
+                return v
+        else:
+            return self.data
+
+    def vec_wo(self):
+        if isinstance(self.data, fd.Function):
+            with self.data.dat.vec_wo as v:
+                return v
+        else:
+            return self.data
+
+    def plus(self, v):
+        vec = self.vec_wo()
+        vec += v.vec_ro()
+        if self.cofun is not None:
+            self.cofun += v.cofun
+
+    def scale(self, alpha):
+        vec = self.vec_wo()
+        vec *= alpha
+        if self.cofun is not None:
+            self.cofun *= alpha
+
+    def clone(self):
+        """
+        Returns a zero vector of the same size of self.
+
+        The name of this method is misleading, but it is dictated by ROL.
+        """
+        res = ControlVector(self.controlspace, self.inner_product,
+                            boundary_extension=self.boundary_extension)
+        # res.set(self)
+        return res
+
+    def dot(self, v):
+        """Inner product between self and v."""
+        return self.inner_product.eval(self, v)
+
+    def norm(self):
+        return self.dot(self)**0.5
+
+    def axpy(self, alpha, x):
+        vec = self.vec_wo()
+        vec.axpy(alpha, x.vec_ro())
+
+    def set(self, v):
+        vec = self.vec_wo()
+        v.vec_ro().copy(vec)
+
+    def __str__(self):
+        """String representative, so we can call print(vec)."""
+        return self.vec_ro()[:].__str__()
+>>>>>>> ce825a3 (Ap/fedecoupledcontrolspace (#85))
