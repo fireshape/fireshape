@@ -4,19 +4,16 @@ from .pde_constraint import PdeConstraint
 
 
 class Objective:
-
-    def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
-                 quadrature_degree: int = None):
-
         """
+        Abstract Objective class.
+
         Inputs: Q: ControlSpace
                 cb: method to store current shape iterate at self.udpate
-                scale: scaling factor that multiplies shape
-                       functional and directional derivative
                 quadrature_degree: quadrature degree to use. If None, then
                 ufl will guesstimate the degree
         """
-        super().__init__()
+    def __init__(self, Q: ControlSpace, cb=None,
+                 quadrature_degree: int = None):
         self.Q = Q  # ControlSpace
         self.V_r = Q.V_r  # fd.VectorFunctionSpace on reference mesh
         self.V_r_dual = Q.V_r_dual
@@ -24,50 +21,44 @@ class Objective:
         self.V_m_dual = Q.V_m_dual
         self.mesh_m = self.V_m.mesh()  # physical mesh
         self.cb = cb
-        self.scale = scale
         self.deriv_r = fd.Cofunction(self.V_r_dual)
         if quadrature_degree is not None:
             self.params = {"quadrature_degree": quadrature_degree}
         else:
             self.params = None
 
-    def value_form(self):
-        """UFL formula of misfit functional."""
+    def value(self):
+        """Evaluate objective functional."""
         raise NotImplementedError
 
-    def value(self, x, tol):
-        """Evaluate misfit functional. Function signature imposed by ROL."""
-        return self.scale * fd.assemble(self.value_form(),
-                                        form_compiler_parameters=self.params)
-
-    def derivative_form(self, v):
+    def derivative(self):
         """
-        UFL formula of partial shape directional derivative
-        """
-        X = fd.SpatialCoordinate(self.mesh_m)
-        return fd.derivative(self.value_form(), X, v)
-
-    def derivative(self, out):
-        """
-        Derivative of the objective (element in dual of space).
-        Called by self.gradient.
+        Compute the derivative of the objective (element in dual of space)
+        and store it in self.deriv_r. Called by self.gradient.
         """
         raise NotImplementedError
 
-    def gradient(self, g, x, tol):
+    def gradient(self, g):
         """
         Compute Riesz representative of shape directional derivative.
-        Function signature imposed by ROL.
         """
-        self.derivative(g)
-        g.apply_riesz_map()
+        self.derivative() # store derivative in self.deriv_r
+        self.Q.compute_gradient(self.deriv_r, g)
+        #g.apply_riesz_map()  # this is what was used before
 
-#    def update(self, x, flag, iteration):
-#        """Update physical domain and possibly store current iterate."""
-#        self.Q.update_domain(x)
-#        if iteration >= 0 and self.cb is not None:
-#            self.cb()
-#
+    def objectiveGradient(self, tao, x, g):
+        """
+        Evaluate objective and compute gradient. Signature imposed
+        by TAO.setObjectiveGradient
+        """
+        if self.Q.update_domain(x):
+            J = self.value()
+            self.gradient(g)
+            return J
+        else:
+            print("implement strategy to retrieve previously computed vals")
+            import ipdb; ipdb.set_trace()
+
     def __add__(self, other):
         if isinstance(other, Objective):
             return ObjectiveSum(self, other)
@@ -91,8 +82,8 @@ class UnconstrainedObjective(Objective)
 
     def value(self):
         """Evaluate objective functional."""
-        return self.scale * fd.assemble(self.value_form(),
-                                        form_compiler_parameters=self.params)
+        return fd.assemble(self.value_form(),
+                           form_compiler_parameters=self.params)
 
     def derivative_form(self, v):
         """
@@ -121,9 +112,7 @@ class ShapeObjective(UnconstrainedObjective):
         Assemble partial directional derivative wrt ControlSpace perturbations.
 
         First, assemble directional derivative (wrt FEspace V_m) and
-        store it in self.deriv_m. Then pass the values to self.deriv_r,
-        which is then converted to the directional derivative wrt
-        ControlSpace perturbations using ControlSpace.restrict .
+        store it in self.deriv_m. Then pass the values to self.deriv_r.
         """
         v = fd.TestFunction(self.V_m)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_m,
@@ -131,8 +120,6 @@ class ShapeObjective(UnconstrainedObjective):
         with self.deriv_m.dat.vec as vec_m:
             with self.deriv_r.dat.vec as vec_r:
                 vec_m.copy(vec_r)
-        #self.Q.from_first_derivative(self.deriv_r)
-        #out.scale(self.scale)
 
 
 class DeformationObjective(UnconstrainedObjective):
@@ -153,10 +140,8 @@ class DeformationObjective(UnconstrainedObjective):
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
-        #out.from_first_derivative(self.deriv_r)
-        #out.scale(self.scale)
 
-
+# comment out functionality which may be removed
 #class ControlObjective(UnconstrainedObjective):
 #    """
 #    Similar to DeformationObjective, but in the case of a
@@ -233,11 +218,9 @@ class PDEconstrainedObjective(Objective):
         dJ = self.Jred.derivative(options=opts)
         # copy coeffs of cofuntion on mesh_m into
         # coeffs of cofunction on mesh_r
-        # Note: consider definining a method for this
         with dJ.dat.vec as vec_dJ:
             with self.deriv_r.dat.vec as vec_r:
                 vec_dJ.copy(vec_r)
-        #self.Q.from_first_derivative(self.deriv_r)
 
     def createJred(self):
         """Create reduced functional using pyadjiont."""
@@ -260,43 +243,6 @@ class PDEconstrainedObjective(Objective):
             print("Failed to solve the state equation for initial guess.")
             raise
 
-#    def update(self, x, flag, iteration):
-#        """Update domain and solution to state and adjoint equation."""
-#        if self.Q.update_domain(x):
-#            try:
-#                # We use pyadjoint to calculate adjoint and shape derivatives,
-#                # in order to do this we need to "record a tape of the forward
-#                # solve", pyadjoint will then figure out all necessary
-#                # adjoints.
-#                import firedrake.adjoint as fda
-#                fda.continue_annotation()
-#                tape = fda.get_working_tape()
-#                tape.clear_tape()
-#                # ensure we are annotating
-#                from pyadjoint.tape import annotate_tape
-#                safety_counter = 0
-#                while not annotate_tape():
-#                    safety_counter += 1
-#                    fda.continue_annotation()
-#                    if safety_counter > 1e2:
-#                        import sys
-#                        sys.exit('Cannot annotate even after 100 attempts.')
-#                mesh_m = self.Q.mesh_m
-#                s = fd.Function(self.Q.V_m)
-#                mesh_m.coordinates.assign(mesh_m.coordinates + s)
-#                self.s = s
-#                self.c = fda.Control(s)
-#                self.solvePDE()
-#                Jpyadj = self.objective_value()
-#                self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-#                fda.pause_annotation()
-#            except fd.ConvergenceError:
-#                if self.cb is not None:
-#                    self.cb()
-#                raise
-#        if iteration >= 0 and self.cb is not None:
-#            self.cb()
-
 
 class ObjectiveSum(Objective):
 
@@ -306,17 +252,13 @@ class ObjectiveSum(Objective):
         self.b = b
 
     def value(self):
-        return self.a.value(x, tol) + self.b.value(x, tol)
+        return self.a.value() + self.b.value()
 
-    def derivative(self, out):
+    def derivative(self):
         temp = out.clone()
-        self.a.derivative(out)
-        self.b.derivative(temp)
-        out.plus(temp)
-
-#    def update(self, *args):
-#        self.a.update(*args)
-#        self.b.update(*args)
+        self.a.derivative()
+        self.b.derivative()
+        self.deriv_r = self.a.deriv_r + self.b.deriv_r
 
 
 class ScaledObjective(Objective):
@@ -326,12 +268,9 @@ class ScaledObjective(Objective):
         self.J = J
         self.alpha = alpha
 
-    def value(self, *args):
-        return self.alpha * self.J.value(*args)
+    def value(self):
+        return self.alpha * self.J.value()
 
     def derivative(self, out):
-        self.J.derivative(out)
-        out.scale(self.alpha)
-
-#    def update(self, *args):
-#        self.J.update(*args)
+        self.J.derivative()
+        self.deriv_r *= self.alpha
