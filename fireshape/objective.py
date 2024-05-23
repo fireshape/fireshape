@@ -78,8 +78,31 @@ class Objective:
     def __rmul__(self, alpha):
         return ScaledObjective(self, alpha)
 
+class UnconstrainedObjective(Objective)
+    """Abstract class of unconstrained objective functionals."""
+    def __init__(self, *args, **kwargs):
+        """
+        """
+        super().__init__(*args, **kwargs)
 
-class ShapeObjective(Objective):
+    def value_form(self):
+        """UFL formula of objective functional."""
+        raise NotImplementedError
+
+    def value(self):
+        """Evaluate objective functional."""
+        return self.scale * fd.assemble(self.value_form(),
+                                        form_compiler_parameters=self.params)
+
+    def derivative_form(self, v):
+        """
+        UFL formula of partial shape directional derivative
+        """
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.value_form(), X, v)
+
+
+class ShapeObjective(UnconstrainedObjective):
     """Abstract class of shape functionals."""
     def __init__(self, *args, **kwargs):
         """
@@ -93,7 +116,7 @@ class ShapeObjective(Objective):
         super().__init__(*args, **kwargs)
         self.deriv_m = fd.Cofunction(self.V_m_dual)
 
-    def derivative(self, out):
+    def derivative(self):
         """
         Assemble partial directional derivative wrt ControlSpace perturbations.
 
@@ -108,11 +131,11 @@ class ShapeObjective(Objective):
         with self.deriv_m.dat.vec as vec_m:
             with self.deriv_r.dat.vec as vec_r:
                 vec_m.copy(vec_r)
-        out.from_first_derivative(self.deriv_r)
-        out.scale(self.scale)
+        #self.Q.from_first_derivative(self.deriv_r)
+        #out.scale(self.scale)
 
 
-class DeformationObjective(Objective):
+class DeformationObjective(UnconstrainedObjective):
     """
     Abstract class for functionals that depend on the deformation of the mesh.
     These are different from shape functionals, as they are entirely defined on
@@ -130,39 +153,39 @@ class DeformationObjective(Objective):
         v = fd.TestFunction(self.V_r)
         fd.assemble(self.derivative_form(v), tensor=self.deriv_r,
                     form_compiler_parameters=self.params)
-        out.from_first_derivative(self.deriv_r)
-        out.scale(self.scale)
+        #out.from_first_derivative(self.deriv_r)
+        #out.scale(self.scale)
 
 
-class ControlObjective(Objective):
-    """
-    Similar to DeformationObjective, but in the case of a
-    FeMultigridConstrolSpace might want to formulate functionals
-    in term of the deformation defined on the coarse grid,
-    and not in terms of the prolonged deformation.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # function used to define objective value_form,
-        # it contains the current control value, see self.update
-        self.f = fd.Function(self.Q.V_r_coarse)
-        # container for directional derivatives
-        self.deriv_r_coarse = fd.Cofunction(self.Q.V_r_coarse_dual)
-
-    def derivative(self, out):
-        """
-        Assemble partial directional derivative wrt ControlSpace perturbations.
-        """
-        v = fd.TestFunction(self.Q.V_r_coarse)
-        fd.assemble(self.derivative_form(v), tensor=self.deriv_r_coarse,
-                    form_compiler_parameters=self.params)
-        out.cofun.assign(self.deriv_r_coarse)
-        out.scale(self.scale)
-
-    #def update(self, x, flag, iteration):
-    #    self.f.assign(x.fun)
-    #    super().update(x, flag, iteration)
+#class ControlObjective(UnconstrainedObjective):
+#    """
+#    Similar to DeformationObjective, but in the case of a
+#    FeMultigridConstrolSpace might want to formulate functionals
+#    in term of the deformation defined on the coarse grid,
+#    and not in terms of the prolonged deformation.
+#    """
+#
+#    def __init__(self, *args, **kwargs):
+#        super().__init__(*args, **kwargs)
+#        # function used to define objective value_form,
+#        # it contains the current control value, see self.update
+#        self.f = fd.Function(self.Q.V_r_coarse)
+#        # container for directional derivatives
+#        self.deriv_r_coarse = fd.Cofunction(self.Q.V_r_coarse_dual)
+#
+#    def derivative(self, out):
+#        """
+#        Assemble partial directional derivative wrt ControlSpace perturbations.
+#        """
+#        v = fd.TestFunction(self.Q.V_r_coarse)
+#        fd.assemble(self.derivative_form(v), tensor=self.deriv_r_coarse,
+#                    form_compiler_parameters=self.params)
+#        out.cofun.assign(self.deriv_r_coarse)
+#        out.scale(self.scale)
+#
+#    #def update(self, x, flag, iteration):
+#    #    self.f.assign(x.fun)
+#    #    super().update(x, flag, iteration)
 
 
 class PDEconstrainedObjective(Objective):
@@ -173,71 +196,66 @@ class PDEconstrainedObjective(Objective):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        # stop any annotation that might be ongoing as we only need to record
-        # what happens in self.solvePDE()
-        from pyadjoint.tape import pause_annotation, annotate_tape
-        if annotate_tape():
-            pause_annotation()
+        # dummy variable pyadjoint uses to compute shape
+        # derivative and evaluate shape functional. In practice,
+        # self.T_m = 0 throughout the optimization because mesh_m
+        # is update via Control.update_domain (because we keep mesh_r
+        # fixed for the computation of shape gradients and BFGS)
+        self.T_m = fd.Function(self.Q.V_m)
 
-    def value(self, x, tol):
+    def solvePDE(self):
         """
-        Evaluate reduced objective.
-        Function signature imposed by ROL.
+        User's implementation to solve the PDE constraint. This method is used
+        by self.createJred to create the reduced functional.
         """
-        return self.objective_value()
+        raise NotImplementedError
 
     def objective_value(self):
         """
-        Evaluate reduced objective. Method introduced to
-        bypass ROL signature in self.value.
+        User's implementation to evaluate the objective function once the PDE
+        constraint has been solved. This method is used by self.createJred to
+        create the reduced functional.
         """
         raise NotImplementedError
 
-    def solvePDE(self):
-        """Solve the PDE constraint."""
-        raise NotImplementedError
+    def value(self):
+        """
+        Evaluate reduced objective.
+        """
+        return self.Jred.__call__(self.T_m)
 
-    def derivative(self, out):
+    def derivative(self):
         """
         Get the derivative from pyadjoint.
         """
-        dJ = self.Jred.derivative()
-        # Pyadjoint returns a function instead of a cofunction
-        # because it assumes it is computing the gradient
+        # use pyadjiont functionality to return cofunction
+        opts = {"riesz_representation": None}
+        dJ = self.Jred.derivative(options=opts)
+        # copy coeffs of cofuntion on mesh_m into
+        # coeffs of cofunction on mesh_r
+        # Note: consider definining a method for this
         with dJ.dat.vec as vec_dJ:
             with self.deriv_r.dat.vec as vec_r:
                 vec_dJ.copy(vec_r)
-        out.from_first_derivative(self.deriv_r)
+        #self.Q.from_first_derivative(self.deriv_r)
 
-    def create_Jred(self):
-        """Cread reduced functional using pyadjiont."""
+    def createJred(self):
+        """Create reduced functional using pyadjiont."""
         try:
             # We use pyadjoint to calculate adjoint and shape derivatives,
             # in order to do this we need to "record a tape of the forward
             # solve", pyadjoint will then figure out all necessary
             # adjoints.
             import firedrake.adjoint as fda
-            fda.continue_annotation()
-            tape = fda.get_working_tape()  # probably better to create a new own tape, ask Daiane
-            tape.clear_tape()
-            # ensure we are annotating
-            from pyadjoint.tape import annotate_tape
-            safety_counter = 0
-            while not annotate_tape():
-                safety_counter += 1
-                fda.continue_annotation()
-                if safety_counter > 1e2:
-                    import sys
-                    sys.exit('Cannot annotate even after 100 attempts.')
-            mesh_m = self.Q.mesh_m
-            s = fd.Function(self.Q.V_m)
-            mesh_m.coordinates.assign(mesh_m.coordinates + s)
-            self.s = s
-            self.c = fda.Control(s)
-            self.solvePDE()
-            Jpyadj = self.objective_value()
-            self.Jred = fda.ReducedFunctional(Jpyadj, self.c)
-            fda.pause_annotation()
+            with stop_annotating():
+                mytape = fda.Tape()
+                with set_working_tape(mytape):
+                    fda.continue_annotation()
+                    mesh_m = self.Q.mesh_m
+                    mesh_m.coordinates.assign(mesh_m.coordinates + self.T_m)
+                    self.solvePDE()
+                    Jpyadj = self.objective_value()
+                    self.Jred = fda.ReducedFunctional(Jpyadj, fda.Control(self.T_m)
         except fd.ConvergenceError:
             print("Failed to solve the state equation for initial guess.")
             raise
@@ -287,7 +305,7 @@ class ObjectiveSum(Objective):
         self.a = a
         self.b = b
 
-    def value(self, x, tol):
+    def value(self):
         return self.a.value(x, tol) + self.b.value(x, tol)
 
     def derivative(self, out):
