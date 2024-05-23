@@ -42,16 +42,13 @@ class ControlSpace:
     required by this operation.
     """
 
-    def restrict(self, residual, out):
+    def restrict(self, residual):
         """
-        Restrict from self.V_r_dual into ControlSpace
+        Restrict from self.V_r_dual into ControlSpace.codata.
 
         Input:
         residual: fd.Cofunction, is a variable in self.V_r_dual
-        out: ControlVector, is a variable in the dual of ControlSpace
-             (overwritten with result)
         """
-
         raise NotImplementedError
 
     def interpolate(self, vector, out):
@@ -73,8 +70,8 @@ class ControlSpace:
         # Check if the new control is different from the last one to avoid
         # unnecessary PDE solves.
         if not hasattr(self, 'lastq') or self.lastq is None:
-            self.lastq = q.clone()
-            self.lastq.set(q)
+            self.lastq = q.duplicate()
+            q.copy(self.lastq)
         else:
             self.lastq.axpy(-1., q)
             # calculate l2 norm (faster)
