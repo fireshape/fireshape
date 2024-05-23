@@ -44,7 +44,6 @@ class Objective:
         """
         self.derivative() # store derivative in self.deriv_r
         self.Q.compute_gradient(self.deriv_r, g)
-        #g.apply_riesz_map()  # this is what was used before
 
     def objectiveGradient(self, tao, x, g):
         """
