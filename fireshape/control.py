@@ -154,8 +154,6 @@ class ControlSpace:
         raise NotImplementedError
 
 
-
-
 class FeControlSpace(ControlSpace):
     """
     Use Lagrangian finite elements as ControlSpace.
@@ -225,14 +223,17 @@ class FeControlSpace(ControlSpace):
             self.Ip.interpolate(residual, output=self.derivative,
                                 transpose=True)
         else:
-            out.cofun.assign(residual)
+            self.derivative.assign(residual)
 
     def interpolate(self, x: 'PETSc.vec'):
+        with self.fun.dat.vec_wo as fun:
+            x.copy(fun)
         if getattr(self, "is_DG", False):
-            self.Ip.interpolate(vector.fun, output=self.T)
+            # inject fom V_c into V_r
+            self.Ip.interpolate(self.fun, output=self.T)
         elif getattr(self, "is_decoupled", False):
             # extend by zero
-            self.Ip.interpolate(vector.fun, output=self.T, default_missing_val=0.)
+            self.Ip.interpolate(self.fun, output=self.T, default_missing_val=0.)
         else:
             self.T.assign(self.fun)
 
@@ -730,6 +731,7 @@ class BsplineControlSpace(ControlSpace):
         viewer = PETSc.Viewer().createBinary(filename, mode="r")
         vec.vec_wo().load(viewer)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 
 
@@ -828,4 +830,3 @@ class ControlVector(ROL.Vector):
     def __str__(self):
         """String representative, so we can call print(vec)."""
         return self.vec_ro()[:].__str__()
->>>>>>> ce825a3 (Ap/fedecoupledcontrolspace (#85))
