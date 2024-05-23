@@ -24,7 +24,7 @@ class ControlSpace:
         self.V_r is a Firedrake vectorial Lagrangian finite element
             space on mesh_r
         self.id is the element of V_r that satisfies id(x) = x for every x
-        self.T is the interpolant of a ControlSpace variable in self.V_r
+        self.T is the interpolant of PETSc.vec control variable in self.V_r
         self.mesh_m is the mesh that corresponds to self.T (moved domain)
         self.V_m is the Firedrake vectorial Lagrangian finite element
             space on mesh_m
@@ -41,32 +41,34 @@ class ControlSpace:
     Lagrangian finite elements are parametric, no transformation matrix is
     required by this operation.
     """
+    def __init__(self):
+        # shape directional derivatives, either a PETSc.vec or a fd.Cofunction
+        # (a PETSc.vec if inner_product.interpolated = True)
+        self.derivative = self.get_zero_covec()
+        # optional (required if inner_product.interpolated = False)
+        self.fun = None  # ufl wrapper of control variable (PETSc.vec)
+        self.gradient = None  # ufl wrapper of PETSc.vec containig gradient
 
     def restrict(self, residual):
         """
-        Restrict from self.V_r_dual into ControlSpace.codata.
+        Restrict from self.V_r_dual into self.derivative.
 
         Input:
-        residual: fd.Cofunction, is a variable in self.V_r_dual
+        residual: fd.Cofunction in  self.V_r_dual provided by Objective.derivative()
         """
         raise NotImplementedError
 
-    def interpolate(self, vector, out):
+    def interpolate(self, x: 'PETSc.vec'):
         """
-        Interpolate from ControlSpace into self.V_r
+        Overwrites self.T.dat.vec with values from x.
 
         Input:
-        vector: ControlVector, is a variable in ControlSpace
-        out: fd.Function, is a variable in self.V_r, is overwritten with
-             the result
+        x: PETSc vector with control values
         """
-
         raise NotImplementedError
 
-    def update_domain(self, q: 'ControlVector'):
-        """
-        Update the interpolant self.T with q
-        """
+    def update_domain(self, q: 'PETSc.vec'):
+        """Interpolate q into self.T."""
         # Check if the new control is different from the last one to avoid
         # unnecessary PDE solves.
         if not hasattr(self, 'lastq') or self.lastq is None:
@@ -81,18 +83,33 @@ class ControlSpace:
                 return False
             else:
                 self.lastq.set(q)
-        q.to_coordinatefield(self.T)
+        self.interpolate(q)
         self.T += self.id
         return True
 
     def get_zero_vec(self):
         """
-        Create the object that stores the data for a ControlVector.
-
-        It returns a fd.Function or a PETSc.Vec.
-        It is only used in ControlVector.__init__.
+        Create the object that stores the data for a ControlVector
+        (either a PETSc.vec or a fd.Function.
         """
         raise NotImplementedError
+
+    def get_zero_covec(self):
+        """
+        Create the object that stores the data for a self.derivative
+        """
+        raise NotImplementedError
+
+    def get_PETSc_zero_vec(self):
+        """
+        Return PETSc.vec for TAO.setSolution(x)
+        """
+        out = self.get_zero_vec()
+        if isinstance(out, fd.Function):
+            with out.dat.vec as vec:
+                return vec
+        else:
+            return out
 
     def assign_inner_product(self, inner_product):
         """
@@ -109,6 +126,21 @@ class ControlSpace:
         """
         raise NotImplementedError
 
+    def compute_gradient(fe_deriv_r, g)
+        """
+        Compute the Riesz representative of the cofunction fe_deriv_r.
+        First, restrict deriv_r to the control space (write in
+        self.derivative). Then, compute its Riesz representative and
+        return its coefficients as a PETSc.vec
+        """
+        self.restrict(fe_deriv_r)
+        if self.inner_product.interpolated:
+            self.inner_product.riesz_map(self.derivative, g)
+        else:
+            self.inner_product.riesz_map(self.derivative, self.gradient)
+            with self.gradient.dat.vec_ro as gradient:
+                gradient.copy(g)
+
     def store(self, vec, filename):
         """
         Store the vector to a file to be reused in a later computation
@@ -120,8 +152,6 @@ class ControlSpace:
         Load a vector from a file
         """
         raise NotImplementedError
-
-
 
 
 class FeControlSpace(ControlSpace):
@@ -162,18 +192,23 @@ class FeControlSpace(ControlSpace):
             testfct_V_c = fd.TestFunction(self.V_c)
             self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
-    def restrict(self, residual, out):
-        if self.is_DG:
-            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
-        else:
-            out.cofun.assign(residual)
+        self.fun = self.get_zero_vec()
+        self.gradient = self.get_zero_vec()
 
-    def interpolate(self, vector, out):
+    def restrict(self, residual):
+        if self.is_DG:
+            self.Ip.interpolate(residual, output=self.derivative, transpose=True)
+        else:
+            self.derivative.assign(residual)
+
+    def interpolate(self, x: 'PETSc.vec'):
+        with self.fun.dat.vec_wo as fun:
+            x.copy(fun)
         if self.is_DG:
             # inject fom V_c into V_r
-            self.Ip.interpolate(vector.fun, output=out)
+            self.Ip.interpolate(self.fun, output=self.T)
         else:
-            out.assign(vector.fun)
+            self.T.assign(self.fun)
 
     def get_zero_vec(self):
         if self.is_DG:
@@ -201,7 +236,6 @@ class FeControlSpace(ControlSpace):
         Store the vector to a file to be reused in a later computation.
         DumbCheckpoint requires that the mesh, FunctionSpace and parallel
         decomposition are identical between store and load.
-
         """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
             chk.store(vec.fun, name=filename)
@@ -264,11 +298,16 @@ class FeMultiGridControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.V_m_dual = self.V_m.dual()
 
-    def restrict(self, residual, out):
-        fd.restrict(residual, out.cofun)
+        self.fun = self.get_zero_vec()
+        self.gradient = self.get_zero_vec()
 
-    def interpolate(self, vector, out):
-        fd.prolong(vector.fun, out)
+    def restrict(self, residual):
+        fd.restrict(residual, self.derivative)
+
+    def interpolate(self, x: 'PETSc.vec'):
+        with self.fun.dat.vec_wo as fun:
+            x.copy(fun)
+        fd.prolong(self.fun, self.T)
 
     def get_zero_vec(self):
         fun = fd.Function(self.V_r_coarse)
@@ -622,17 +661,20 @@ class BsplineControlSpace(ControlSpace):
         FullIFW.assemble()
         return FullIFW
 
-    def restrict(self, residual, out):
+    def restrict(self, residual):
         with residual.dat.vec as w:
-            self.FullIFW.multTranspose(w, out.vec_wo())
+            self.FullIFW.multTranspose(w, self.derivative.vec_wo())
 
-    def interpolate(self, vector, out):
-        with out.dat.vec as w:
-            self.FullIFW.mult(vector.vec_ro(), w)
+    def interpolate(self, x):
+        with self.T.dat.vec_wo as T:
+            self.FullIFW.mult(x.vec_ro(), T)
 
     def get_zero_vec(self):
         vec = self.FullIFW.createVecRight()
         return vec
+
+    def get_zero_covec(self):
+        return self.get_zero_vec()
 
     def get_space_for_inner(self):
         return (self.V_control, self.I_control)
@@ -658,65 +700,3 @@ class BsplineControlSpace(ControlSpace):
         """
         viewer = PETSc.Viewer().createBinary(filename, mode="r")
         vec.vec_wo().load(viewer)
-
-
-class ControlVector:
-    """
-    A ControlVector is a variable in the ControlSpace.
-
-    The data of a control vector is a PETSc.vec stored in self.vec.
-    If this data corresponds also to a fd.Function, the firedrake wrapper
-    around self.vec is stored in self.fun (otherwise, self.fun = None).
-    """
-
-    def __init__(self, controlspace: ControlSpace, inner_product: InnerProduct,
-                 data=None):
-        super().__init__()
-        self.controlspace = controlspace
-        self.inner_product = inner_product
-
-        if data is None:
-            data = controlspace.get_zero_vec()
-
-        self.data = data
-        if isinstance(data, fd.Function):
-            self.fun = data
-            self.cofun = controlspace.get_zero_covec()
-        else:
-            self.fun = None
-            self.cofun = None
-
-    def from_first_derivative(self, fe_deriv):
-        self.controlspace.restrict(fe_deriv, self)
-
-    def to_coordinatefield(self, out):
-        self.controlspace.interpolate(self, out)
-
-    def apply_riesz_map(self):
-        """
-        Maps this vector into the dual space.
-        Overwrites the content.
-        """
-        self.inner_product.riesz_map(self, self)
-
-    def vec_ro(self):
-        if isinstance(self.data, fd.Function):
-            with self.data.dat.vec_ro as v:
-                return v
-        else:
-            return self.data
-
-    def vec_wo(self):
-        if isinstance(self.data, fd.Function):
-            with self.data.dat.vec_wo as v:
-                return v
-        else:
-            return self.data
-
-    def set(self, v):
-        vec = self.vec_wo()
-        v.vec_ro().copy(vec)
-
-    def __str__(self):
-        """String representative, so we can call print(vec)."""
-        return self.vec_ro()[:].__str__()
