@@ -1,6 +1,4 @@
 import firedrake as fd
-import numpy as np
-from firedrake.petsc import PETSc
 
 
 class InnerProduct:
