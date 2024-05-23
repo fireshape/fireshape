@@ -3,14 +3,16 @@ import numpy as np
 from firedrake.petsc import PETSc
 
 
-class InnerProduct(object):
-
+class InnerProduct:
     """
     Generic implementation of an inner product.
+    Thus far, we only have UFLInnerProducts.
     """
-
     def eval(self, u, v):
-        """Evaluate inner product in primal space."""
+        """
+        Evaluate inner product in primal space.
+        Thus far unused, but maybe useful for TAO.setGradientNorm.
+        """
         raise NotImplementedError
 
     def riesz_map(self, v, out):  # dual to primal
@@ -25,14 +27,12 @@ class InnerProduct(object):
 
 
 class UflInnerProduct(InnerProduct):
-
     """
     Implementation of an inner product that is build on a
     firedrake.FunctionSpace.  If the ControlSpace is not itselt the
     firedrake.FunctionSpace, then an interpolation matrix between the two is
     necessary.
     """
-
     def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False):
         if isinstance(extra_bcs, fd.DirichletBC):
             extra_bcs = [extra_bcs]
