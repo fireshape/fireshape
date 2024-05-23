@@ -1,8 +1,7 @@
-from .innerproduct import InnerProduct
 import firedrake as fd
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+           "BsplineControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -54,7 +53,8 @@ class ControlSpace:
         Restrict from self.V_r_dual into self.derivative.
 
         Input:
-        residual: fd.Cofunction in  self.V_r_dual provided by Objective.derivative()
+        residual: fd.Cofunction in self.V_r_dual provided by
+        Objective.derivative()
         """
         raise NotImplementedError
 
@@ -115,7 +115,7 @@ class ControlSpace:
         """
         create self.inner_product
         """
-        raise NotImplementedError
+        self.inner_product = inner_product
 
     def get_space_for_inner(self):
         """
@@ -126,7 +126,7 @@ class ControlSpace:
         """
         raise NotImplementedError
 
-    def compute_gradient(fe_deriv_r, g)
+    def compute_gradient(self, fe_deriv_r, g):
         """
         Compute the Riesz representative of the cofunction fe_deriv_r.
         First, restrict deriv_r to the control space (write in
@@ -197,7 +197,8 @@ class FeControlSpace(ControlSpace):
 
     def restrict(self, residual):
         if self.is_DG:
-            self.Ip.interpolate(residual, output=self.derivative, transpose=True)
+            self.Ip.interpolate(residual, output=self.derivative,
+                                transpose=True)
         else:
             self.derivative.assign(residual)
 
