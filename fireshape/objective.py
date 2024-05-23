@@ -1,17 +1,17 @@
 import firedrake as fd
 from .control import ControlSpace
-from .pde_constraint import PdeConstraint
 
 
 class Objective:
-        """
-        Abstract Objective class.
+    """
+    Abstract Objective class.
 
-        Inputs: Q: ControlSpace
-                cb: method to store current shape iterate at self.udpate
-                quadrature_degree: quadrature degree to use. If None, then
-                ufl will guesstimate the degree
-        """
+    Inputs:
+    Q: ControlSpace
+    cb: method to store current shape iterate at self.udpate
+    quadrature_degree: quadrature degree to use. If None, then
+    ufl will guesstimate the degree
+    """
     def __init__(self, Q: ControlSpace, cb=None,
                  quadrature_degree: int = None):
         self.Q = Q  # ControlSpace
@@ -22,6 +22,8 @@ class Objective:
         self.mesh_m = self.V_m.mesh()  # physical mesh
         self.cb = cb
         self.deriv_r = fd.Cofunction(self.V_r_dual)
+        # container to store one gradient
+        self.g_pre = Q.get_PETSc_zero_vec()
         if quadrature_degree is not None:
             self.params = {"quadrature_degree": quadrature_degree}
         else:
@@ -42,7 +44,7 @@ class Objective:
         """
         Compute Riesz representative of shape directional derivative.
         """
-        self.derivative() # store derivative in self.deriv_r
+        self.derivative()  # store derivative in self.deriv_r
         self.Q.compute_gradient(self.deriv_r, g)
 
     def objectiveGradient(self, tao, x, g):
@@ -53,10 +55,12 @@ class Objective:
         if self.Q.update_domain(x):
             J = self.value()
             self.gradient(g)
+            self.Jpre = J
+            g.copy(self.g_pre)
             return J
         else:
-            print("implement strategy to retrieve previously computed vals")
-            import ipdb; ipdb.set_trace()
+            self.g_pre.copy(g)
+            return self.Jpre
 
     def __add__(self, other):
         if isinstance(other, Objective):
@@ -68,7 +72,8 @@ class Objective:
     def __rmul__(self, alpha):
         return ScaledObjective(self, alpha)
 
-class UnconstrainedObjective(Objective)
+
+class UnconstrainedObjective(Objective):
     """Abstract class of unconstrained objective functionals."""
     def __init__(self, *args, **kwargs):
         """
@@ -141,7 +146,7 @@ class DeformationObjective(UnconstrainedObjective):
                     form_compiler_parameters=self.params)
 
 # comment out functionality which may be removed
-#class ControlObjective(UnconstrainedObjective):
+# class ControlObjective(UnconstrainedObjective):
 #    """
 #    Similar to DeformationObjective, but in the case of a
 #    FeMultigridConstrolSpace might want to formulate functionals
@@ -159,17 +164,14 @@ class DeformationObjective(UnconstrainedObjective):
 #
 #    def derivative(self, out):
 #        """
-#        Assemble partial directional derivative wrt ControlSpace perturbations.
+#        Assemble partial directional derivative wrt ControlSpace
+#        perturbations.
 #        """
 #        v = fd.TestFunction(self.Q.V_r_coarse)
 #        fd.assemble(self.derivative_form(v), tensor=self.deriv_r_coarse,
 #                    form_compiler_parameters=self.params)
 #        out.cofun.assign(self.deriv_r_coarse)
 #        out.scale(self.scale)
-#
-#    #def update(self, x, flag, iteration):
-#    #    self.f.assign(x.fun)
-#    #    super().update(x, flag, iteration)
 
 
 class PDEconstrainedObjective(Objective):
@@ -229,18 +231,19 @@ class PDEconstrainedObjective(Objective):
             # solve", pyadjoint will then figure out all necessary
             # adjoints.
             import firedrake.adjoint as fda
-            with stop_annotating():
+            with fda.stop_annotating():
                 mytape = fda.Tape()
-                with set_working_tape(mytape):
+                with fda.set_working_tape(mytape):
                     fda.continue_annotation()
                     mesh_m = self.Q.mesh_m
                     mesh_m.coordinates.assign(mesh_m.coordinates + self.T_m)
                     self.solvePDE()
                     Jpyadj = self.objective_value()
-                    self.Jred = fda.ReducedFunctional(Jpyadj, fda.Control(self.T_m)
+                    self.Jred = fda.ReducedFunctional(Jpyadj,
+                                                      fda.Control(self.T_m))
         except fd.ConvergenceError:
             print("Failed to solve the state equation for initial guess.")
-            raise
+            raise fd.ConvergenceError
 
 
 class ObjectiveSum(Objective):
@@ -254,7 +257,6 @@ class ObjectiveSum(Objective):
         return self.a.value() + self.b.value()
 
     def derivative(self):
-        temp = out.clone()
         self.a.derivative()
         self.b.derivative()
         self.deriv_r = self.a.deriv_r + self.b.deriv_r
