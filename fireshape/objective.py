@@ -184,11 +184,6 @@ class PDEconstrainedObjective(Objective):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        # dummy variable pyadjoint uses to compute shape
-        # derivative and evaluate shape functional. In practice,
-        # self.T_m = 0 throughout the optimization because mesh_m
-        # is update via Control.update_domain (because we keep mesh_r
-        # fixed for the computation of shape gradients and BFGS)
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
         self.Jred = None
