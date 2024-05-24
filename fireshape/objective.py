@@ -53,6 +53,8 @@ class Objective:
         by TAO.setObjectiveGradient
         """
         if self.Q.update_domain(x):
+            if self.cb is not None:
+                self.cb()
             J = self.value()
             self.gradient(g)
             self.Jpre = J
@@ -187,7 +189,9 @@ class PDEconstrainedObjective(Objective):
         # self.T_m = 0 throughout the optimization because mesh_m
         # is update via Control.update_domain (because we keep mesh_r
         # fixed for the computation of shape gradients and BFGS)
-        self.T_m = fd.Function(self.Q.V_m)
+        self.dT_m = fd.Function(self.Q.V_m)
+        self.dT_r = fd.Function(self.Q.V_r)
+        self.Jred = None
 
     def solvePDE(self):
         """
@@ -208,7 +212,13 @@ class PDEconstrainedObjective(Objective):
         """
         Evaluate reduced objective.
         """
-        return self.Jred.__call__(self.T_m)
+        if self.Jred is None:
+            self.createJred()
+        self.dT_r.assign(self.Q.T - self.Q.id)
+        with self.dT_r.dat.vec_ro as a:
+            with self.dT_m.dat.vec_wo as b:
+                a.copy(b)
+        return self.Jred.__call__(self.dT_m)
 
     def derivative(self):
         """
@@ -236,11 +246,11 @@ class PDEconstrainedObjective(Objective):
                 with fda.set_working_tape(mytape):
                     fda.continue_annotation()
                     mesh_m = self.Q.mesh_m
-                    mesh_m.coordinates.assign(mesh_m.coordinates + self.T_m)
+                    mesh_m.coordinates.assign(mesh_m.coordinates + self.dT_m)
                     self.solvePDE()
                     Jpyadj = self.objective_value()
                     self.Jred = fda.ReducedFunctional(Jpyadj,
-                                                      fda.Control(self.T_m))
+                                                      fda.Control(self.dT_m))
         except fd.ConvergenceError:
             print("Failed to solve the state equation for initial guess.")
             raise fd.ConvergenceError
