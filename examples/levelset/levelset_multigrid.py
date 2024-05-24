@@ -15,16 +15,10 @@ Q.assign_inner_product(fs.H1InnerProduct(Q))
 x, y = fd.SpatialCoordinate(Q.mesh_m)
 f = (x - 0.5)**2 + (y - 0.5)**2 - 0.5**2
 J = fsz.LevelsetFunctional(Q, f, usecb=True)
-## define objective
-#mesh_m = Q.mesh_m
-#(x, y) = fd.SpatialCoordinate(mesh_m)
-#f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
-#out = fd.File("domain.pvd")
-#J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 
 # PETSc.TAO solver using the limited-memory
 # variable-metric method. Call using
-# python levelset.py -tao_monitor
+# python levelset_multigrid.py -tao_monitor
 # to print updates in the terminal
 solver = PETSc.TAO().create()
 solver.setType("lmvm")
