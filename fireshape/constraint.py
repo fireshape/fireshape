@@ -1,3 +1,4 @@
+"""
 import ROL
 
 
@@ -35,3 +36,4 @@ class EqualityConstraint(ROL.Constraint):
     def update(self, x, flag, iteration):
         for c_ in self.c:
             c_.update(x, flag, iteration)
+"""

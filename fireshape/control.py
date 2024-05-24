@@ -194,6 +194,7 @@ class FeControlSpace(ControlSpace):
 
         self.fun = self.get_zero_vec()
         self.gradient = self.get_zero_vec()
+        self.derivative = self.get_zero_covec()
 
     def restrict(self, residual):
         if self.is_DG:
