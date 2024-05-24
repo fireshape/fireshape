@@ -162,7 +162,7 @@ class UflInnerProduct(InnerProduct):
         if self.interpolated:
             self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
-            self.ls.solve(out.fun, v.cofun)
+            self.ls.solve(out, v)
 
 
 class H1InnerProduct(UflInnerProduct):

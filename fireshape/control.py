@@ -77,12 +77,12 @@ class ControlSpace:
         else:
             self.lastq.axpy(-1., q)
             # calculate l2 norm (faster)
-            diff = self.lastq.vec_ro().norm()
+            diff = self.lastq.norm()
             self.lastq.axpy(+1., q)
             if diff < 1e-20:
                 return False
             else:
-                self.lastq.set(q)
+                q.copy(self.lastq)
         self.interpolate(q)
         self.T += self.id
         return True
