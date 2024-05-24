@@ -15,7 +15,7 @@ class LevelsetFunctional(ShapeObjective):
         self.f = f
         Vdet = fd.FunctionSpace(self.Q.mesh_r, "DG", 0)
         self.detDT = fd.Function(Vdet)
-        if usecb:  # if True, store meshes in soln.pvd
+        if usecb and cb is None:  # if True, store meshes in soln.pvd
             out = fd.VTKFile("soln.pvd")
             self.cb = lambda: out.write(Q.mesh_m.coordinates)
 
