@@ -1,6 +1,5 @@
 import firedrake as fd
 import fireshape as fs
-#import fireshape.zoo as fsz
 import petsc4py.PETSc as PETSc
 
 class L2tracking(fs.PDEconstrainedObjective):
@@ -20,7 +19,6 @@ class L2tracking(fs.PDEconstrainedObjective):
         self.bcs = fd.DirichletBC(V, 0, "on_boundary")
         self.u = u  # make it accessible to self.solvePDE
         self.u_old = fd.Function(V)  # solution at previous iteration
-        #import ipdb; ipdb.set_trace()
         problem = fd.NonlinearVariationalProblem(F, u, bcs=self.bcs)
         self.solver = fd.NonlinearVariationalSolver(problem)
         self.solver.solve()
