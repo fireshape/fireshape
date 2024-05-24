@@ -8,3 +8,4 @@
 .cache/
 .pytest_cache/
 fireshape.egg-info/
+*.DS_Store
