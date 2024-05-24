@@ -1,36 +1,35 @@
 import firedrake as fd
 import fireshape as fs
 import fireshape.zoo as fsz
-import ROL
+import petsc4py.PETSc as PETSc
 
-mesh = fd.UnitSquareMesh(3, 3)
-
-# create multigrid controlspace: the physical mesh is twice
-# as fine than the controlspace mesh
+# setup problem using multigrid controlspace: the physical mesh
+# is twice as fine than the controlspace mesh
+mesh = fd.UnitSquareMesh(3, 3)  # initial guess
 Q = fs.FeMultiGridControlSpace(mesh, refinements=2, degree=2)
-inner = fs.H1InnerProduct(Q)
+Q.assign_inner_product(fs.H1InnerProduct(Q))
 
-# define objective
-mesh_m = Q.mesh_m
-(x, y) = fd.SpatialCoordinate(mesh_m)
-f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
-out = fd.File("domain.pvd")
-J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
+# create objective functional, the optimum is
+# a disc of radius 0.5 centered at (0.5, 0.5)
+# set usecb=True to store mesh iterates in soln.pvd
+x, y = fd.SpatialCoordinate(Q.mesh_m)
+f = (x - 0.5)**2 + (y - 0.5)**2 - 0.5**2
+J = fsz.LevelsetFunctional(Q, f, usecb=True)
+## define objective
+#mesh_m = Q.mesh_m
+#(x, y) = fd.SpatialCoordinate(mesh_m)
+#f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
+#out = fd.File("domain.pvd")
+#J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 
-# optimize
-q = fs.ControlVector(Q, inner)
-params_dict = {
-    'General': {
-        'Secant': {'Type': 'Limited-Memory BFGS', 'Maximum Storage': 5}},
-    'Step': {
-        'Type': 'Line Search',
-        'Line Search': {'Descent Method': {'Type': 'Quasi-Newton Step'}}},
-    'Status Test': {
-        'Gradient Tolerance': 1e-3,
-        'Step Tolerance': 1e-6,
-        'Iteration Limit': 40}}
-
-params = ROL.ParameterList(params_dict, "Parameters")
-problem = ROL.OptimizationProblem(J, q)
-solver = ROL.OptimizationSolver(problem, params)
+# PETSc.TAO solver using the limited-memory
+# variable-metric method. Call using
+# python levelset.py -tao_monitor
+# to print updates in the terminal
+solver = PETSc.TAO().create()
+solver.setType("lmvm")
+solver.setFromOptions()
+solver.setSolution(Q.get_PETSc_zero_vec())
+solver.setObjectiveGradient(J.objectiveGradient, None)
+solver.setTolerances(gatol=1.0e-4, grtol=1.0e-4)
 solver.solve()
