@@ -160,7 +160,7 @@ class UflInnerProduct(InnerProduct):
         out: ControlVector, in the primal space
         """
         if self.interpolated:
-            self.Aksp.solve(v.vec_ro(), out.vec_wo())
+            self.Aksp.solve(v, out)
         else:
             self.ls.solve(out, v)
 

@@ -1,65 +1,32 @@
 import firedrake as fd
-import fireshape.zoo as fsz
 import fireshape as fs
-import ROL
+import fireshape.zoo as fsz
+import petsc4py.PETSc as PETSc
 
-mesh = fs.DiskMesh(0.1)
-
-bbox = [(-1.01, 1.01), (-1.01, 1.01)]
+# setup problem using BsplineControlSpace:
+mesh = fd.UnitSquareMesh(10, 10)
+bbox = [(-0.01, 1.01), (-0.01, 1.01)]
 orders = [3, 3]
 levels = [4, 4]
 Q = fs.BsplineControlSpace(mesh, bbox, orders, levels,
                            boundary_regularities=[0, 0])
-inner = fs.H1InnerProduct(Q)
-q = fs.ControlVector(Q, inner)
+Q.assign_inner_product(fs.H1InnerProduct(Q))
 
-mesh_m = Q.mesh_m
-(x, y) = fd.SpatialCoordinate(mesh_m)
+# create objective functional, the optimum is
+# a disc of radius 0.5 centered at (0.5, 0.5)
+# set usecb=True to store mesh iterates in soln.pvd
+x, y = fd.SpatialCoordinate(Q.mesh_m)
+f = 0.1*((x - 0.5)**2 + (y - 0.5)**2 - 0.5**2)
+J = fsz.LevelsetFunctional(Q, f, usecb=True)
 
-f = (pow(x, 2))+pow(2*y, 2) - 1
-outdef = fd.File("deformation.pvd")
-out = fd.File("domain.pvd")
-V, I = Q.get_space_for_inner()
-T = fd.Function(V)
-
-
-def cb():
-    out.write(mesh_m.coordinates)
-    Q.visualize_control(q, T)
-    outdef.write(T)
-
-
-J = fsz.LevelsetFunctional(f, Q, cb=cb)
-J = 0.1 * J
-
-g = q.clone()
-J.gradient(g, q, None)
-J.checkGradient(q, g, 4, 1)
-
-
-params_dict = {
-    'Step': {
-        'Type': 'Line Search',
-        'Line Search': {
-            'Descent Method': {
-                'Type': 'Quasi-Newton Step'
-            }
-        }
-    },
-    'General': {
-        'Secant': {
-            'Type': 'Limited-Memory BFGS',
-            'Maximum Storage': 25
-        }
-    },
-    'Status Test': {
-        'Gradient Tolerance': 1e-4,
-        'Step Tolerance': 1e-10,
-        'Iteration Limit': 30
-    }
-}
-
-params = ROL.ParameterList(params_dict, "Parameters")
-problem = ROL.OptimizationProblem(J, q)
-solver = ROL.OptimizationSolver(problem, params)
+# PETSc.TAO solver using the limited-memory
+# variable-metric method. Call using
+# python levelset_spline.py -tao_monitor
+# to print updates in the terminal
+solver = PETSc.TAO().create()
+solver.setType("lmvm")
+solver.setFromOptions()
+solver.setSolution(Q.get_PETSc_zero_vec())
+solver.setObjectiveGradient(J.objectiveGradient, None)
+solver.setTolerances(gatol=1.0e-4, grtol=1.0e-4)
 solver.solve()

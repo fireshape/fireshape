@@ -438,6 +438,8 @@ class BsplineControlSpace(ControlSpace):
         # assemble correct interpolation matrix
         self.FullIFW = self.build_interpolation_matrix(self.V_r)
 
+        self.derivative = self.get_zero_covec()
+
     def construct_knots(self):
         """
         construct self.knots, self.n, self.N
@@ -666,11 +668,11 @@ class BsplineControlSpace(ControlSpace):
 
     def restrict(self, residual):
         with residual.dat.vec as w:
-            self.FullIFW.multTranspose(w, self.derivative.vec_wo())
+            self.FullIFW.multTranspose(w, self.derivative)
 
     def interpolate(self, x):
         with self.T.dat.vec_wo as T:
-            self.FullIFW.mult(x.vec_ro(), T)
+            self.FullIFW.mult(x, T)
 
     def get_zero_vec(self):
         vec = self.FullIFW.createVecRight()
