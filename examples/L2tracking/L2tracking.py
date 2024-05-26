@@ -10,7 +10,7 @@ class L2tracking(fs.PDEconstrainedObjective):
         x, y = fd.SpatialCoordinate(self.Q.mesh_m)
         self.u_target = 0.36 - (x-0.5)*(x-0.5) - (y-0.5)*(y-0.5)
 
-        # heat equation discretized with implicit Euler
+        # Poisson problem with homogeneous DirichletBC
         V = fd.FunctionSpace(self.Q.mesh_m, "CG", 1)
         u = fd.Function(V)
         v = fd.TestFunction(V)
