@@ -2,6 +2,7 @@ import firedrake as fd
 import fireshape as fs
 import petsc4py.PETSc as PETSc
 
+
 class L2tracking(fs.PDEconstrainedObjective):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,7 +53,8 @@ class L2tracking(fs.PDEconstrainedObjective):
             import numpy as np
             return AdjFloat(np.NAN)
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     # setup problem
     mesh = fd.UnitSquareMesh(100, 100)
     Q = fs.FeControlSpace(mesh)
