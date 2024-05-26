@@ -10,7 +10,7 @@ Q = fs.FeControlSpace(mesh)
 # in this example, LaplaceInnerProduct and ElasticityInnerProduct
 # work better because they exclude translations (and rotations)
 Q.assign_inner_product(fs.LaplaceInnerProduct(Q))
-#Q.assign_inner_product(fs.ElasticityInnerProduct(Q))
+# Q.assign_inner_product(fs.ElasticityInnerProduct(Q))
 
 # save shape evolution in file soln.pvd
 V = fd.FunctionSpace(Q.mesh_m, "DG", 1)
@@ -21,8 +21,9 @@ f = fd.cos(2*fd.pi*x)*g  # target function
 perturbation = 0.1*fd.sin(x*fd.pi)*g**2  # perturb sigma
 sigma.interpolate(g*fd.cos(2*fd.pi*x*(1+perturbation)))
 out = fd.VTKFile("soln.pvd")
-cb = lambda: out.write(sigma)
-J = fsz.LevelsetFunctional(Q, (sigma - f)**2, cb=cb, quadrature_degree=2)
+J = fsz.LevelsetFunctional(Q, (sigma - f)**2,
+                           cb=lambda: out.write(sigma),
+                           quadrature_degree=2)
 
 # PETSc.TAO solver using the limited-memory
 # variable-metric method. Call using

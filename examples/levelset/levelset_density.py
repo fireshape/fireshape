@@ -18,8 +18,9 @@ perturbation = 0.1*fd.sin(x*fd.pi)*(16*y**2*(1-y)**2)
 sigma.interpolate(y*(1-y)*(fd.cos(2*fd.pi*x*(1+perturbation))))
 f = fd.cos(2*fd.pi*x)*y*(1-y)  # target
 out = fd.VTKFile("soln.pvd")
-cb = lambda: out.write(sigma)
-J = fsz.LevelsetFunctional(Q, (sigma - f)**2, cb=cb, quadrature_degree=2)
+J = fsz.LevelsetFunctional(Q, (sigma - f)**2,
+                           cb=lambda: out.write(sigma),
+                           quadrature_degree=2)
 
 # PETSc.TAO solver using the limited-memory
 # variable-metric method. Call using

@@ -22,7 +22,7 @@ J = fsz.LevelsetFunctional(Q, f, usecb=True)
 # PETSc.TAO solver using the limited-memory
 # variable-metric method. Call using
 # python levelset_spline.py -tao_monitor
-# to print updates in the terminal
+# to print updates in the terminal
 solver = PETSc.TAO().create()
 solver.setType("lmvm")
 solver.setFromOptions()
