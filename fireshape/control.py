@@ -168,7 +168,7 @@ class FeControlSpace(ControlSpace):
     the variable add_to_degree_r.
 
     If mesh_c and degree_c are provided, then use a degree_c Lagrangian
-    finite element space defined on mesh_d as ControlSpace.
+    finite element space defined on mesh_c as ControlSpace.
     Note: as of 15.11.2023, higher-order meshes are not supported, that is,
     mesh_d has to be a polygonal mesh (mesh_r can still be of higher-order).
     """
