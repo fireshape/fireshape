@@ -170,7 +170,7 @@ class FeControlSpace(ControlSpace):
     If mesh_c and degree_c are provided, then use a degree_c Lagrangian
     finite element space defined on mesh_c as ControlSpace.
     Note: as of 15.11.2023, higher-order meshes are not supported, that is,
-    mesh_d has to be a polygonal mesh (mesh_r can still be of higher-order).
+    mesh_c has to be a polygonal mesh (mesh_r can still be of higher-order).
     """
 
     def __init__(self, mesh_r, add_to_degree_r=0, mesh_c=None, degree_c=None):
