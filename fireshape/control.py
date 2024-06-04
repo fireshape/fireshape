@@ -730,9 +730,6 @@ class BsplineControlSpace(ControlSpace):
         """
         viewer = PETSc.Viewer().createBinary(filename, mode="r")
         vec.vec_wo().load(viewer)
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 
 
 class ControlVector(ROL.Vector):
