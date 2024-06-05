@@ -167,20 +167,28 @@ class UflInnerProduct(InnerProduct):
             self.ls.solve(out.fun, v.cofun)
 
 
-def get_penalties(V): # I suspect this process is overkill, do some testing later
-    mesh = V.mesh()
-    V_ = fd.VectorFunctionSpace(mesh, "CG", degree = 1)
-    f = fd.Function(V_)
-    f.interpolate(fd.SpatialCoordinate(mesh))
-    deg_1_mesh = fd.Mesh(f)
-    radii_space = fd.Function(deg_1_mesh, "DG", 0)
-    radii = fd.Function(radii_space)
-    radii.interpolate(deg_1_mesh.cell_sizes)
-    h = min(radii.vector())
-    element_degree = V.ufl_element().degree()
-    alpha = 1000000.0 * element_degree ** 6 * (8 * h) ** -3
-    beta = 100.0 * element_degree**2 * (8*h)**-1
-    return alpha, beta
+class UflPenalisedInnerProduct(UflInnerProduct):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
+        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False)
+        if alpha is None or beta is None: # I suspect this process is overkill, do some testing later
+            mesh = Q.V_r.mesh()
+            V_ = fd.VectorFunctionSpace(mesh, "CG", degree = 1)
+            f = fd.Function(V_)
+            f.interpolate(fd.SpatialCoordinate(mesh))
+            deg_1_mesh = fd.Mesh(f)
+            radii_space = fd.FunctionSpace(deg_1_mesh, "DG", 0)
+            radii = fd.Function(radii_space)
+            radii.interpolate(deg_1_mesh.cell_sizes)
+            h = min(radii.vector())
+            element_degree = Q.V_r.ufl_element().degree()
+            if alpha is None:
+                alpha = 1000000.0 * element_degree ** 6 * (8 * h) ** -3
+            if beta is None:
+                beta = 100.0 * element_degree**2 * (8*h)**-1
+        self.alpha = alpha
+        self.beta = beta
+
+
 class H1InnerProduct(UflInnerProduct):
     """Inner product on H1. It involves stiffness and mass matrices."""
 
@@ -219,56 +227,45 @@ class LaplaceInnerProduct(UflInnerProduct):
             raise NotImplementedError
         return res
 
-class H2PenalisedInnerProduct(UflInnerProduct):
+class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        alpha, beta = get_penalties(V)
         a = fd.inner(u, v) * fd.dx \
             + fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
-            + beta * fd.jump(fd.div(u)) * fd.jump(fd.div(v)) * fd.dS \
+            + self.beta * fd.jump(fd.div(u)) * fd.jump(fd.div(v)) * fd.dS \
             + fd.inner(fd.grad(fd.div(u)), fd.grad(fd.div(v))) * fd.dx # is this right?
+        return a
     def get_nullspace(self, V):
         return None
 
 
-class H2FrobeniusPenalisedInnerProduct(UflInnerProduct):
+class H2FrobeniusPenalisedInnerProduct(UflPenalisedInnerProduct):
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        alpha, beta = get_penalties(V)
         a = fd.inner(u, v) * fd.dx \
             + fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
-            + beta * fd.jump(fd.div(u)) * fd.jump(fd.div(v)) * fd.dS \
+            + self.beta * fd.jump(fd.div(u)) * fd.jump(fd.div(v)) * fd.dS \
             + fd.inner(fd.grad(fd.grad(u)), fd.grad(fd.grad(v))) * fd.dx
+        return a
     def get_nullspace(self, V):
         return None
+
 
 class H2FrobeniusInnerProduct(UflInnerProduct):
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
-        alpha, beta = get_penalties(V)
-        a = fd.inner(u, v) * fd.dx \
-            + fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
-            + beta * fd.jump(fd.div(u)) * fd.jump(fd.div(v)) * fd.dS \
-            + fd.inner(fd.grad(fd.grad(u)), fd.grad(fd.grad(v))) * fd.dx
-    def get_nullspace(self, V):
-        return None
-
-class H2InnerProductFrobenius(UflInnerProduct):
-    def get_weak_form(self, V):
-        u = fd.TrialFunction(V)
-        v = fd.TestFunction(V)
         a = fd.inner(u, v) * fd.dx \
             + fd.inner(fd.grad(u), fd.grad(v)) * fd.dx \
             + fd.inner(fd.grad(fd.grad(u)), fd.grad(fd.grad(v))) * fd.dx
+        return a
     def get_nullspace(self, V):
         return None
 
 class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
-
     def get_mu(self, V):
         W = fd.FunctionSpace(V.mesh(), "CG", 1)
         bcs = []
