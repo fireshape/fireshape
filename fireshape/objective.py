@@ -202,7 +202,8 @@ class PDEconstrainedObjective(Objective):
         """
         Get the derivative from pyadjoint.
         """
-        dJ = self.Jred.derivative()
+        opts = {"riesz_representation": None}
+        dJ = self.Jred.derivative(options=opts)
         # Pyadjoint returns a function instead of a cofunction
         # because it assumes it is computing the gradient
         with dJ.dat.vec as vec_dJ:
@@ -281,7 +282,8 @@ class ReducedObjective(ShapeObjective):
         """
         Get the derivative from pyadjoint.
         """
-        dJ = self.Jred.derivative()
+        opts = {"riesz_representation": None}
+        dJ = self.Jred.derivative(options=opts)
         # Pyadjoint returns a function instead of a cofunction
         # because it assumes it is computing the gradient
         with dJ.dat.vec as vec_dJ:
