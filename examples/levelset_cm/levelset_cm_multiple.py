@@ -15,7 +15,7 @@ I.interpolate(fd.conditional(x[0] < 1, fd.conditional(x[0] > 0, fd.conditional(x
 
 mesh_r = fd.UnitSquareMesh(50, 50)
 
-Q = fs.MultipleHelmholtzControlSpace(mesh_c, mesh_r, I, 25, 11, 1/3)
+Q = fs.MultipleHelmholtzControlSpace(mesh_c, mesh_r, I, 25, 11, 0.05)
 inner = fs.LaplaceInnerProduct(Q)
 
 # inner = fs.H1InnerProduct(Q)
