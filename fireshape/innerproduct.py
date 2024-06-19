@@ -169,7 +169,6 @@ class UflInnerProduct(InnerProduct):
 
 class UflPenalisedInnerProduct(UflInnerProduct):
     def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
-        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False)
         if alpha is None or beta is None: # I suspect this process is overkill, do some testing later
             mesh = Q.V_r.mesh()
             V_ = fd.VectorFunctionSpace(mesh, "CG", degree = 1)
@@ -181,12 +180,13 @@ class UflPenalisedInnerProduct(UflInnerProduct):
             radii.interpolate(deg_1_mesh.cell_sizes)
             h = min(radii.vector())
             element_degree = Q.V_r.ufl_element().degree()
-            if alpha is None:
-                alpha = 1000000.0 * element_degree ** 6 * (8 * h) ** -3
+            #if alpha is None:
+            #    alpha = 1000000.0 * element_degree ** 6 * (8 * h) ** -3
             if beta is None:
                 beta = 100.0 * element_degree**2 * (8*h)**-1
-        self.alpha = alpha
-        self.beta = beta
+            #self.alpha = alpha
+            self.beta = beta
+        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False)
 
 
 class H1InnerProduct(UflInnerProduct):
@@ -228,6 +228,8 @@ class LaplaceInnerProduct(UflInnerProduct):
         return res
 
 class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
+        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None)
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -241,6 +243,8 @@ class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
 
 
 class H2FrobeniusPenalisedInnerProduct(UflPenalisedInnerProduct):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
+        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None)
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
