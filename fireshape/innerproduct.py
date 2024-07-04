@@ -162,9 +162,15 @@ class UflInnerProduct(InnerProduct):
         out: ControlVector, in the primal space
         """
         if self.interpolated:
-            self.Aksp.solve(v.vec_ro(), out.vec_wo())
+            try:
+                self.Aksp.solve(v.vec_ro(), out.vec_wo())
+            except:
+                raise NotImplementedError # we should also assign nan here, but I am not in a position to test how to do that.
         else:
-            self.ls.solve(out.fun, v.cofun)
+            try:
+                self.ls.solve(out.fun, v.cofun)
+            except:
+                out.fun.assign(np.nan) # return nan if the solve fails
 
 
 class UflPenalisedInnerProduct(UflInnerProduct):
