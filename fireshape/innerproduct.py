@@ -168,7 +168,7 @@ class UflInnerProduct(InnerProduct):
 
 
 class UflPenalisedInnerProduct(UflInnerProduct):
-    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
+    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=True, alpha = None, beta = None):
         if alpha is None or beta is None: # I suspect this process is overkill, do some testing later
             mesh = Q.V_r.mesh()
             V_ = fd.VectorFunctionSpace(mesh, "CG", degree = 1)
@@ -186,7 +186,7 @@ class UflPenalisedInnerProduct(UflInnerProduct):
                 beta = 100.0 * element_degree**2 * (8*h)**-1
             #self.alpha = alpha
             self.beta = beta
-        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False)
+        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=direct_solve)
 
 
 class H1InnerProduct(UflInnerProduct):
@@ -228,8 +228,8 @@ class LaplaceInnerProduct(UflInnerProduct):
         return res
 
 class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
-    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
-        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None)
+    def __init__(self, Q, **kwargs):
+        super().__init__(Q, **kwargs)
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
@@ -243,8 +243,8 @@ class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
 
 
 class H2FrobeniusPenalisedInnerProduct(UflPenalisedInnerProduct):
-    def __init__(self, Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None):
-        super().__init__(Q, fixed_bids=[], extra_bcs=[], direct_solve=False, alpha = None, beta = None)
+    def __init__(self, Q, **kwargs):
+        super().__init__(Q, **kwargs)
     def get_weak_form(self, V):
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
