@@ -13,4 +13,4 @@ RUN apt-get update \
 USER firedrake
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install wheel --upgrade
 RUN . /home/firedrake/firedrake/bin/activate; pip3 install scipy
-RUN . /home/firedrake/firedrake/bin/activate; pip3 install pip install pyroltrilinos
+RUN . /home/firedrake/firedrake/bin/activate; pip3 install pyroltrilinos
