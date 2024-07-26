@@ -22,12 +22,6 @@ Activate Firedrake's virtualenv first.
 
     source path/to/firedrake/bin/activate
 
-On Linux, install the :code:`patchelf` library, e.g.
-
-.. code-block:: bash
-
-    sudo apt install patchelf
-
 Then install the `Rapid Optimization Library <https://trilinos.org/packages/rol/>`_ along with :code:`roltrilinos`.
 
 .. code-block:: bash
