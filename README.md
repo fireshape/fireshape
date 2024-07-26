@@ -24,10 +24,6 @@ Activate the Firedrake virtualenv first
 
     source path/to/firedrake/bin/activate
 
-On Linux, install the `patchelf` library, e.g.
-
-    sudo apt install patchelf
-
 Then install the _Rapid Optimization Library_ along with `roltrilinos`.
 
     pip3 install --no-cache-dir pyroltrilinos

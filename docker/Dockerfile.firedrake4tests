@@ -6,7 +6,7 @@ MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 USER root
 RUN apt-get update \
     && apt-get -y dist-upgrade \
-    && apt-get -y install gmsh patchelf \
+    && apt-get -y install gmsh \
     && rm -rf /var/lib/apt/lists/*
 
 # Now install fireshape
