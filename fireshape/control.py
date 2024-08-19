@@ -5,10 +5,10 @@ from firedrake.__future__ import interpolate
 import firedrake.adjoint as fda
 from firedrake.petsc import PETSc
 from icecream import ic
-ic.configureOutput(includeContext=True) 
+ic.configureOutput(includeContext=True)
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "CmControlSpace", 
+           "BsplineControlSpace", "ControlVector", "CmControlSpace",
            "HelmholtzControlSpace", "MultipleHelmholtzControlSpace"]
 
 # new imports for splines
@@ -133,62 +133,127 @@ class ControlSpace(object):
         Load a vector from a file
         """
         raise NotImplementedError
-    
-class CmControlSpace(ControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator, nstep):
-        self.mesh_c = mesh_c
-        self.mesh_r = mesh_r
-        self.I = indicator
 
-        self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1, name="V_r")
+class CmControlSpace(ControlSpace):
+    """
+    What does Cm mean?
+    What is indicator?
+    Does this require CG1 meshes or does it work also for higher order or periodic meshes?
+    Must self.P be CG1?
+    The control variable p0 lives in a scalar function space on mesh_c.
+    Diffeomorphisms are computes as flows governed by the source term p0.
+    """
+    def __init__(self, mesh_c, mesh_r, indicator, nstep, bdry_tag, interior_bc_tags=[], alpha=1, multiple_solve=0):
+        # create mesh_r and V_r
+        self.mesh_r = mesh_r
+        element = self.mesh_r.coordinates.function_space().ufl_element()
+        family = element.family()
+        degree = element.degree()
+        self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree, name="V_r")
+        #self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1, name="V_r")  # does it have to be CG1?
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
-        self.id = fd.interpolate(fd.SpatialCoordinate(self.mesh_r), self.V_r)
+        X_r = fd.SpatialCoordinate(self.mesh_r)
+        self.id = fd.interpolate(X_r, self.V_r)
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
-        self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1, name="V_m")
+        self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree, name="V_m")
+        #self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1, name="V_m")  # does it have to be CG1?
         self.V_m_dual = self.V_m.dual()
 
-
-        self.V_c = fd.VectorFunctionSpace(self.mesh_c, "CG", 1, name="V_c")
+        # The special construction begins here.
+        # First, Create decoupled control space
+        self.mesh_c = mesh_c
+        self.V_c = fd.VectorFunctionSpace(self.mesh_c, "CG", 1, name="V_c")  # does it have to be CG1? or would degree_c be advantageous?
         self.V_c_dual = self.V_c.dual()
-        testfct_V_c = fd.TestFunction(self.V_c); # only used to create interpolator
-        # Interpolator
-        self.Ip = fd.Interpolator(testfct_V_c, self.V_r, allow_missing_dofs=True)
+        testfct_V_c = fd.TestFunction(self.V_c)
+        self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
+                                  allow_missing_dofs=True)
 
-        # Scalar function space to hold the control vector p0
-        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")
+        # Space of scalar functions containing control p0
+        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")  # does it have to be CG1?
         self.P_dual = self.P.dual()
-        self.p0 = fd.Function(self.P)
+        self.p0 = fd.Function(self.P)  # this is the control variable
 
+
+        # Set up operators to define flow to map p0 to dphi
+        v = fd.TestFunction(self.V_c)
+        u = fd.TrialFunction(self.V_c)
+        n = fd.FacetNormal(self.mesh_c)
+        normal = indicator("+")*n("+") + indicator("-")*n("-")
+
+        # The variable dphi contains the flow resulting from source p0
         self.dphi = fd.Function(self.V_c, name="dphi")
-        self.X = fd.SpatialCoordinate(self.mesh_c)
-        self.phi = self.X + self.dphi
-
-        self.J = fd.grad(self.phi)
-        self.Jit = fd.inv(self.J.T)
-
-        self.u0 = fd.Function(self.V_c, name="u0")
         self.residual = fd.Cofunction(self.V_c_dual, name="residual")
 
-        self.setup()
+        # Parameters depending on current value of self.dphi
+        X_c = fd.SpatialCoordinate(self.mesh_c)
+        J = fd.grad(X_c + self.dphi)
+        Jit = fd.inv(J.T)
+        a = (alpha**2 * fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))
+             + dot(u, v)) * fd.det(J) * fd.dx
+        L = fd.inner(Jit("+") * normal,
+                     self.p0("+") * v("+")) * fd.dS(bdry_tag)
 
-        # move into constructor
+        # impose no displacement on bdry (and possibly interior) interior nodes
+        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
+        for tag in interior_bc_tags:
+            self.bcs.append(fd.DirichletBC(self.V_c, fd.Constant((0, 0)), tag))
+
+        # set up problem and solver
+        self.u0 = fd.Function(self.V_c, name="u0")  # flow velocity
+        problem = fd.LinearVariationalProblem(a, L, self.u0, bcs=self.bcs)
+        self.solver = fd.LinearVariationalSolver(problem)
+
+        # set up additional solvers, if necessary
+        self.multiple_solve = multiple_solve
+        if self.multiple_solve > 0:
+            L2 = fd.inner(v, self.u0) * fd.det(J) * fd.dx
+            self.u0_ = fd.Function(self.V_c, name="u0_")  # dummy flow velocity
+            problem2 = fd.LinearVariationalProblem(a, L2, self.u0_, bcs=self.bcs)
+            self.solver2 = fd.LinearVariationalSolver(problem2)
+
+        # parameters for explicit time-stepping in self.run_forward()
         self.nstep = nstep # TODO: experiment to find optimal nstep or feed through as parameter
         self.dt = 1 / self.nstep
 
+        # create local tape
         self.taped = False
         self.tape = fda.Tape()
+        old_tape = fda.get_working_tape()
+        old_annotation = fda.annotate_tape()
+        fda.set_working_tape(self.tape)
+
+        if not self.taped:
+            fda.continue_annotation()
+
+            self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
+            self.run_forward()
+
+            self.Jhh_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
+
+            fda.pause_annotation()
+            self.taped = True
+
+    # Solve problem and place solution into self.u0 that can be used to update dphi
+    def compute_u0(self):
+        """Compute flow velocity, used in self.run_forward."""
+        self.solver.solve()
+        for ii in range(self.multiple_solve):
+            self.solver2.solve()
+            self.u0.assign(self.u0_)
 
     def run_forward(self):
-        self.dphi.zero()
+        """Map self.p0 to self.dphi using explicit timestepping."""
+        self.dphi.zero()  # reset dphi to zero
         for _ in range(self.nstep):
-            self.solve()
+            self.compute_u0()  # compute flow velocity
             self.dphi.interpolate(self.dphi + self.dt * self.u0)
 
     def interpolate(self, vector, out):
+        """Evaluate flow."""
         self.p0.assign(vector.fun)
         self.run_forward()
         self.Ip.interpolate(self.dphi, output=out)
@@ -196,7 +261,7 @@ class CmControlSpace(ControlSpace):
     def restrict(self, residual, out):
         # Interpolate cofunction in V_r_dual into V_c_dual
         self.Ip.interpolate(residual, output=self.residual, transpose=True)
-        
+
         old_tape = fda.get_working_tape()
         old_annotation = fda.annotate_tape()
         fda.set_working_tape(self.tape)
@@ -222,14 +287,6 @@ class CmControlSpace(ControlSpace):
         else:
             fda.pause_annotation()
 
-    # Setup and solvers/problems/variables needed
-    def setup(self):
-        raise NotImplementedError
-
-    # Solve problem and place solution into self.u0 that can be used to update dphi
-    def solve(self):
-        raise NotImplementedError
-    
     def get_zero_vec(self):
         fun = fd.Function(self.P)
         fun *= 0.
@@ -250,72 +307,6 @@ class CmControlSpace(ControlSpace):
     def load(self, vec, filename="control"):
         with fd.DumbCheckpoint(filename, mode=fd.FILE_READ) as chk:
             chk.load(vec.fun, name=filename)
-
-class HelmholtzControlSpace(CmControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag, interior_bc_tags = []):
-        self.boundary_tag = boundary_tag
-        self.interior_bc_tags = interior_bc_tags
-        super().__init__(mesh_c, mesh_r, indicator, nstep)
-    
-    def setup(self):
-        v = fd.TestFunction(self.V_c)
-        u = fd.TrialFunction(self.V_c)
-
-        n = fd.FacetNormal(self.mesh_c)
-        normal = self.I("+")*n("+") + self.I("-")*n("-")
-
-        self.a = (fd.inner(u, v) + fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
-            * fd.det(self.J) * fd.dx
-
-        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(self.boundary_tag)
-        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
-
-        for tag in self.interior_bc_tags:
-            self.bcs.append(fd.DirichletBC(self.V_c, fd.Constant((0, 0)), tag))
-
-        problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
-        self.solver = fd.LinearVariationalSolver(problem)
-
-    def solve(self):
-        self.solver.solve()
-
-class MultipleHelmholtzControlSpace(CmControlSpace):
-    def __init__(self, mesh_c, mesh_r, indicator, nstep, boundary_tag, alpha):
-        self.boundary_tag = boundary_tag
-        self.alpha = alpha
-        super().__init__(mesh_c, mesh_r, indicator, nstep)
-    
-    def setup(self):
-        v = fd.TestFunction(self.V_c)
-        u = fd.TrialFunction(self.V_c)
-
-        n = fd.FacetNormal(self.mesh_c)
-        normal = self.I("+")*n("+") + self.I("-")*n("-")
-
-        # ADD LENGTH SCALE TO SECOND INNER TERM here    
-        self.a = (fd.inner(u, v) + self.alpha**2 * fd.inner(self.Jit * fd.grad(v), self.Jit * fd.grad(u))) \
-            * fd.det(self.J) * fd.dx
-
-        self.L = fd.inner(self.Jit("+") * normal, self.p0("+") * v("+")) * fd.dS(self.boundary_tag)
-        
-        self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
-
-        problem = fd.LinearVariationalProblem(self.a, self.L, self.u0, bcs=self.bcs)
-        self.solver = fd.LinearVariationalSolver(problem)
-
-        self.L2 = fd.inner(v, self.u0) * fd.det(self.J) * fd.dx
-        
-        self.u1 = fd.Function(self.V_c, name="u1")
-
-        problem2 = fd.LinearVariationalProblem(self.a, self.L2, self.u1, bcs=self.bcs)
-        self.solver2 = fd.LinearVariationalSolver(problem2)
-
-    def solve(self):
-        self.solver.solve()
-        self.solver2.solve()
-        self.u0.assign(self.u1)
-        self.solver2.solve()
-        self.u0.assign(self.u1)
 
 
 class FeControlSpace(ControlSpace):
