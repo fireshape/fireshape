@@ -1,7 +1,7 @@
 from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
-from firedrake._future_ import interpolate as fd_interpolate
+from firedrake.__future__ import interpolate as fd_interpolate
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
