@@ -220,22 +220,12 @@ class CmControlSpace(ControlSpace):
         self.dt = 1 / self.nstep
 
         # create local tape
-        self.taped = False
-        self.tape = fda.Tape()
-        old_tape = fda.get_working_tape()
-        old_annotation = fda.annotate_tape()
-        fda.set_working_tape(self.tape)
-
-        if not self.taped:
-            fda.continue_annotation()
-
-            self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
-            self.run_forward()
-
-            self.Jhh_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
-
-            fda.pause_annotation()
-            self.taped = True
+        with fda.stop_annotating():
+                self.tape = fda.Tape()
+                with fda.set_working_tape(self.tape):
+                    fda.continue_annotation()
+                    self.run_forward()
+                    self.dphi_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
 
     # Solve problem and place solution into self.u0 that can be used to update dphi
     def compute_u0(self):
@@ -259,33 +249,24 @@ class CmControlSpace(ControlSpace):
         self.Ip.interpolate(self.dphi, output=out)
 
     def restrict(self, residual, out):
-        # Interpolate cofunction in V_r_dual into V_c_dual
+        # Interpolate cofunction from V_r_dual into V_c_dual
         self.Ip.interpolate(residual, output=self.residual, transpose=True)
 
-        old_tape = fda.get_working_tape()
-        old_annotation = fda.annotate_tape()
-        fda.set_working_tape(self.tape)
+        #not sure this tape management is necessary
+        #old_tape = fda.get_working_tape()
+        #old_annotation = fda.annotate_tape()
+        #fda.set_working_tape(self.tape)
 
-        if not self.taped:
-            fda.continue_annotation()
+        # Restrict from V_c_dual to P_dual
+        self.dphi_hat([self.p0]) # Evaluate dphi_hat at self.p0
+        k = self.dphi_hat.derivative(adj_input=self.residual)[0]  # Colin can you explain this? I guess it's the adjoint
+        k.dat.copy(out.cofun.dat)  # out.cofun.assign(k)
 
-            self.p0.assign(out.fun) # not sure if this is needed as running forward inside the not taped section?
-            self.run_forward()
-
-            self.Jhh_hat = fda.ReducedFunctional(self.dphi, [fda.Control(self.p0)]) # misnomer now can return any overloaded type, functional does not need to be an adj float
-
-            fda.pause_annotation()
-            self.taped = True
-
-        self.Jhh_hat([self.p0]) # This is a solve
-        k = self.Jhh_hat.derivative(adj_input=self.residual)[0]
-        k.dat.copy(out.cofun.dat)
-
-        fda.set_working_tape(old_tape)
-        if old_annotation:
-            fda.continue_annotation()
-        else:
-            fda.pause_annotation()
+        #fda.set_working_tape(old_tape)
+        #if old_annotation:
+        #    fda.continue_annotation()
+        #else:
+        #    fda.pause_annotation()
 
     def get_zero_vec(self):
         fun = fd.Function(self.P)
