@@ -1,7 +1,7 @@
 from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
-from firedrake._future_ import interpolate as fd.interpolate
+from firedrake._future_ import interpolate as fd_interpolate
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
@@ -160,7 +160,7 @@ class FeControlSpace(ControlSpace):
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.assemble(fd.interpolate(X, self.V_r))
+        self.id = fd.assemble(fd_interpolate(X, self.V_r))
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
@@ -497,7 +497,7 @@ class BsplineControlSpace(ControlSpace):
         # by replacing x_fct with self.id
         x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
-        x_int = fd.assemble(fd.interpolate(x_fct[0], V.sub(0)))
+        x_int = fd.assemble(fd_interpolate(x_fct[0], V.sub(0)))
         self.M = x_int.vector().size()
 
         comm = self.comm
@@ -521,7 +521,7 @@ class BsplineControlSpace(ControlSpace):
             I.setSizes(((lsize, gsize), (local_n, n)))
 
             I.setUp()
-            x_int = fd.assemble(fd.interpolate(x_fct[dim], V.sub(0)))
+            x_int = fd.assemble(fd_interpolate(x_fct[dim], V.sub(0)))
             x = x_int.vector().get_local()
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
