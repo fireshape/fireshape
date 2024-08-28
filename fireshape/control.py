@@ -265,6 +265,9 @@ class FeMultiGridControlSpace(ControlSpace):
         self.mesh_r = self.mh[-1]
         self.V_r = self.Vs[-1]
         self.V_r_dual = self.V_duals[-1]
+        # Control space on coarsest mesh, accessed elsewhere in fireshape
+        self.V_r_coarse = self.Vs[0]
+        self.V_r_coarse_dual = self.V_duals[0]
 
         # Create hierarchy of transformations, identities, and cofunctions
         self.ids = [fd.Function(V) for V in self.Vs]
@@ -320,8 +323,7 @@ class FeMultiGridControlSpace(ControlSpace):
                 return False
             else:
                 self.lastq.set(q)
-        # pass slef.Ts only for API compatibility
-        q.to_coordinatefield(self.Ts)
+        q.to_coordinatefield(self.Ts[0])
         # add identity to every function in the hierarchy
         # this is the only reason we need to overwrite update_domain
         #[T += id_ for (T, id_) in zip(self.Ts, self.ids)]
