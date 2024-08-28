@@ -165,6 +165,9 @@ class UflInnerProduct(InnerProduct):
             self.Aksp.solve(v.vec_ro(), out.vec_wo())
         else:
             self.ls.solve(out.fun, v.cofun)
+            # dirty trick
+            u1, u2, u3 = fd.split(out.fun)
+            out.fun.interpolate(fd.as_vector([u1, u2, 0]))
 
 
 class H1InnerProduct(UflInnerProduct):
