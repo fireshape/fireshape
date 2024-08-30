@@ -8,8 +8,7 @@ from icecream import ic
 ic.configureOutput(includeContext=True)
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector", "CmControlSpace",
-           "HelmholtzControlSpace", "MultipleHelmholtzControlSpace"]
+           "BsplineControlSpace", "ControlVector", "LLDMControlSpace"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
@@ -134,12 +133,10 @@ class ControlSpace(object):
         """
         raise NotImplementedError
 
-class CmControlSpace(ControlSpace):
+class LLDMControlSpace(ControlSpace):
     """
-    What does Cm mean?
-    What is indicator?
-    Does this require CG1 meshes or does it work also for higher order or periodic meshes?
-    Must self.P be CG1?
+    The control (should) live on a closed curve.  TODO: user should pass surface of codim 1 on which p0 lives. If so, indicator could just be 1 on + (it's probably fine)
+    Indicator is currently a piecewise constant function that is 1 inside the domain bounded by the curved.
     The control variable p0 lives in a scalar function space on mesh_c.
     Diffeomorphisms are computes as flows governed by the source term p0.
     """
@@ -150,7 +147,6 @@ class CmControlSpace(ControlSpace):
         family = element.family()
         degree = element.degree()
         self.V_r = fd.VectorFunctionSpace(self.mesh_r, family, degree, name="V_r")
-        #self.V_r = fd.VectorFunctionSpace(self.mesh_r, "CG", 1, name="V_r")  # does it have to be CG1?
         self.V_r_dual = self.V_r.dual()
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
@@ -160,7 +156,6 @@ class CmControlSpace(ControlSpace):
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
         self.V_m = fd.VectorFunctionSpace(self.mesh_m, family, degree, name="V_m")
-        #self.V_m = fd.VectorFunctionSpace(self.mesh_m, "CG", 1, name="V_m")  # does it have to be CG1?
         self.V_m_dual = self.V_m.dual()
 
         # The special construction begins here.
@@ -173,7 +168,7 @@ class CmControlSpace(ControlSpace):
                                   allow_missing_dofs=True)
 
         # Space of scalar functions containing control p0
-        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")  # does it have to be CG1?
+        self.P = fd.FunctionSpace(self.mesh_c, "CG", 1, name="P")  # self.P should be  DG of the same degree (it's a trace space), but then we need a CG space for u and dphi. Only two inner products here then, L2 on hypersurface (implement check that fs.innerproduct is L2)
         self.P_dual = self.P.dual()
         self.p0 = fd.Function(self.P)  # this is the control variable
 
@@ -195,9 +190,9 @@ class CmControlSpace(ControlSpace):
         a = (alpha**2 * fd.inner(Jit * fd.grad(v), Jit * fd.grad(u))
              + dot(u, v)) * fd.det(J) * fd.dx
         L = fd.inner(Jit("+") * normal,
-                     self.p0("+") * v("+")) * fd.dS(bdry_tag)
+                     self.p0("+") * v("+")) * fd.dS(bdry_tag)  # if passing hypersurface, bdry_tag will be redundant
 
-        # impose no displacement on bdry (and possibly interior) interior nodes
+        # impose no displacement on bdry (and possibly interior) nodes
         self.bcs = [fd.DirichletBC(self.V_c, fd.Constant((0, 0)), "on_boundary")]
         for tag in interior_bc_tags:
             self.bcs.append(fd.DirichletBC(self.V_c, fd.Constant((0, 0)), tag))
@@ -216,7 +211,7 @@ class CmControlSpace(ControlSpace):
             self.solver2 = fd.LinearVariationalSolver(problem2)
 
         # parameters for explicit time-stepping in self.run_forward()
-        self.nstep = nstep # TODO: experiment to find optimal nstep or feed through as parameter
+        self.nstep = nstep  # note: nstep must be sufficiently large, and is problem dependent, one could dream of a automated estimate at instantiation
         self.dt = 1 / self.nstep
 
         # create local tape
@@ -251,22 +246,11 @@ class CmControlSpace(ControlSpace):
     def restrict(self, residual, out):
         # Interpolate cofunction from V_r_dual into V_c_dual
         self.Ip.interpolate(residual, output=self.residual, transpose=True)
-
-        #not sure this tape management is necessary
-        #old_tape = fda.get_working_tape()
-        #old_annotation = fda.annotate_tape()
-        #fda.set_working_tape(self.tape)
-
         # Restrict from V_c_dual to P_dual
         self.dphi_hat([self.p0]) # Evaluate dphi_hat at self.p0
-        k = self.dphi_hat.derivative(adj_input=self.residual)[0]  # Colin can you explain this? I guess it's the adjoint
-        k.dat.copy(out.cofun.dat)  # out.cofun.assign(k)
-
-        #fda.set_working_tape(old_tape)
-        #if old_annotation:
-        #    fda.continue_annotation()
-        #else:
-        #    fda.pause_annotation()
+        # restrict residual to cofunction in self.P_dual
+        k = self.dphi_hat.derivative(adj_input=self.residual)[0]
+        out.cofun.assign(k)
 
     def get_zero_vec(self):
         fun = fd.Function(self.P)
