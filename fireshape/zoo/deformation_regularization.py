@@ -13,7 +13,8 @@ class DeformationRegularization(fs.DeformationObjective):
         super().__init__(*args, **kwargs)
         self.T = self.Q.T
         self.id = self.T.copy(deepcopy=True)
-        self.id.interpolate(fd.SpatialCoordinate(self.T.ufl_domain()))
+        X = fd.SpatialCoordinate(extract_unique_domain(self.T))
+        self.id.interpolate(X)
         self.l2_reg = l2_reg
         self.sym_grad_reg = sym_grad_reg
         self.skew_grad_reg = skew_grad_reg

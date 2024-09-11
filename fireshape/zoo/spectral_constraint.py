@@ -12,7 +12,7 @@ class MoYoSpectralConstraint(fs.DeformationObjective):
         super().__init__(*args, **kwargs)
         self.c = c
         self.T = self.Q.T
-        r_mesh = self.T.ufl_domain()
+        r_mesh = fd.extract_unique_domain(self.T)
         self.lam_space = fd.TensorFunctionSpace(r_mesh, "DG", 0)
         self.scalar_space = fd.FunctionSpace(r_mesh, "DG", 0)
         self.nuclear_norm = fd.Function(self.scalar_space)
