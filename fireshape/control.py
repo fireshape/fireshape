@@ -1,6 +1,8 @@
 from .innerproduct import InnerProduct
 import ROL
 import firedrake as fd
+from firedrake.__future__ import interpolate as fd_interpolate
+from firedrake.__future__ import Interpolator as fd_Interpolator
 
 __all__ = ["FeControlSpace", "FeMultiGridControlSpace",
            "BsplineControlSpace", "ControlVector"]
@@ -159,7 +161,7 @@ class FeControlSpace(ControlSpace):
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.interpolate(X, self.V_r)
+        self.id = fd.assemble(fd_interpolate(X, self.V_r))
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
@@ -175,7 +177,7 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             testfct_V_c = fd.TestFunction(self.V_c)
             # Create interpolator from V_c into V_r
-            self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
+            self.Ip = fd_Interpolator(testfct_V_c, self.V_r,
                                       allow_missing_dofs=True)
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
@@ -183,23 +185,27 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             testfct_V_c = fd.TestFunction(self.V_c)
             # Create interpolator from V_c into V_r
-            self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
+            self.Ip = fd_Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
         if getattr(self, "is_DG", False):
-            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
+            interp = self.Ip.interpolate(residual, transpose=True)
+            fd.assemble(interp, tensor=out.cofun)
         elif getattr(self, "is_decoupled", False):
             # it's not clear whether this is 100% correct for missing vals
-            self.Ip.interpolate(residual, output=out.cofun, transpose=True)
+            interp = self.Ip.interpolate(residual, transpose=True)
+            fd.assemble(interp, tensor=out.cofun)
         else:
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         if getattr(self, "is_DG", False):
-            self.Ip.interpolate(vector.fun, output=out)
+            interp = self.Ip.interpolate(vector.fun)
+            fd.assemble(interp, tensor=out)
         elif getattr(self, "is_decoupled", False):
             # extend by zero
-            self.Ip.interpolate(vector.fun, output=out, default_missing_val=0.)
+            interp = self.Ip.interpolate(vector.fun, default_missing_val=0.)
+            fd.assemble(interp, tensor=out)
         else:
             out.assign(vector.fun)
 
@@ -530,7 +536,7 @@ class BsplineControlSpace(ControlSpace):
         # by replacing x_fct with self.id
         x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
-        x_int = fd.interpolate(x_fct[0], V.sub(0))
+        x_int = fd.assemble(fd_interpolate(x_fct[0], V.sub(0)))
         self.M = x_int.vector().size()
 
         comm = self.comm
@@ -554,7 +560,7 @@ class BsplineControlSpace(ControlSpace):
             I.setSizes(((lsize, gsize), (local_n, n)))
 
             I.setUp()
-            x_int = fd.interpolate(x_fct[dim], V.sub(0))
+            x_int = fd.assemble(fd_interpolate(x_fct[dim], V.sub(0)))
             x = x_int.vector().get_local()
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
