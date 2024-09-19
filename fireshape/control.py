@@ -255,29 +255,27 @@ class FeMultiGridControlSpace(ControlSpace):
     A control space which uses the coarse grid of a mesh hierarchy
     as control for the shape optimisation.
 
-    The class ensures that all grids in the hierarchy remain consistent (nested),
-    which is important for using multigrid as a solver inside a shape optimisation
-    loop.
-    """
+    The class ensures that all grids in the hierarchy remain consistent
+    (nested), which is important for using multigrid as a solver inside a shape
+    optimisation loop.  """
     def __init__(self, mesh, refinements=1, degree=1):
 
         self.mh = fd.MeshHierarchy(mesh, refinements)
 
         # Coordinate function spaces on all meshes
-        self.Vs = [fd.VectorFunctionSpace(mesh, "CG", degree) for mesh in self.mh]
+        self.Vs = [fd.VectorFunctionSpace(mesh, "CG", degree)
+                   for mesh in self.mh]
         self.V_duals = [V.dual() for V in self.Vs]
 
         # Control space on most refined mesh
         self.mesh_r = self.mh[-1]
         self.V_r = self.Vs[-1]
         self.V_r_dual = self.V_duals[-1]
-        # Control space on coarsest mesh, accessed elsewhere in fireshape
-        self.V_r_coarse = self.Vs[0]
-        self.V_r_coarse_dual = self.V_duals[0]
 
         # Create hierarchy of transformations, identities, and cofunctions
         self.ids = [fd.Function(V) for V in self.Vs]
-        [id_.interpolate(fd.SpatialCoordinate(m)) for (m, id_) in zip(self.mh, self.ids)]
+        [id_.interpolate(fd.SpatialCoordinate(m))
+         for (m, id_) in zip(self.mh, self.ids)]
         self.Ts = [fd.Function(V, name="T") for V in self.Vs]
         [T.assign(id_) for (T, id_) in zip(self.Ts, self.ids)]
         self.cofuns = [fd.Cofunction(V_dual) for V_dual in self.V_duals]
@@ -285,12 +283,14 @@ class FeMultiGridControlSpace(ControlSpace):
 
         # Create mesh hierarchy reflecting self.Ts
         mapped_meshes = [fd.Mesh(T) for T in self.Ts]
-        self.mh_mapped = fd.HierarchyBase(mapped_meshes, self.mh.coarse_to_fine_cells,
-                                                         self.mh.fine_to_coarse_cells,
-                                                         self.mh.refinements_per_level,
-                                                         self.mh.nested)
+        self.mh_mapped = fd.HierarchyBase(mapped_meshes,
+                                          self.mh.coarse_to_fine_cells,
+                                          self.mh.fine_to_coarse_cells,
+                                          self.mh.refinements_per_level,
+                                          self.mh.nested)
 
-        # Create moved mesh and V_m (and dual) to evaluate and collect shape derivative
+        # Create moved mesh and V_m (and dual)
+        # to evaluate and collect shape derivative
         self.mesh_m = self.mh_mapped[-1]
         element = self.Vs[-1].ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
@@ -309,9 +309,12 @@ class FeMultiGridControlSpace(ControlSpace):
         for (prev, next) in zip(self.Ts, self.Ts[1:]):
             fd.prolong(prev, next)
 
-    def update_domain(self, q: 'ControlVector'):  # not happy of overwriting this
+    def update_domain(self, q: 'ControlVector'):
         """
-        Update the interpolant self.T with q
+        Update the interpolant self.T with q. For multigrid, one
+        must pass self.Ts[0] instead of self.T to the coordinatefield.
+
+        AP (19/09/2024): not so happy we had to overwrite this.
         """
 
         # Check if the new control is different from the last one.  ROL is
@@ -332,12 +335,12 @@ class FeMultiGridControlSpace(ControlSpace):
         q.to_coordinatefield(self.Ts[0])
         # add identity to every function in the hierarchy
         # this is the only reason we need to overwrite update_domain
-        #[T += id_ for (T, id_) in zip(self.Ts, self.ids)]
         [T.assign(T + id_) for (T, id_) in zip(self.Ts, self.ids)]
 
         for mesh in self.mh_mapped:
-            if "hierarchy_physical_node_locations" in mesh._geometric_shared_data_cache:
-                mesh._geometric_shared_data_cache.pop("hierarchy_physical_node_locations")
+            cache = mesh._geometric_shared_data_cache
+            if "hierarchy_physical_node_locations" in cache:
+                cache.pop("hierarchy_physical_node_locations")
         return True
 
     def get_zero_vec(self):

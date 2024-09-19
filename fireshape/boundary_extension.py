@@ -5,7 +5,7 @@ class ElasticityExtension(object):
 
     def __init__(self, V, fixed_dims=[], direct_solve=False):
         print("Boundary extension is currently broken")
-        assert(False)
+        assert False
         if isinstance(fixed_dims, int):
             fixed_dims = [fixed_dims]
         self.V = V
