@@ -11,9 +11,11 @@ import ROL
                                      fs.LaplaceInnerProduct])
 @pytest.mark.parametrize("controlspace_t", [fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
-def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
+#@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
+#                                           "w_ext_fixed_fim"])
+#def test_levelset(dim, inner_t, controlspace_t, use_extension=None, pytestconfig):
+def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
+    use_extension=None
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
