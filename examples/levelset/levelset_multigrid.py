@@ -14,7 +14,7 @@ inner = fs.H1InnerProduct(Q)
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)
 f = (pow(x-0.5, 2))+pow(y-0.5, 2) - 2.
-out = fd.File("domain.pvd")
+out = fd.VTKFile("domain.pvd")
 J = fsz.LevelsetFunctional(f, Q, cb=lambda: out.write(mesh_m.coordinates))
 
 # optimize
