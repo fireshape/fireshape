@@ -7,7 +7,7 @@ from .pde_constraint import PdeConstraint
 class Objective(ROL.Objective):
 
     def __init__(self, Q: ControlSpace, cb=None, scale: float = 1.0,
-                 quadrature_degree: int = None):
+                 quadrature_degree: int = None, *args, **kwargs):
 
         """
         Inputs: Q: ControlSpace
