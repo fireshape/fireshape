@@ -5,11 +5,12 @@ import ROL
 
 mesh = fd.UnitDiskMesh(refinement_level=3)
 Q = fs.FeControlSpace(mesh)
-#Q = fs.FeMultiGridControlSpace(mesh, refinements=4, degree=2)
-#inner = fs.SurfaceInnerProduct(Q)
-#extension = fs.ElasticityExtension(Q.get_space_for_inner()[0], direct_solve=True)
+# Q = fs.FeMultiGridControlSpace(mesh, refinements=4, degree=2)
+# inner = fs.SurfaceInnerProduct(Q)
+# extension = fs.ElasticityExtension(Q.get_space_for_inner()[0],
+#                                    direct_solve=True)
 inner = fs.ElasticityInnerProduct(Q)
-extension=None
+extension = None
 
 
 mesh_m = Q.mesh_m
