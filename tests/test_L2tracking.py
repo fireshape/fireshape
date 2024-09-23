@@ -86,7 +86,7 @@ def run_L2tracking_optimization(write_output=False):
 
     # tool for developing new tests, allows storing shape iterates
     if write_output:
-        out = fd.File("domain.pvd")
+        out = fd.VTKFile("domain.pvd")
 
         def cb(*args):
             out.write(Q.mesh_m.coordinates)

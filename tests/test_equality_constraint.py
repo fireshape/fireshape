@@ -16,7 +16,7 @@ def test_equality_constraint(pytestconfig):
 
     q = fs.ControlVector(Q, inner)
     if pytestconfig.getoption("verbose"):
-        out = fd.File("domain.pvd")
+        out = fd.VTKFile("domain.pvd")
 
         def cb(*args):
             out.write(Q.mesh_m.coordinates)

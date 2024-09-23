@@ -55,8 +55,8 @@ class TimeTracking(PDEconstrainedObjective):
         self.u0.interpolate(sin(pi*x*(1+perturbation))*sin(pi*y))
 
         # define self.cb, which is always called after self.solvePDE
-        # self.File = fd.File("u0.pvd")
-        # self.cb = lambda : self.File.write(self.u0)
+        # self.VTKFile = fd.VTKFile("u0.pvd")
+        # self.cb = lambda : self.VTKFile.write(self.u0)
 
         # heat equation discreized with implicit Euler
         self.u = fd.Function(V)
