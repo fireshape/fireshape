@@ -252,70 +252,107 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
     """
-    FEControlSpace on given mesh and StateSpace on uniformly refined mesh.
+    A control space which uses the coarse grid of a mesh hierarchy
+    as control for the shape optimisation.
 
-    Use the provided mesh to construct a Lagrangian finite element control
-    space. Then, create a finer mesh using `refinements`-many uniform
-    refinements and construct a representative of ControlVector that is
-    compatible with the state space.
+    The class ensures that all grids in the hierarchy remain consistent
+    (nested), which is important for using multigrid as a solver inside a shape
+    optimisation loop.  """
+    def __init__(self, mesh, refinements=1, degree=1):
 
-    Inputs:
-        refinements: type int, number of uniform refinements to perform
-                     to obtain the StateSpace mesh.
-        degree: type int, degree of Lagrange basis functions of ControlSpace.
+        self.mh = fd.MeshHierarchy(mesh, refinements)
 
-    Note: as of 15.11.2023, higher-order meshes are not supported, that is,
-    mesh_r has to be a polygonal mesh (mesh_m can still be of higher-order).
-    """
+        # Coordinate function spaces on all meshes
+        self.Vs = [fd.VectorFunctionSpace(mesh, "CG", degree)
+                   for mesh in self.mh]
+        self.V_duals = [V.dual() for V in self.Vs]
 
-    def __init__(self, mesh_r, refinements=1, degree=1):
-        # as of 15.11.2023, MeshHierarchy does not work if
-        # refinements_per_level is not a power of 2
-        n = refinements
-        n_is_power_of_2 = (n & (n-1) == 0) and n != 0
-        if not n_is_power_of_2:
-            raise NotImplementedError("refinements must be a power of 2")
+        # Control space on most refined mesh
+        self.mesh_r = self.mh[-1]
+        self.V_r = self.Vs[-1]
+        self.V_r_dual = self.V_duals[-1]
 
-        # one refinement level with `refinements`-many uniform refinements
-        mh = fd.MeshHierarchy(mesh_r, 1, refinements)
+        # Create hierarchy of transformations, identities, and cofunctions
+        self.ids = [fd.Function(V) for V in self.Vs]
+        [id_.interpolate(fd.SpatialCoordinate(m))
+         for (m, id_) in zip(self.mh, self.ids)]
+        self.Ts = [fd.Function(V, name="T") for V in self.Vs]
+        [T.assign(id_) for (T, id_) in zip(self.Ts, self.ids)]
+        self.cofuns = [fd.Cofunction(V_dual) for V_dual in self.V_duals]
+        self.T = self.Ts[-1]
 
-        # Control space on coarsest mesh
-        self.V_r_coarse = fd.VectorFunctionSpace(mh[0], "CG", degree)
-        self.V_r_coarse_dual = self.V_r_coarse.dual()
+        # Create mesh hierarchy reflecting self.Ts
+        mapped_meshes = [fd.Mesh(T) for T in self.Ts]
+        self.mh_mapped = fd.HierarchyBase(mapped_meshes,
+                                          self.mh.coarse_to_fine_cells,
+                                          self.mh.fine_to_coarse_cells,
+                                          self.mh.refinements_per_level,
+                                          self.mh.nested)
 
-        # Control space on refined mesh.
-        self.mesh_r = mh[-1]
-        element = self.V_r_coarse.ufl_element()
-        self.V_r = fd.FunctionSpace(self.mesh_r, element)
-        self.V_r_dual = self.V_r.dual()
-
-        # Create self.id and self.T on refined mesh.
-        X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.Function(self.V_r).interpolate(X)
-        self.T = fd.Function(self.V_r, name="T")
-        self.T.assign(self.id)
-        self.mesh_m = fd.Mesh(self.T)
+        # Create moved mesh and V_m (and dual)
+        # to evaluate and collect shape derivative
+        self.mesh_m = self.mh_mapped[-1]
+        element = self.Vs[-1].ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.V_m_dual = self.V_m.dual()
 
     def restrict(self, residual, out):
-        fd.restrict(residual, out.cofun)
+
+        self.cofuns[-1].assign(residual)
+        for (prev, next) in zip(self.cofuns[::-1], self.cofuns[:-1][::-1]):
+            fd.restrict(prev, next)
+        out.cofun.assign(self.cofuns[0])
 
     def interpolate(self, vector, out):
-        fd.prolong(vector.fun, out)
+        # out is unused, but keep it for API compatibility
+        self.Ts[0].assign(vector.fun)
+        for (prev, next) in zip(self.Ts, self.Ts[1:]):
+            fd.prolong(prev, next)
+
+    def update_domain(self, q: 'ControlVector'):
+        """
+        Update the interpolant self.T with q. For multigrid, one
+        must pass self.Ts[0] instead of self.T to the coordinatefield.
+
+        AP (19/09/2024): not so happy we had to overwrite this.
+        """
+
+        # Check if the new control is different from the last one.  ROL is
+        # sometimes a bit strange in that it calls update on the same value
+        # more than once, in that case we don't want to solve the PDE again.
+        if not hasattr(self, 'lastq') or self.lastq is None:
+            self.lastq = q.clone()
+            self.lastq.set(q)
+        else:
+            self.lastq.axpy(-1., q)
+            # calculate l2 norm (faster)
+            diff = self.lastq.vec_ro().norm()
+            self.lastq.axpy(+1., q)
+            if diff < 1e-20:
+                return False
+            else:
+                self.lastq.set(q)
+        q.to_coordinatefield(self.Ts[0])
+        # add identity to every function in the hierarchy
+        # this is the only reason we need to overwrite update_domain
+        [T.assign(T + id_) for (T, id_) in zip(self.Ts, self.ids)]
+
+        for mesh in self.mh_mapped:
+            cache = mesh._geometric_shared_data_cache
+            if "hierarchy_physical_node_locations" in cache:
+                cache.pop("hierarchy_physical_node_locations")
+        return True
 
     def get_zero_vec(self):
-        fun = fd.Function(self.V_r_coarse)
-        fun *= 0.
+        fun = fd.Function(self.Vs[0])
         return fun
 
     def get_zero_covec(self):
-        fun = fd.Cofunction(self.V_r_coarse_dual)
-        fun *= 0.
+        fun = fd.Cofunction(self.V_duals[0])
         return fun
 
     def get_space_for_inner(self):
-        return (self.V_r_coarse, None)
+        return (self.Vs[0], None)
 
     def store(self, vec, filename="control"):
         """

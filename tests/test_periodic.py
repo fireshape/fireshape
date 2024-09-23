@@ -63,7 +63,7 @@ def test_periodic(dim, inner_t, pytestconfig):
 
     # if running with -v or --verbose, then export the shapes
     if verbose:
-        out = fd.File("sigma.pvd")
+        out = fd.VTKFile("sigma.pvd")
 
         def cb(*args):
             out.write(sigma)
