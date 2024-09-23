@@ -337,6 +337,8 @@ class FeMultiGridControlSpace(ControlSpace):
         # this is the only reason we need to overwrite update_domain
         [T.assign(T + id_) for (T, id_) in zip(self.Ts, self.ids)]
 
+        # uncache physical node locations (which firedrake automatically
+        # caches to speed up multrigrid transfer operators)
         for mesh in self.mh_mapped:
             cache = mesh._geometric_shared_data_cache
             if "hierarchy_physical_node_locations" in cache:
