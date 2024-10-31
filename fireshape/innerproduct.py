@@ -167,6 +167,79 @@ class UflInnerProduct(InnerProduct):
             self.ls.solve(out.fun, v.cofun)
 
 
+class W1p_representative(InnerProduct):
+    """
+    Implementation of an inner product that is build on a
+    firedrake.FunctionSpace. Note: the ControlSpace must be
+    firedrake.FunctionSpace.
+    """
+
+    def __init__(self, p, Q, fixed_bids=[]):
+        self.p = p  # should see an improvement for corners if p>4
+        self.fixed_bids = fixed_bids  # fixed parts of bdry
+        self.Q = Q
+
+        """
+        V: type fd.FunctionSpace
+        I: must be None, we do not allow interpolated control spaces
+        """
+        (V, I_interp) = Q.get_space_for_inner()
+        if I_interp is none:
+            assert("Cannot compute W1p for interpolated control spaces, sorry.")
+        free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        self.free_bids = [int(i) for i in free_bids]  # np.int->int
+        for bid in self.fixed_bids:
+            self.free_bids.remove(bid)
+
+        bcs = []
+        # impose homogeneous Dirichlet bcs on bdry parts that are fixed.
+        if len(self.fixed_bids) > 0:
+            dim = V.value_size
+            if dim == 2:
+                zerovector = fd.Constant((0, 0))
+            elif dim == 3:
+                zerovector = fd.Constant((0, 0, 0))
+            else:
+                raise NotImplementedError
+            bcs.append(fd.DirichletBC(V, zerovector, self.fixed_bids))
+
+        if len(bcs) == 0:
+            bcs = None
+
+        F = self.get_residual(V)
+        NonLinearVariationalProblem = ...
+        nonls = fd.NonLinearVariationSolver(F == 0, bcs=bcs)
+        self.nonls = nonls
+        self.interpolated = False
+
+    def get_residual(self, V):
+        """ Weak formulation of inner product (in UFL)."""
+        u = fd.Funtion(V)  # cannot start with zero
+        self.dJ_ = fd.Cofunction(V)
+        v = fd.TestFunction(V)
+        F = fd.inner(fd.inner(fd.grad(u),fd.grad(u))**((self.p-2)/2)*grad(u), grad(v)) * dx \
+            + fd.inner(fd.dot(u,u)**((self.p-2)/2)*u, v) * dx \
+            - self.dJ_.apply(u)  # not sure this syntax is correct
+        return F
+
+    def eval(self, u, v):
+        """Evaluate inner product in primal space."""
+        F = fd.inner(fd.inner(fd.grad(u),fd.grad(u))**((self.p-2)/2)*grad(u), grad(v)) * dx \
+            + fd.inner(fd.dot(u,u)**((self.p-2)/2)*u, v) * dx
+        return assemble(F)
+
+    def riesz_map(self, v, out):  # dual to primal
+        """
+        Compute Riesz representative of v and save it in out.
+
+        Input:
+        v: ControlVector, in the dual space
+        out: ControlVector, in the primal space
+        """
+        self.dJ_.assign(v)
+        self.nonls.solve(out.fun, v.cofun)  # this was the sintax for a linear solver, it may not work
+
+
 class H1InnerProduct(UflInnerProduct):
     """Inner product on H1. It involves stiffness and mass matrices."""
 
