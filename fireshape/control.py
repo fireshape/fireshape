@@ -295,6 +295,7 @@ class FeMultiGridControlSpace(ControlSpace):
         element = self.Vs[-1].ufl_element()
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.V_m_dual = self.V_m.dual()
+        self.id = self.ids[-1]
 
     def restrict(self, residual, out):
 
