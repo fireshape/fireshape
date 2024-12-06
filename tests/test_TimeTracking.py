@@ -69,7 +69,7 @@ class TimeTracking(PDEconstrainedObjective):
             + fd.inner(fd.grad(u), fd.grad(v))*self.dx \
             - self.f(t+self.dt)*v*self.dx
 
-    def solvePDE(self):
+    def objective_value(self):
         """Solve the heat equation and evaluate the objective function."""
         self.J = 0
         t = 0
