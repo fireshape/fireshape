@@ -2,6 +2,7 @@ import ROL
 import firedrake as fd
 from .control import ControlSpace
 from .pde_constraint import PdeConstraint
+import numpy as np
 
 
 class Objective(ROL.Objective):
@@ -177,6 +178,20 @@ class PDEconstrainedObjective(Objective):
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
         self.Jred = None
+        self.feasible_control = False
+        self.Vdet = fd.FunctionSpace(self.Q.mesh_r, "DG", 0)
+        self.detDT = fd.Function(self.Vdet)
+        # pyadjiont post-evaluation callback, signature:
+        # self.eval_cb_post(func_value, self.controls.delist(values))
+        self.eval_cb_post = lambda J, *args: None
+
+    def eval_cb_pre(self, *args):
+        """
+        Function called within fda.ReducedFunctional.__call__().
+        Raise an error if the mesh is tangled.
+        """
+        self.detDT.interpolate(fd.det(fd.grad(self.Q.T)))
+        assert (min(self.detDT.vector()) > 0.05)
 
     def objective_value(self):
         """
@@ -197,19 +212,26 @@ class PDEconstrainedObjective(Objective):
         with self.dT_r.dat.vec_ro as a:
             with self.dT_m.dat.vec_wo as b:
                 a.copy(b)
-        return self.Jred.__call__(self.dT_m)
+        try:
+            J = self.Jred(self.dT_m)
+            self.feasible_control = True
+        except Exception:
+            J = np.nan
+            self.feasible_control = False
+        return J
 
     def derivative(self, out):
         """
         Get the derivative from pyadjoint.
         """
-        opts = {"riesz_representation": None}
-        dJ = self.Jred.derivative(options=opts)
-        # transplant from moved to reference mesh
-        with dJ.dat.vec as vec_dJ:
-            with self.deriv_r.dat.vec as vec_r:
-                vec_dJ.copy(vec_r)
-        out.from_first_derivative(self.deriv_r)
+        if self.feasible_control:
+            opts = {"riesz_representation": None}
+            dJ = self.Jred.derivative(options=opts)
+            # transplant from moved to reference mesh
+            with dJ.dat.vec as vec_dJ:
+                with self.deriv_r.dat.vec as vec_r:
+                    vec_dJ.copy(vec_r)
+            out.from_first_derivative(self.deriv_r)
 
     def createJred(self):
         """Create reduced functional using pyadjiont."""
@@ -226,8 +248,12 @@ class PDEconstrainedObjective(Objective):
                     mesh_m = self.Q.mesh_m
                     mesh_m.coordinates.assign(mesh_m.coordinates + self.dT_m)
                     Jpyadj = self.objective_value()
+                    cb_pre = self.eval_cb_pre
+                    cb_post = self.eval_cb_post
                     self.Jred = fda.ReducedFunctional(Jpyadj,
-                                                      fda.Control(self.dT_m))
+                                                      fda.Control(self.dT_m),
+                                                      eval_cb_pre=cb_pre,
+                                                      eval_cb_post=cb_post)
         except fd.ConvergenceError:
             print("Failed to solve the state equation for initial guess.")
             raise fd.ConvergenceError
