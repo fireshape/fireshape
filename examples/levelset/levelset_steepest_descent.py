@@ -1,25 +1,25 @@
-from firedrake import *
-from fireshape import *
+import firedrake as fd
+import fireshape as fs
 
 
 # create objective functional
-class LevelsetFunctional(ShapeObjective):
+class LevelsetFunctional(fs.ShapeObjective):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        x, y = SpatialCoordinate(self.Q.mesh_m)
+        x, y = fd.SpatialCoordinate(self.Q.mesh_m)
         self.f = (x - 0.5)**2 + (y - 0.5)**2 - 0.5
 
     def value_form(self):
-        return self.f * dx
+        return self.f * fd.dx
 
 
 # setup problem
-mesh = UnitSquareMesh(30, 30)
-Q = FeControlSpace(mesh)
-q = ControlVector(Q, H1InnerProduct(Q))
+mesh = fd.UnitSquareMesh(30, 30)
+Q = fs.FeControlSpace(mesh)
+q = fs.ControlVector(Q, fs.H1InnerProduct(Q))
 
 # instantiate objective
-out = VTKFile("domain_steepest_descent.pvd")
+out = fd.VTKFile("domain_steepest_descent.pvd")
 J = LevelsetFunctional(Q, cb=lambda: out.write(Q.mesh_m.coordinates))
 J.cb()  # store initial domain once
 
