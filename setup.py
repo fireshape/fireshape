@@ -1,12 +1,12 @@
 from setuptools import setup
-#try:
+#try: # noqa
 #    import firedrake # noqa
 #    import firedrake.adjoint # noqa
 #    import ROL # noqa
-#except ImportError:
-#    raise Exception("Firedrake needs to be installed and activated."
-#                    "Please visit firedrakeproject.org ."
-#                    "ROL must have been installed, too")
+#except ImportError: # noqa
+#    raise Exception("Firedrake needs to be installed and activated." # noqa
+#                    "Please visit firedrakeproject.org ." # noqa
+#                    "ROL must have been installed, too") # noqa
 setup(
     name='fireshape',
     version='0.0.1',
