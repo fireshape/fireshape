@@ -16,5 +16,5 @@ setup(
     long_description='',
     packages=['fireshape', 'fireshape.zoo'],
     zip_safe=False,
-    install_requires=["scipy"]
+    # install_requires=["scipy"]
 )
