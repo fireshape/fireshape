@@ -18,7 +18,7 @@ def test_spectral_constraint(pytestconfig):
     mesh_m = Q.mesh_m
     q = fs.ControlVector(Q, inner)
     if pytestconfig.getoption("verbose"):
-        out = fd.File("domain.pvd")
+        out = fd.VTKFile("domain.pvd")
 
         def cb():
             out.write(mesh_m.coordinates)

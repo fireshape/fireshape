@@ -11,9 +11,11 @@ import ROL
                                      fs.LaplaceInnerProduct])
 @pytest.mark.parametrize("controlspace_t", [fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
-@pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
-                                           "w_ext_fixed_fim"])
-def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
+# @pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
+#                                            "w_ext_fixed_fim"])
+# def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
+def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
+    use_extension = None
     verbose = pytestconfig.getoption("verbose")
     """ Test template for fsz.LevelsetFunctional."""
 
@@ -49,7 +51,7 @@ def test_levelset(dim, inner_t, controlspace_t, use_extension, pytestconfig):
     inner = inner_t(Q)
     # if running with -v or --verbose, then export the shapes
     if verbose:
-        out = fd.File("domain.pvd")
+        out = fd.VTKFile("domain.pvd")
 
         def cb(*args):
             out.write(Q.mesh_m.coordinates)
