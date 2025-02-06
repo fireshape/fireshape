@@ -227,6 +227,7 @@ class LaplaceInnerProduct(UflInnerProduct):
             raise NotImplementedError
         return res
 
+
 class H2PenalisedInnerProduct(UflPenalisedInnerProduct):
     def __init__(self, Q, **kwargs):
         super().__init__(Q, **kwargs)
@@ -267,6 +268,7 @@ class H2FrobeniusInnerProduct(UflInnerProduct):
         return a
     def get_nullspace(self, V):
         return None
+
 
 class ElasticityInnerProduct(UflInnerProduct):
     """Inner product stemming from the linear elasticity equation."""
