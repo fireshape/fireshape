@@ -9,7 +9,10 @@ import ROL
 @pytest.mark.parametrize("add_to_degree_r", [0, 1])
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
-                                     fs.LaplaceInnerProduct])
+                                     fs.LaplaceInnerProduct,
+                                     fs.H2FrobeniusInnerProduct,
+                                     fs.H2PenalisedInnerProduct,
+                                     fs.H2FrobeniusPenalisedInnerProduct])
 @pytest.mark.parametrize("decoupled", [False, True])
 def test_levelset(dim, add_to_degree_r, inner_t, decoupled, pytestconfig):
     verbose = pytestconfig.getoption("verbose")

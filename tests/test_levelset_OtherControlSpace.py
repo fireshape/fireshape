@@ -8,7 +8,10 @@ import ROL
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("inner_t", [fs.H1InnerProduct,
                                      fs.ElasticityInnerProduct,
-                                     fs.LaplaceInnerProduct])
+                                     fs.LaplaceInnerProduct,
+                                     fs.H2FrobeniusInnerProduct,
+                                     fs.H2PenalisedInnerProduct,
+                                     fs.H2FrobeniusPenalisedInnerProduct])
 @pytest.mark.parametrize("controlspace_t", [fs.FeMultiGridControlSpace,
                                             fs.BsplineControlSpace])
 # @pytest.mark.parametrize("use_extension", ["wo_ext", "w_ext",
