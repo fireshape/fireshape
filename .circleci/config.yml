@@ -10,8 +10,9 @@ jobs:
       - checkout
       - run:
           name: install fireshape
+          # Pass '--system-site-packages' so Firedrake is found
           command: |
-            python3 -m venv venv
+            python3 -m venv --system-site-packages venv
             . venv/bin/activate
             pip install -e .
             pip list
@@ -40,8 +41,9 @@ jobs:
       - checkout
       - run:
           name: run tests
+          # Pass '--system-site-packages' so Firedrake is found
           command: |
-            python3 -m venv venv
+            python3 -m venv --system-site-packages venv
             . venv/bin/activate
             pip install -e .
             mkdir ./test-results
