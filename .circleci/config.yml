@@ -2,26 +2,36 @@ version: 2
 jobs:
   build:
     docker:
-      - image: fireshape/firedrake4tests:latest
+      # UNDO ME
+      # - image: fireshape/firedrake4tests:latest
+      - image: fireshape/firedrake4tests:pip
     working_directory: ~/repo
     steps:
       - checkout
       - run:
+          name: install fireshape
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -e .
+            pip list
+      - run:
           name: run lint
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
+            . venv/bin/activate
+            pip install flake8
             make lint
       - run:
           name: run examples
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
+            . venv/bin/activate
             make examples
 
   test:
     docker:
-      - image: fireshape/firedrake4tests:latest
+      # UNDO ME
+      # - image: fireshape/firedrake4tests:latest
+      - image: fireshape/firedrake4tests:pip
 
     working_directory: ~/repo
 
@@ -31,8 +41,9 @@ jobs:
       - run:
           name: run tests
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -e .
             mkdir ./test-results
             pip install pytest-circleci-parallelized
             pytest --circleci-parallelize --junitxml=./test-results/junit.xml
