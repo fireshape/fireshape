@@ -46,4 +46,4 @@ jobs:
           file: docker/Dockerfile.${{ matrix.dockerfile }}
           # UNDO ME
           # tags: fireshape/${{ matrix.dockerfile }}:latest
-          tags: pip
+          tags: fireshape/${{ matrix.dockerfile }}:pip
