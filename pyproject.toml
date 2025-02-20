@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
   "pyroltrilinos",
   "scipy",
+  "vtk",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
