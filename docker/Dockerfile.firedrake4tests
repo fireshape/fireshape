@@ -1,11 +1,9 @@
-# UNDO ME
-# FROM firedrakeproject/firedrake-vanilla-default:latest
-FROM firedrakeproject/firedrake-vanilla-default:pip
+FROM firedrakeproject/firedrake-vanilla-default:latest
 # keep as light as possible for CircleCI
 
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 
-RUN sudo apt-get update; \
-    sudo apt-get -y dist-upgrade; \
-    sudo apt-get -y install gmsh; \
-    sudo rm -rf /var/lib/apt/lists/*
+RUN sudo apt-get update \
+    && sudo apt-get -y dist-upgrade \
+    && sudo apt-get -y install gmsh \
+    && sudo rm -rf /var/lib/apt/lists/*

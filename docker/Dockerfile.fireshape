@@ -1,14 +1,12 @@
-# UNDO ME
-# FROM firedrakeproject/firedrake:latest
-FROM firedrakeproject/firedrake:pip
+FROM firedrakeproject/firedrake:latest
 # build on fully fledged firedrake
 
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 
-RUN sudo apt-get update; \
-    sudo apt-get -y dist-upgrade; \
-    sudo apt-get -y install gmsh; \
-    sudo rm -rf /var/lib/apt/lists/*
+RUN sudo apt-get update \
+    && sudo apt-get -y dist-upgrade \
+    && sudo apt-get -y install gmsh \
+    && sudo rm -rf /var/lib/apt/lists/*
 
 # Now install fireshape
 RUN pip install --break-system-packages --verbose --src . \
