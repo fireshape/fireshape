@@ -7,16 +7,23 @@ jobs:
     steps:
       - checkout
       - run:
+          name: install fireshape
+          # Pass '--system-site-packages' so Firedrake is found
+          command: |
+            python3 -m venv --system-site-packages ~/venv
+            . ~/venv/bin/activate
+            python -m pip install -e .
+            python -m pip list
+      - run:
           name: run lint
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
+            . ~/venv/bin/activate
+            python -m pip install flake8
             make lint
       - run:
           name: run examples
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
+            . ~/venv/bin/activate
             make examples
 
   test:
@@ -30,12 +37,14 @@ jobs:
       - checkout
       - run:
           name: run tests
+          # Pass '--system-site-packages' so Firedrake is found
           command: |
-            . /home/firedrake/firedrake/bin/activate
-            export PYTHONPATH=$(pwd):$PYTHONPATH
-            mkdir ./test-results
-            pip install pytest-circleci-parallelized
-            pytest --circleci-parallelize --junitxml=./test-results/junit.xml
+            python3 -m venv --system-site-packages ~/venv
+            . ~/venv/bin/activate
+            python -m pip install -e .
+            python -m pip install pytest-circleci-parallelized
+            mkdir test-results
+            python -m pytest --circleci-parallelize --junitxml=test-results/junit.xml
       - store_test_results:
           path: ./test-results
 

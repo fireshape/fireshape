@@ -19,50 +19,28 @@ jobs:
 
   #build: #eventually add job here if we want to also test installation
 
-  docker_firedrake4tests:
-    name: "Build firedrake4tests Docker container"
-    # The type of runner that tests will run on
-    if: ${{ github.ref == 'refs/heads/master' }}
+  docker:
+    name: "Build Docker container"
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile: [firedrake4tests, fireshape]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
-        id: buildx
         uses: docker/setup-buildx-action@v2
       - name: Build and push firedrake4tests
         uses: docker/build-push-action@v4
         with:
           push: true
           no-cache: true
-          file: docker/Dockerfile.firedrake4tests
-          tags: fireshape/firedrake4tests:latest
-
-  docker_fireshape:
-    name: "Build fireshape Docker container"
-    # The type of runner that tests will run on
-    if: ${{ github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v3
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build and push fireshape
-        uses: docker/build-push-action@v4
-        with:
-          push: true
-          no-cache: true
-          file: docker/Dockerfile.fireshape
-          tags: fireshape/fireshape:latest
+          file: docker/Dockerfile.${{ matrix.dockerfile }}
+          tags: fireshape/${{ matrix.dockerfile }}:latest

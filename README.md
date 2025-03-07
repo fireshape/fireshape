@@ -13,22 +13,9 @@ We have also published an Open Access paper about Fireshape. It is available
 
 ## Requirements
 
-Please install the [firedrake finite element library](https://www.firedrakeproject.org) first.
-
-    curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
-    python3 firedrake-install
-
+Please install the [firedrake finite element library](https://www.firedrakeproject.org) first by following the instructions [here](https://firedrakeproject.org/install).
 
 ## Installation
-Activate the Firedrake virtualenv first
-
-    source path/to/firedrake/bin/activate
-
-Then install the _Rapid Optimization Library_ along with `roltrilinos`.
-
-    pip3 install --no-cache-dir pyroltrilinos
-
-Now you are ready to install fireshape.
 
 For users:
 
@@ -38,6 +25,8 @@ For developers:
 
     git clone git@github.com:fireshape/fireshape.git
     python -m pip install -e fireshape/
+
+If you have installed Firedrake into a virtual environment then this must be activated first.
 
 ## Docker images
 Fireshape is also available as a [docker image](https://hub.docker.com/r/fireshape/fireshape).

@@ -1,3 +1,22 @@
 [build-system]
-requires = ["setuptools >= 64"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "fireshape"
+version = "0.0.1"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = [
+  "pyroltrilinos",
+  "scipy",
+  "vtk",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: Unix",
+]
+
+[project.urls]
+Repository = "https://github.com/fireshape/fireshape"
