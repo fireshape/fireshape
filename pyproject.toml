@@ -24,3 +24,6 @@ Repository = "https://github.com/fireshape/fireshape"
 [tool.flake8]
 ignore = ["E741", "E226"]
 exclude = [".git", "__pycache__", "build", ".tox", "dist"]
+
+[tool.setuptools.packages.find]
+namespaces = false
