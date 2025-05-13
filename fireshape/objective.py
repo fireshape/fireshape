@@ -177,7 +177,6 @@ class PDEconstrainedObjective(Objective):
         super().__init__(*args, **kwargs)
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
-        self.Jred = None
         self.feasible_control = False
         self.Vdet = fd.FunctionSpace(self.Q.mesh_r, "DG", 0)
         self.detDT = fd.Function(self.Vdet)
@@ -206,7 +205,7 @@ class PDEconstrainedObjective(Objective):
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
-        if self.Jred is None:
+        if not hasattr(self, 'Jred'):
             self.createJred()
         self.dT_r.assign(self.Q.T - self.Q.id)
         with self.dT_r.dat.vec_ro as a:
@@ -224,6 +223,11 @@ class PDEconstrainedObjective(Objective):
         """
         Get the derivative from pyadjoint.
         """
+        if not hasattr(self, 'Jred'):
+            # create Jred and evaluate it so pyadjoint
+            # computes the correct gradient in the first iteration
+            self.createJred()
+            self.value(None, None)
         if self.feasible_control:
             opts = {"riesz_representation": None}
             dJ = self.Jred.derivative(options=opts)
