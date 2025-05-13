@@ -112,7 +112,7 @@ class ControlSpace(object):
     def get_space_for_inner(self):
         """
         Return the functionspace V to define the inner product on
-        and possibly an interpolation matrix I between the finite element
+        and possibly an interpolation matrix IM between the finite element
         functions in V and the control functions. Note that this matrix
         is not necessarily related to self.restict() and self.interpolate()
         """
@@ -559,13 +559,13 @@ class BsplineControlSpace(ControlSpace):
 
             # owned part of global problem
             local_n = n // comm.size + int(comm.rank < (n % comm.size))
-            I = PETSc.Mat().create(comm=self.comm)
-            I.setType(PETSc.Mat.Type.AIJ)
+            IM = PETSc.Mat().create(comm=self.comm)
+            IM.setType(PETSc.Mat.Type.AIJ)
             lsize = x_int.vector().local_size()
             gsize = x_int.vector().size()
-            I.setSizes(((lsize, gsize), (local_n, n)))
+            IM.setSizes(((lsize, gsize), (local_n, n)))
 
-            I.setUp()
+            IM.setUp()
             x_int = fd.assemble(fd_interpolate(x_fct[dim], V.sub(0)))
             x = x_int.vector().get_local()
             for idx in range(n):
@@ -582,10 +582,10 @@ class BsplineControlSpace(ControlSpace):
                 rows_is = PETSc.IS().createGeneral(rows)
                 global_rows_is = self.lg_map_fe.applyIS(rows_is)
                 rows = global_rows_is.array
-                I.setValues(rows, [idx], values)
+                IM.setValues(rows, [idx], values)
 
-            I.assemble()  # lazy strategy for kron
-            interp_1d.append(I)
+            IM.assemble()  # lazy strategy for kron
+            interp_1d.append(IM)
 
         # from IPython import embed; embed()
         return interp_1d

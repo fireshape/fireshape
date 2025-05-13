@@ -19,7 +19,7 @@ mesh_m = Q.mesh_m
 f = (pow(x, 2))+pow(2*y, 2) - 1
 outdef = fd.File("deformation.pvd")
 out = fd.File("domain.pvd")
-V, I = Q.get_space_for_inner()
+V, IM = Q.get_space_for_inner()
 T = fd.Function(V)
 
 

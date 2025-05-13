@@ -93,7 +93,7 @@ def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
     """ Start taylor test """
     J.gradient(g, q, None)
     res = J.checkGradient(q, g, 5, 1)
-    errors = [l[-1] for l in res]
+    errors = [L[-1] for L in res]
     assert (errors[-1] < 0.11 * errors[-2])
     q.scale(0)
     """ End taylor test """
