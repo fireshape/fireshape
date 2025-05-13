@@ -6,7 +6,7 @@ SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = Fireshape
 SOURCEDIR     = source
-BUILDDIR      = _build
+BUILDDIR      = build
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -18,3 +18,8 @@ help:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+.PHONY: demos
+
+demos:
+	for file in */*.py.rst; do pylit $$file; done
