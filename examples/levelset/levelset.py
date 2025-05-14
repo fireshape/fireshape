@@ -17,6 +17,7 @@ class LevelsetFunction(PDEconstrainedObjective):
     def objective_value(self):
         return assemble(self.f * dx)
 
+
 # Select initial guess, control space, and inner product
 mesh = UnitBallMesh(refinement_level=3)
 Q = FeControlSpace(mesh)
@@ -29,11 +30,11 @@ J = LevelsetFunction(Q, cb=lambda: out.write(Q.mesh_m.coordinates))
 
 # Select the optimization algorithm and solve the problem
 pd = {'Step': {'Type': 'Trust Region'},
-      'General':  {'Secant': {'Type': 'Limited-Memory BFGS',
-                                       'Maximum Storage': 25}},
-       'Status Test': {'Gradient Tolerance': 1e-3,
-                       'Step Tolerance': 1e-8,
-                       'Iteration Limit': 30}}
+      'General': {'Secant': {'Type': 'Limited-Memory BFGS',
+                                     'Maximum Storage': 25}},
+      'Status Test': {'Gradient Tolerance': 1e-3,
+                      'Step Tolerance': 1e-8,
+                      'Iteration Limit': 30}}
 params = ROL.ParameterList(pd, "Parameters")
 problem = ROL.OptimizationProblem(J, q)
 solver = ROL.OptimizationSolver(problem, params)

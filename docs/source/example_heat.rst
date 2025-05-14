@@ -76,7 +76,7 @@ With these, we create a control variable :bash:`q` that will
 be updated by the optimization algorithm.
 
 .. literalinclude:: ../../examples/heat/heat.py
-    :lines: 68-72
+    :lines: 69-73
     :linenos:
     :lineno-match:
 
@@ -89,7 +89,7 @@ shape iterates whenever :bash:`J` is evaluated. We also store
 the evolution of the temperature profile on the initial domain.
 
 .. literalinclude:: ../../examples/heat/heat.py
-    :lines: 74-77
+    :lines: 75-78
     :linenos:
     :lineno-match:
 
@@ -104,7 +104,7 @@ we store the evolution of the temperature profile
 on the optimized domain.
 
 .. literalinclude:: ../../examples/heat/heat.py
-    :lines: 79-90
+    :lines: 80-91
     :linenos:
     :lineno-match:
 

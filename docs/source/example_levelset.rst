@@ -68,7 +68,7 @@ With these, we create a control variable :bash:`q` that will
 be updated by the optimization algorithm.
 
 .. literalinclude:: ../../examples/levelset/levelset.py
-    :lines: 20-24
+    :lines: 21-25
     :linenos:
     :lineno-match:
 
@@ -80,7 +80,7 @@ we also pass a call back function :bash:`cb` that stores the
 shape iterates whenever :bash:`J` is evaluated.
 
 .. literalinclude:: ../../examples/levelset/levelset.py
-    :lines: 26-28
+    :lines: 27-29
     :linenos:
     :lineno-match:
 
@@ -93,7 +93,7 @@ updates and set the optimization stopping criteria in the dictionary
 which solves the problem.
 
 .. literalinclude:: ../../examples/levelset/levelset.py
-    :lines: 30-40
+    :lines: 31-41
     :linenos:
     :lineno-match:
 

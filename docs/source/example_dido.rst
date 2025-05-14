@@ -77,7 +77,7 @@ With these, we create a control variable :bash:`q` that will
 be updated by the optimization algorithm.
 
 .. literalinclude:: ../../examples/levelset/dido.py
-    :lines: 14-18
+    :lines: 15-19
     :linenos:
     :lineno-match:
 
@@ -89,7 +89,7 @@ we also pass a call back function :bash:`cb` that stores the
 shape iterates whenever :bash:`J` is evaluated.
 
 .. literalinclude:: ../../examples/levelset/dido.py
-    :lines: 20-22
+    :lines: 21-23
     :linenos:
     :lineno-match:
 
@@ -99,7 +99,7 @@ We instantiate :math:`P(\Omega)` using the class
 :bash:`SurfaceAreaFunctional` from :bash:`fireshop.zoo`.
 
 .. literalinclude:: ../../examples/levelset/dido.py
-    :lines: 24-28
+    :lines: 25-29
     :linenos:
     :lineno-match:
 
@@ -114,7 +114,7 @@ optimization parameters in the dictionary
 :bash:`emul` are passed to ROL, which solves the problem.
 
 .. literalinclude:: ../../examples/levelset/dido.py
-    :lines: 30-48
+    :lines: 31-49
     :linenos:
     :lineno-match:
 

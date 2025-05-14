@@ -11,6 +11,7 @@ class NegativeArea(PDEconstrainedObjective):
     def objective_value(self):
         return assemble(Constant(-1) * dx(self.Q.mesh_m))
 
+
 # Select initial guess, control space, and inner product
 mesh = UnitSquareMesh(5, 5)
 Q = FeControlSpace(mesh, add_to_degree_r=1)
@@ -31,17 +32,17 @@ emul = ROL.StdVector(1)
 pd = {'General': {'Print Verbosity': 0,
                   'Secant': {'Type': 'Limited-Memory BFGS',
                              'Maximum Storage': 10}},
-     'Step': {'Type': 'Augmented Lagrangian',
-              'Augmented Lagrangian':
-              {'Use Default Problem Scaling': False,
-               'Constraint Scaling': 1.5,
-               'Subproblem Step Type': 'Trust Region',
-               'Print Intermediate Optimization History': False,
-               'Subproblem Iteration Limit': 10}},
-     'Status Test': {'Gradient Tolerance': 1e-2,
-                     'Step Tolerance': 1e-3,
-                     'Constraint Tolerance': 1e-1,
-                     'Iteration Limit': 10}}
+      'Step': {'Type': 'Augmented Lagrangian',
+               'Augmented Lagrangian':
+               {'Use Default Problem Scaling': False,
+                'Constraint Scaling': 1.5,
+                'Subproblem Step Type': 'Trust Region',
+                'Print Intermediate Optimization History': False,
+                'Subproblem Iteration Limit': 10}},
+      'Status Test': {'Gradient Tolerance': 1e-2,
+                      'Step Tolerance': 1e-3,
+                      'Constraint Tolerance': 1e-1,
+                      'Iteration Limit': 10}}
 params = ROL.ParameterList(pd, "Parameters")
 problem = ROL.OptimizationProblem(J, q, econ=econ, emul=emul)
 solver = ROL.OptimizationSolver(problem, params)
