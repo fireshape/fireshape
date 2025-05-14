@@ -39,25 +39,22 @@ spaces offered by Firedrake.
 Fireshape relies on the mesh-deformation approach to update the
 geometry of the domain. By specifying the metric of the control
 space, you can decide whether meshes should be updated using
-Laplace or elasticity equations. In 2D, you can also use the elasticity
-equation corrected with Cauchy-Riemann terms, which generally leads
-to very high-quality meshes.
+Laplace or elasticity equations.
 
 Where to go from here
 ^^^^^^^^^^^^^^^^^^^^^
 If you are interested in using Fireshape, do not hesitate to get in
-contact. You can do so by sending an email to :bash:`a.paganini@leicester.ac.uk`
-or to :bash:`wechsung@nyu.edu`.
+contact. You can do so by sending an email to :bash:`a.paganini@leicester.ac.uk`.
 
 You can find information on how to install Fireshape on the page :ref:`installation`.
 
 On the page :ref:`example_levelset`, we show how to solve a toy shape optimization problem.
 
-On the page :ref:`example_L2tracking`, we show how to solve a shape optimization problem
-constrained to a linear boundary value problem.
+On the page :ref:`example_dido`, we show how to solve a `classic <https://en.m.wikipedia.org/wiki/Dido>`_ shape
+optimization problem with perimeter constraint.
 
-On the page :ref:`example_pipe`, we show how to solve a shape optimization problem
-constrained to a nonlinear boundary value problem and a volume constraint.
+On the page :ref:`example_heat`, we show how to solve a shape optimization problem
+constrained to a time-dependent linear boundary value problem.
 
 On the page :ref:`ROL`, we give a very brief introduction to ROL.
 
@@ -70,6 +67,6 @@ Finally, you can find a manuscript about Fireshape `here <https://arxiv.org/abs/
    self
    installation
    example_levelset
-   example_L2tracking
-   example_pipe
+   example_dido
+   example_heat
    ROL
