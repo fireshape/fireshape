@@ -267,7 +267,11 @@ class FeMultiGridControlSpace(ControlSpace):
                    for mesh in self.mh]
         self.V_duals = [V.dual() for V in self.Vs]
 
-        # Control space on most refined mesh
+        # Control space is on coarsest mesh, but we need its counterpart on the
+        # finest mesh to transplant shape derivatives, which are evaluated on
+        # the finest physical mesh. These are then restricted to the coarsest
+        # mesh to compute mesh updates, which are then propagated throughout
+        # the mesh hierarchy.
         self.mesh_r = self.mh[-1]
         self.V_r = self.Vs[-1]
         self.V_r_dual = self.V_duals[-1]
