@@ -79,7 +79,8 @@ def run_L2tracking_optimization(controlspace, write_output=False):
     elif controlspace == fs.FeMultiGridControlSpace:
         mesh = fd.UnitSquareMesh(5, 5, diagonal="crossed")
         nref = 2
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=nref)
+        mh = fd.MeshHierarchy(mesh, nref)
+        Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
         # PDE-solver parameters
         pms = {"mat_type": "aij",
                "ksp_type": "cg",

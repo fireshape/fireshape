@@ -46,7 +46,8 @@ def test_levelset(dim, inner_t, controlspace_t, pytestconfig):
             levels = [3, 3, 3]
         Q = fs.BsplineControlSpace(mesh, bbox, orders, levels)
     elif controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=2)
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh)
     else:
         Q = controlspace_t(mesh)
 
