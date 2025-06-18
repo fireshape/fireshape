@@ -7,7 +7,8 @@ mesh = fd.UnitSquareMesh(3, 3)
 
 # create multigrid controlspace: the physical mesh is twice
 # as fine than the controlspace mesh
-Q = fs.FeMultiGridControlSpace(mesh, refinements=2, degree=2)
+mh = fd.MeshHierarchy(mesh, 2)
+Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
 inner = fs.H1InnerProduct(Q)
 
 # define objective

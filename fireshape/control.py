@@ -252,38 +252,40 @@ class FeControlSpace(ControlSpace):
 
 class FeMultiGridControlSpace(ControlSpace):
     """
-    A control space which uses the coarse grid of a mesh hierarchy
-    as control for the shape optimisation.
+    A control space which uses a mesh in a mesh hierarchy as control
+    for shape optimization. The mesh could either be the coarsest or
+    the finest in the hierarchy.
 
     The class ensures that all grids in the hierarchy remain consistent
-    (nested), which is important for using multigrid as a solver inside a shape
-    optimisation loop.  """
-    def __init__(self, mesh, refinements=1, degree=1):
+    (nested, or sufficiently close), which is important for using multigrid
+    as a solver inside a shape optimisation loop.
 
-        self.mh = fd.MeshHierarchy(mesh, refinements)
+    TODO: this class could support using multigrid in the Riesz map.
+    """
+    def __init__(self, mh, coarse_control=True):
+
+        # mesh hierarchy
+        self.mh = mh
+        self.coarse_control = coarse_control
 
         # Coordinate function spaces on all meshes
-        self.Vs = [fd.VectorFunctionSpace(mesh, "CG", degree)
-                   for mesh in self.mh]
+        self.Vs = [mesh.coordinates.function_space() for mesh in self.mh]
         self.V_duals = [V.dual() for V in self.Vs]
 
-        # Control space is on coarsest mesh, but we need its counterpart on the
-        # finest mesh to transplant shape derivatives, which are evaluated on
-        # the finest physical mesh. These are then restricted to the coarsest
-        # mesh to compute mesh updates, which are then propagated throughout
-        # the mesh hierarchy.
+        # Finest mesh to transplant shape derivatives
+        # from the finest physical mesh.
         self.mesh_r = self.mh[-1]
         self.V_r = self.Vs[-1]
         self.V_r_dual = self.V_duals[-1]
 
         # Create hierarchy of transformations, identities, and cofunctions
         self.ids = [fd.Function(V) for V in self.Vs]
-        [id_.interpolate(fd.SpatialCoordinate(m))
-         for (m, id_) in zip(self.mh, self.ids)]
+        for (m, id_) in zip(self.mh, self.ids):
+            id_.interpolate(fd.SpatialCoordinate(m))
         self.Ts = [fd.Function(V, name="T") for V in self.Vs]
         [T.assign(id_) for (T, id_) in zip(self.Ts, self.ids)]
-        self.cofuns = [fd.Cofunction(V_dual) for V_dual in self.V_duals]
         self.T = self.Ts[-1]
+        self.cofuns = [fd.Cofunction(V_dual) for V_dual in self.V_duals]
 
         # Create mesh hierarchy reflecting self.Ts
         mapped_meshes = [fd.Mesh(T) for T in self.Ts]
@@ -302,17 +304,25 @@ class FeMultiGridControlSpace(ControlSpace):
         self.id = self.ids[-1]
 
     def restrict(self, residual, out):
-
-        self.cofuns[-1].assign(residual)
-        for (prev, next) in zip(self.cofuns[::-1], self.cofuns[:-1][::-1]):
-            fd.restrict(prev, next)
-        out.cofun.assign(self.cofuns[0])
+        # restrict shape derivative to control space
+        if self.coarse_control:  # restrict from fine to coarse
+            self.cofuns[-1].assign(residual)
+            for (prev, next) in zip(self.cofuns[::-1], self.cofuns[:-1][::-1]):
+                fd.restrict(prev, next)
+            out.cofun.assign(self.cofuns[0])
+        else:  # control on fines mesh
+            out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         # out is unused, but keep it for API compatibility
-        self.Ts[0].assign(vector.fun)
-        for (prev, next) in zip(self.Ts, self.Ts[1:]):
-            fd.prolong(prev, next)
+        if self.coarse_control:  # prolong from coarse to fine
+            self.Ts[0].assign(vector.fun)
+            for (prev, next) in zip(self.Ts, self.Ts[1:]):
+                fd.prolong(prev, next)
+        else:  # inject from fine to coarse
+            self.Ts[-1].assign(vector.fun)
+            for (prev, next) in zip(self.Ts[::-1], self.Ts[:-1][::-1]):
+                fd.inject(prev, next)
 
     def update_domain(self, q: 'ControlVector'):
         """
@@ -351,15 +361,24 @@ class FeMultiGridControlSpace(ControlSpace):
         return True
 
     def get_zero_vec(self):
-        fun = fd.Function(self.Vs[0])
+        if self.coarse_control:
+            fun = fd.Function(self.Vs[0])
+        else:
+            fun = fd.Function(self.Vs[-1])
         return fun
 
     def get_zero_covec(self):
-        fun = fd.Cofunction(self.V_duals[0])
+        if self.coarse_control:
+            fun = fd.Cofunction(self.V_duals[0])
+        else:
+            fun = fd.Cofunction(self.V_duals[-1])
         return fun
 
     def get_space_for_inner(self):
-        return (self.Vs[0], None)
+        if self.coarse_control:
+            return (self.Vs[0], None)
+        else:
+            return (self.Vs[-1], None)
 
     def store(self, vec, filename="control"):
         """
