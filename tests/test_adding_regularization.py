@@ -13,7 +13,8 @@ def test_regularization(controlspace_t, use_extension):
     mesh = fd.UnitSquareMesh(n, n)
 
     if controlspace_t == fs.FeMultiGridControlSpace:
-        Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=2)
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
     else:
         Q = controlspace_t(mesh)
 
