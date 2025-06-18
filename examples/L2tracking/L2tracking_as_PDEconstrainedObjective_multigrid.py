@@ -56,7 +56,8 @@ if __name__ == '__main__':
     # setup problem
     mesh = fd.UnitSquareMesh(5, 5, diagonal="crossed")
     nref = 2
-    Q = fs.FeMultiGridControlSpace(mesh, refinements=nref)
+    mh = fd.MeshHierarchy(mesh, nref)
+    Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
     inner = fs.H1InnerProduct(Q)
     q = fs.ControlVector(Q, inner)
 

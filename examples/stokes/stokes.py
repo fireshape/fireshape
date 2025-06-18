@@ -7,7 +7,8 @@ import ROL
 mesh = fd.Mesh("Sphere2D.msh")
 
 # Q = fs.FeControlSpace(mesh)
-Q = fs.FeMultiGridControlSpace(mesh, refinements=1, degree=1)
+mh = fd.MeshHierarchy(mesh, 1)
+Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
 inner = fs.ElasticityInnerProduct(Q, fixed_bids=[1, 2, 3])
 mesh_m = Q.mesh_m
 (x, y) = fd.SpatialCoordinate(mesh_m)
@@ -15,11 +16,12 @@ inflow_expr = fd.Constant((1.0, 0.0))
 e = fsz.StokesSolver(mesh_m, inflow_bids=[1, 2],
                      inflow_expr=inflow_expr, noslip_bids=[4])
 e.solve()
-out = fd.File("u.pvd")
+out = fd.VTKFile("u.pvd")
 
 
 def cb(*args):
-    out.write(e.solution.split()[0])
+    u, p = e.solution.subfunctions
+    out.write(u)
 
 
 cb()
