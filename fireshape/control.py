@@ -4,14 +4,20 @@ import firedrake as fd
 from firedrake.__future__ import interpolate as fd_interpolate
 from firedrake.__future__ import Interpolator as fd_Interpolator
 
-__all__ = ["FeControlSpace", "FeMultiGridControlSpace",
-           "BsplineControlSpace", "ControlVector"]
+__all__ = ["FeControlSpace", "FeMultiGridControlSpace", "BsplineControlSpace",
+           "WaveletControlSpace", "ControlVector"]
 
 # new imports for splines
 from firedrake.petsc import PETSc
 from functools import reduce
 from scipy.interpolate import splev
 import numpy as np
+
+# new imports for wavelets
+from itertools import product
+from math import factorial, floor, ceil
+from scipy.sparse import csr_matrix
+from scipy.special import binom
 
 
 class ControlSpace(object):
@@ -622,7 +628,7 @@ class BsplineControlSpace(ControlSpace):
         idx1, data1, len1 = v
         idx2, data2, len2 = w
 
-        # lenght of output vector
+        # length of output vector
         lenout = len1*len2
 
         if len(data1) == 0 or len(data2) == 0:
@@ -657,7 +663,7 @@ class BsplineControlSpace(ControlSpace):
         # guess sparsity pattern from interp_1d[0]
         for row in range(lsize):
             row = self.lg_map_fe.apply([row])[0]
-            nnz_ = len(interp_1d[0].getRow(row)[0])  # lenght of nnz-array
+            nnz_ = len(interp_1d[0].getRow(row)[0])  # length of nnz-array
             self.IFWnnz = max(self.IFWnnz, nnz_**self.dim)
         IFW.setPreallocationNNZ(self.IFWnnz)
         IFW.setUp()
@@ -667,7 +673,7 @@ class BsplineControlSpace(ControlSpace):
             M = [[A.getRow(row)[0],
                   A.getRow(row)[1], A.getSize()[1]] for A in interp_1d]
             M = reduce(self.vectorkron, M)
-            columns, values, lenght = M
+            columns, values, length = M
             IFW.setValues([row], columns, values)
 
         IFW.assemble()
@@ -758,6 +764,692 @@ class BsplineControlSpace(ControlSpace):
         vec.vec_wo().load(viewer)
 
 
+class WaveletControlSpace(BsplineControlSpace):
+    """
+    ControlSpace based on cartesian tensorized biorthogonal spline-wavelets.
+    """
+
+    def __init__(self, mesh, bbox, orders, dual_orders, levels, fixed_dims=[],
+                 homogeneous_bc=None, tol=None):
+        """
+        bbox: a list of tuples describing [(xmin, xmax), (ymin, ymax), ...]
+              of a Cartesian grid that extends around the shape to be
+              optimised
+        orders: describe the orders (one integer per geometric dimension)
+                of the tensor-product spline-wavelet basis. A univariate
+                wavelet has order "o" if it is a piecewise polynomial of
+                degree "o-1".
+        dual_orders: describe the orders (one integer per geometric dimension)
+                     of the dual basis. For each dimension, the order "o" and
+                     the dual order "o_t" must satisfy that
+                     (o + o_t) mod 2 == 0 and o_t >= o. It is set to the same
+                     value as orders by default.
+        levels: describe the subdivision levels (one integers per
+                geometric dimension) used to construct the knots of
+                univariate B-splines
+        fixed_dims: dimensions in which the deformation should be zero
+        homogeneous_bc: impose homogeneous Dirichlet boundary conditions on
+                        wavelets for each dimension. True for all boundaries
+                        by default.
+        tol: threshold for selecting basis functions
+        """
+        if homogeneous_bc is None:
+            # set homogeneous Dirichlet bc on all boundaries
+            homogeneous_bc = [True] * len(bbox)
+
+        if dual_orders is None:
+            # use same orders for both primal and dual wavelets
+            self.dual_orders = orders
+        else:
+            self.dual_orders = dual_orders
+
+        # construct transformation matrices for univariate wavelets
+        # based on DOI:10.1007/s00025-009-0008-6
+        self.j0 = []
+        self.mat = []
+        self.n_split = []
+        for dim in range(len(bbox)):
+            d = orders[dim]
+            d_t = dual_orders[dim]
+            J = levels[dim]
+            bc = homogeneous_bc[dim]
+
+            a = self.primal_refinement_coeffs(d)
+            a_t = self.dual_refinement_coeffs(d, d_t)
+            ML = self.primal_ML(d, bc)
+            ML_t = self.dual_ML(d, d_t, a, a_t, ML, bc)
+            GL = self.primal_GL(d, d_t, a, a_t, ML, ML_t, bc)
+            T = self.transformation_matrix(J, d, d_t, a, a_t, ML, GL, bc)
+            self.mat.append(T)
+
+        super().__init__(mesh, bbox, orders, levels, fixed_dims,
+                         homogeneous_bc)
+
+        self.free_dims = list(set(range(self.dim)) - set(self.fixed_dims))
+        self.dfree = len(self.free_dims)
+        self.tol = tol
+
+    def primal_refinement_coeffs(self, d):
+        """
+        Compute the refinement coefficients for the primal scaling function
+        on real line.
+        """
+        l1 = -floor(d / 2)
+        l2 = ceil(d / 2)
+        a = 2**(1-d) * np.array([binom(d, k - l1) for k in range(l1, l2 + 1)])
+        return a
+
+    def primal_ML(self, d, bc):
+        """
+        Compute the block of refinement matrix for primal left boundary
+        scaling functions.
+        """
+        knots = np.concatenate((np.zeros(d - 1), np.arange(3 * d - 3)))
+        x = np.arange(2 * d - 2)
+
+        B1 = np.empty((2 * d - 2, d - 1))
+        for k in range(d - 1):
+            coeffs = np.zeros(3 * d - 4)
+            coeffs[k] = 1.
+            tck = (knots, coeffs, d - 1)
+            B1[:, k] = splev(x / 2, tck, der=0, ext=1)
+
+        B2 = np.empty((2 * d - 2, 2 * d - 2))
+        for k in range(2 * d - 2):
+            coeffs = np.zeros(3 * d - 4)
+            coeffs[k] = 1.
+            tck = (knots, coeffs, d - 1)
+            B2[:, k] = splev(x, tck, der=0, ext=1)
+
+        ML = np.linalg.solve(B2, B1)
+        ML[np.abs(ML) < 1e-9] = 0.
+        if bc:
+            ML = ML[1:, 1:]
+        return ML
+
+    def primal_A(self, j, d, a):
+        """
+        Compute the block of refinement matrix for primal inner scaling
+        functions at level j.
+        """
+        n = a.size
+        A = np.zeros((2**(j+1) - d + 1, 2**j - d + 1))
+        for k in range(A.shape[1]):
+            A[2*k:2*k+n, k] = a
+        return A
+
+    def primal_M0(self, j, d, a, ML, bc):
+        """
+        Construct the refinement matrix for primal scaling functions
+        at level j.
+        """
+        A = self.primal_A(j, d, a)
+
+        M0 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
+        m, n = M0.shape
+        mL, nL = ML.shape
+        M0[:mL, :nL] = ML
+        M0[nL:m-nL, nL:n-nL] = A
+        M0[m-mL:, n-nL:] = ML[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M0
+
+    def dual_refinement_coeffs(self, d, d_t):
+        """
+        Compute the refinement coefficients for the dual scaling function
+        on real line.
+        """
+        l1_t = -floor(d / 2) - d_t + 1
+        l2_t = ceil(d / 2) + d_t - 1
+        K = (d + d_t) // 2
+
+        def entry(k):
+            res = 0
+            for n in range(K):
+                for i in range(2 * n + 1):
+                    res += 2**(1 - d_t - 2 * n) * (-1)**(n + i) \
+                           * binom(d_t, k + floor(d_t / 2) - i + n) \
+                           * binom(K - 1 + n, n) * binom(2 * n, i)
+            return res
+        a_t = np.array([entry(k) for k in range(l1_t, l2_t + 1)])
+        return a_t
+
+    def dual_ML(self, d, d_t, a, a_t, ML, bc):
+        """
+        Compute the block of refinement matrix for dual left boundary
+        scaling functions.
+        """
+        l1 = -floor((a.size - 1) / 2)
+        l2 = ceil((a.size - 1) / 2)
+        l1_t = -floor((a_t.size - 1) / 2)
+        l2_t = ceil((a_t.size - 1) / 2)
+        if bc and d == 2:
+            ML_t = np.zeros((5 * d_t,  2 * d_t))
+        else:
+            ML_t = np.zeros((2 * d + 3 * d_t - 5 - bc, d + d_t - 2 - bc))
+        mL, nL = ML_t.shape
+
+        m, n = ML.shape
+        ML_full = np.zeros_like(ML_t)
+        ML_full[:m, :n] = ML
+        for k in range(n, nL):
+            ML_full[2*k-n:2*k-n+d+1, k] = a
+        ML = ML_full
+
+        # Compute block of ML_t corresponding to k = d-2, ..., d+2*d_t-3
+
+        # Compute alpha_{0,r}
+        alpha0 = np.zeros(d_t)
+        alpha0[0] = 1
+        for r in range(1, d_t):
+            for k in range(l1, l2 + 1):
+                sum = 0
+                for s in range(r):
+                    sum += binom(r, s) * k**(r-s) * alpha0[s]
+                alpha0[r] += a[k-l1] * sum
+            alpha0[r] /= (2**(r+1) - 2)
+
+        # Compute alpha_{k,r}
+        def alpha(k, r):
+            res = 0
+            for i in range(r + 1):
+                res += binom(r, i) * k**i * alpha0[r-i]
+            return res
+
+        def compute_gramian():
+            n = ML.shape[1]
+            UL = ML[:n, :]
+            LL = ML[n:, :]
+            UL_t = ML_t[:n, :]
+            LL_t = ML_t[n:, :]
+            lhs = 2 * np.identity(n**2) - np.kron(UL_t.T, UL.T)
+            rhs = (LL.T @ LL_t).reshape(-1, order='F')
+            gamma = np.linalg.solve(lhs, rhs)
+            return gamma.reshape((n, n), order='F')
+
+        if bc and d == 2:
+            # Compute beta_{n,r}
+            def beta(n, r):
+                res = 0
+                for k in range(ceil((n-d_t) / 2), d_t + 1):
+                    res += alpha(k, r) * a_t[n-2*k+d_t]
+                return res
+
+            ML_t[:d_t, :d_t] = np.diag([2**(-r) for r in range(d_t)])
+            ML_t[d_t, :d_t] = np.array(
+                [2**(-r) * alpha(d_t + 1, r) for r in range(d_t)])
+            ML_t[d_t+1:3*d_t, :d_t] = np.array(
+                [[beta(n+d_t+2, r) for r in range(d_t)]
+                 for n in range(2 * d_t - 1)])
+            for k in range(d_t, 2 * d_t):
+                ML_t[2*k-d_t+1:2*k+d_t+2, k] = a_t
+
+            # Biorthogonalize
+
+            gramian = compute_gramian()
+            ML_t[:2*d_t, :] = gramian @ ML_t[:2*d_t, :]
+            ML_t = np.linalg.solve(gramian.T, ML_t.T).T
+            ML_t = ML_t[:3*d_t, :d_t]
+
+        else:
+            # Compute beta_{n,r}
+            def beta(n, r):
+                res = 0
+                for k in range(ceil((n-l2_t) / 2), -l1_t):
+                    res += alpha(k, r) * a_t[n-2*k-l1_t]
+                return res
+
+            def divided_diff(f, t):
+                if t.size == 1:
+                    return f(t[0])
+                return (divided_diff(f, t[1:]) - divided_diff(f, t[:-1])) \
+                    / (t[-1] - t[0])
+
+            D1 = np.zeros((d_t, d_t))
+            D2 = np.zeros((d_t, d_t))
+            D3 = np.zeros((d_t, d_t))
+            k0 = -l1_t - 1
+            for n in range(d_t):
+                for k in range(n + 1):
+                    D1[n, k] = binom(n, k) * alpha0[n-k]
+                    D2[n, k] = binom(n, k) * k0**(n-k) * (-1)**k
+                    D3[n, k] = factorial(k) \
+                        * divided_diff(lambda x: x**n, np.arange(k + 1))
+            D_t = D1 @ D2 @ D3
+            rhs = np.empty((d_t, d + 3 * d_t - 3))
+            rhs[:, :d_t] = \
+                np.diag([2**(-r) for r in range(d_t)]) @ D_t[:, ::-1]
+            rhs[:, d_t:] = np.array(
+                [[beta(n-l1_t, r) for n in range(d + 2 * d_t - 3)]
+                 for r in range(d_t)])
+            ML_t[d-2-bc:, d-2-bc:] = np.linalg.solve(D_t, rhs)[::-1, :].T
+
+            # Compute block of ML_t corresponding to k = 0, ..., d-3
+
+            gramian_full = np.identity(mL)
+            for k in range(d - 3 - bc, -1, -1):
+                gramian_full[:nL, :nL] = compute_gramian()
+                B_k = ML[:, :k+d].T @ gramian_full[:, k+1:2*k+d+1] / 2.
+
+                delta = np.zeros(k + d)
+                delta[k] = 1
+                ML_t[k+1:2*k+d+1, k] = np.linalg.solve(B_k, delta)
+
+            # Biorthogonalize
+
+            gramian = np.triu(compute_gramian())
+            gramian[:d-2-bc, :d-2-bc] = np.identity(d - 2 - bc)
+            ML_t[:d+d_t-2-bc, :] = gramian @ ML_t[:d+d_t-2-bc, :]
+            ML_t = np.linalg.solve(gramian.T, ML_t.T).T
+
+        ML_t[np.abs(ML_t) < 1e-9] = 0.
+        return ML_t
+
+    def dual_A(self, j, d, d_t, a_t, bc):
+        """
+        Compute the block of refinement matrix for dual inner scaling
+        functions at level j.
+        """
+        n = a_t.size
+        if bc and d == 2:
+            A_t = np.zeros((2**(j+1) - 2 * d_t - 3,
+                            2**j - 2 * d_t - 1))
+        else:
+            A_t = np.zeros((2**(j+1) - d - 2 * d_t + 3,
+                            2**j - d - 2 * d_t + 3))
+        for k in range(A_t.shape[1]):
+            A_t[2*k:2*k+n, k] = a_t
+        return A_t
+
+    def dual_M0(self, j, d, d_t, a_t, ML_t, bc):
+        """
+        Construct the refinement matrix for dual scaling functions
+        at level j.
+        """
+        A_t = self.dual_A(j, d, d_t, a_t, bc)
+
+        M0_t = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j + d - 1 - 2 * bc))
+        m, n = M0_t.shape
+        mL, nL = ML_t.shape
+        shift = (m - A_t.shape[0]) // 2
+        M0_t[:mL, :nL] = ML_t
+        M0_t[shift:m-shift, nL:n-nL] = A_t
+        M0_t[m-mL:, n-nL:] = ML_t[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M0_t
+
+    def primal_GL(self, d, d_t, a, a_t, ML, ML_t, bc):
+        """
+        Compute the block of refinement matrix for primal left boundary
+        wavelets.
+        """
+        if bc and d == 2:
+            j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
+        else:
+            j0 = ceil(np.log2(d + d_t - 2) + 1)
+
+        # initial completion
+        l1 = -floor((a.size - 1) / 2)
+        l2 = ceil((a.size - 1) / 2)
+        p = 2**j0 - d + 1
+        q = 2**(j0+1) - d + 1
+
+        mL, nL = ML.shape
+        P = np.identity(q + 2 * nL)
+        P[:mL, :nL] = ML
+        P[q+2*nL-mL:, q+nL:] = ML[::-1, ::-1]
+
+        ML_inv = np.linalg.inv(P[:mL, :mL])
+        P_inv = np.identity(q + 2 * nL)
+        P_inv[:mL, :mL] = ML_inv
+        P_inv[q+2*nL-mL:, q+2*nL-mL:] = ML_inv[::-1, ::-1]
+
+        A = self.primal_A(j0, d, a)
+        H_inv = np.identity(q)
+        for i in range(d):
+            if i % 2 == 0:
+                m = i // 2
+                v = A[m, 0] / A[m+1, 0]
+                H_i = np.identity(q)
+                H_i_inv = np.identity(q)
+                rows = np.arange(m % 2, q, 2)
+                cols = np.arange(m % 2 + 1, q, 2)
+                rows = rows[:cols.size]
+                H_i[rows, cols] = -v
+                H_i_inv[rows, cols] = v
+            else:
+                m = (i - 1) // 2
+                v = A[d-m, 0] / A[d-m-1, 0]
+                H_i = np.identity(q)
+                H_i_inv = np.identity(q)
+                rows = np.arange(q - m % 2, 0, -2) - 1
+                cols = np.arange(q - m % 2 - 1, 0, -2) - 1
+                rows = rows[:cols.size]
+                H_i[rows, cols] = -v
+                H_i_inv[rows, cols] = v
+            A = H_i @ A
+            H_inv = H_inv @ H_i_inv
+
+        b = A[l2, 0]
+        rows = np.arange(p) * 2 + l2 - 1
+        cols = np.arange(p)
+        F = np.zeros_like(A)
+        F[rows, cols] = 1
+
+        F_hat = np.zeros((q + 2 * nL, 2**j0))
+        F_hat[nL:l2-1+nL, :l2-1] = np.identity(l2 - 1)
+        F_hat[nL:q+nL, l2-1:p+l2-1] = F
+        F_hat[q+nL+l1:q+nL, 2**j0+l1:] = np.identity(-l1)
+
+        H_hat_inv = np.identity(q + 2 * nL)
+        H_hat_inv[nL:q+nL, nL:q+nL] = H_inv
+
+        M1 = (-1)**(d+1) * np.sqrt(2) / b * P @ H_hat_inv @ F_hat
+
+        # stable completion
+        M0 = self.primal_M0(j0, d, a, ML, bc)
+        M0_t = self.dual_M0(j0, d, d_t, a_t, ML_t, bc)
+        M1 = M1 - M0 @ M0_t.T @ M1
+
+        if bc and d == 2:
+            GL = np.sqrt(2) * M1[:2*d_t+1, :d_t//2]
+        else:
+            GL = np.sqrt(2) * M1[:2*(d+d_t-2)-bc, :(d+d_t-2)//2]
+
+        GL[np.abs(GL) < 1e-9] = 0.
+        return GL
+
+    def primal_B(self, j, d, d_t, a_t):
+        """
+        Compute the block of refinement matrix for primal inner wavelets
+        at level j.
+        """
+        l1_t = -floor((a_t.size - 1) / 2)
+        l2_t = ceil((a_t.size - 1) / 2)
+        sgn = (-1)**np.abs(np.arange(1 - l2_t, 2 - l1_t))
+        b = sgn * np.flip(a_t)
+
+        B = np.zeros((2**(j+1) - d + 1, 2**j - d - d_t + 2))
+        for k in range(2**(j-1) - (d + d_t - 2) // 2):
+            B[2*k:2*k+d+2*d_t-1, k] = b
+        B += B[::-1, ::-1]
+        return B
+
+    def primal_M1(self, j, d, d_t, a_t, GL, bc):
+        """
+        Construct the refinement matrix for primal wavelets at level j.
+        """
+        B = self.primal_B(j, d, d_t, a_t)
+
+        M1 = np.zeros((2**(j+1) + d - 1 - 2 * bc, 2**j))
+        m, n = M1.shape
+        mL, nL = GL.shape
+        shift = (m - B.shape[0]) // 2
+        M1[:mL, :nL] = GL
+        M1[shift:m-shift, nL:n-nL] = B
+        M1[m-mL:, n-nL:] = GL[::-1, ::-1]
+
+        return 1 / np.sqrt(2) * M1
+
+    def transformation_matrix(self, J, d, d_t, a, a_t, ML, GL, bc):
+        """
+        Construct the transformation matrix that transforms univariate
+        B-splines at level J to a multi-scale wavelet basis.
+        """
+        if bc and d == 2:
+            j0 = ceil(np.log2(3 / 2 * d_t + 1) + 1)
+        else:
+            j0 = ceil(np.log2(d + d_t - 2) + 1)
+        self.j0.append(j0)
+
+        T = np.identity(2**J + d - 1 - 2 * bc)
+        for j in range(j0, J):
+            M0 = self.primal_M0(j, d, a, ML, bc)
+            M1 = self.primal_M1(j, d, d_t, a_t, GL, bc)
+            M = np.hstack((M0, M1))
+            n = M.shape[0]
+            T[:n, :n] = M @ T[:n, :n]
+
+        n = 2**j0 + d - 1 - 2 * bc
+        T_split = [T[:, :n]]
+        n_split = [n]
+        offset = n
+        for j in range(j0, J):
+            n = 2**j
+            T_split.append(T[:, offset:offset+n])
+            n_split.append(n)
+            offset += n
+        self.n_split.append(n_split)
+        return T_split
+
+    def construct_1d_interpolation_matrices(self, V):
+        """
+        Create a nested list of sparse matrices (one sublist per geometric
+        dimension).
+
+        Each sublist contains blocks of the 1d interpolation matrix that
+        corresponds to univariate wavelets at different levels.
+        """
+        # construct 1d interpolation matrices for univariate B-spline bases
+        interp_1d_spline = super().construct_1d_interpolation_matrices(V)
+        # apply transformation matrices to obtain 1d interpolation matrices
+        # for univariate spline-wavelet bases
+        interp_1d = []
+        for dim in range(self.dim):
+            T = self.mat[dim]
+            I = interp_1d_spline[dim]
+            interp_sub = []
+            for T_sub in T:
+                T_sub_sp = csr_matrix(T_sub)
+                T_sub_petsc = \
+                    PETSc.Mat().createAIJ(
+                        size=T_sub_sp.shape,
+                        bsize=(I.getLocalSize()[1], T_sub_sp.shape[1]),
+                        csr=(T_sub_sp.indptr, T_sub_sp.indices, T_sub_sp.data),
+                        comm=self.comm)
+                tmp = PETSc.Mat()
+                I.matMult(T_sub_petsc, tmp)
+                interp_sub.append(tmp)
+            interp_1d.append(interp_sub)
+        return interp_1d
+
+    def construct_kronecker_matrix(self, interp_1d):
+        """
+        Construct the block tensorized interpolation matrix.
+
+        The implementation is based on super().construct_kronecker_matrix
+        but computes the kron product of the rows of the 1d univariate
+        interpolation submatrices. The resulting blocks are interpolation
+        matrices for tensorized wavelets at different levels.
+        """
+        IFW = PETSc.Mat().create(self.comm)
+        IFW.setType(PETSc.Mat.Type.AIJ)
+
+        comm = self.comm
+        # owned part of global problem
+        local_N = self.N // comm.size + int(comm.rank < (self.N % comm.size))
+        (lsize, gsize) = interp_1d[0][0].getSizes()[0]
+        IFW.setSizes(((lsize, gsize), (local_N, self.N)))
+
+        # guess sparsity pattern
+        for row in range(lsize):
+            row = self.lg_map_fe.apply([row])[0]
+            nnz_ = 1
+            for interp_sub in interp_1d:
+                nnz_ *= len(interp_sub[-1].getRow(row)[0]) * len(interp_sub)
+            self.IFWnnz = max(self.IFWnnz, nnz_)
+        IFW.setPreallocationNNZ(self.IFWnnz)
+        IFW.setUp()
+
+        interp_1d = list(product(*interp_1d))
+        for row in range(lsize):
+            offset = 0
+            row = self.lg_map_fe.apply([row])[0]
+            for blocks in interp_1d:
+                M = [[A.getRow(row)[0],
+                      A.getRow(row)[1], A.getSize()[1]] for A in blocks]
+                M = reduce(self.vectorkron, M)
+                columns, values, length = M
+                if len(columns):
+                    columns += offset
+                IFW.setValues([row], columns, values)
+                offset += length
+
+        IFW.assemble()
+        return IFW
+
+    def assign_inner_product(self, inner_product):
+        """Normalize basis functions."""
+        A = inner_product.A
+        D = A.getDiagonal()
+        D.sqrtabs()
+        D = 1 / D
+        self.I_control.diagonalScale(R=D)
+        self.FullIFW.diagonalScale(R=D)
+        A.diagonalScale(L=D, R=D)
+
+    def visualize_control(self, q, filename="control"):
+        """
+        Visualize distribution of wavelet coefficients.
+
+        For each dimension of the deformation, the tensorized wavelet basis is
+        a direct sum of subspaces with wavelet bases at different levels, and
+        a subfigure is plotted per subspace. At every point of the domain,
+        the contributions from the wavelets whose supports cover that point
+        are counted.
+        """
+        if self.dim != 2:
+            raise ValueError("Only 2D visualization is supported.")
+
+        supp_1d = []
+        nx_1d = []
+        for dim in range(self.dim):
+            d = self.orders[dim]
+            d_t = self.dual_orders[dim]
+            j0 = self.j0[dim]
+            J = self.levels[dim]
+            bc = self.boundary_regularities[dim]
+            n = self.n_split[dim]
+            m = (d + d_t - 2) // 2  # number of boundary wavelets
+            supp_split = []
+            nx = []
+
+            # compute supports of scaling functions
+            supp = []
+            for k in range(n[0]):
+                supp.append((max(k+bc-d+1, 0),
+                             min(k+bc+1, 2**j0)))
+            supp_split.append(supp)
+            nx.append(2**j0)
+
+            # compute supports of wavelets
+            for j in range(j0, J):
+                supp = []
+                if bc and d == 2:
+                    for k in range(d_t // 2):
+                        supp.append((0, d_t + 1))
+                    for k in range(d_t // 2, 2**j - d_t // 2):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - d_t // 2, 2**j):
+                        supp.append((2**j - (d_t + 1), 2**j))
+                else:
+                    for k in range(m):
+                        supp.append((0, d + d_t - 2))
+                    for k in range(m, 2**j - m):
+                        supp.append((max(k-m, 0),
+                                     min(k-m+d+d_t-1, 2**j)))
+                    for k in range(2**j - m, 2**j):
+                        supp.append((2**j - (d + d_t - 2), 2**j))
+                supp_split.append(supp)
+                nx.append(2**j)
+            supp_1d.append(supp_split)
+            nx_1d.append(nx)
+
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+        fig_rows, fig_cols = len(supp_1d[1]), len(supp_1d[0])
+        figs = []
+        axs = []
+        ims = []
+        for _ in self.free_dims:
+            fig, ax = plt.subplots(fig_rows, fig_cols)
+            figs.append(fig)
+            axs.append(ax)
+            ims.append(None)
+
+        v_sq = q.vec_ro().array**2
+        extent = [self.bbox[0][0], self.bbox[0][1],
+                  self.bbox[1][0], self.bbox[1][1]]
+        k = 0
+        for j in range(fig_cols):
+            supp_x = supp_1d[0][j]
+            for i in range(fig_rows):
+                supp_y = supp_1d[1][i]
+                data = [np.zeros((nx_1d[1][i], nx_1d[0][j]))
+                        for _ in self.free_dims]
+
+                # add squared magnitudes of coefficients
+                # to supports of corresponding wavelets
+                for xmin, xmax in supp_x:
+                    for ymin, ymax in supp_y:
+                        for d in range(self.dfree):
+                            data[d][ymin:ymax, xmin:xmax] += v_sq[k]
+                            k += 1
+
+                for d in range(self.dfree):
+                    ax = axs[d][i, j]
+                    data_ = np.sqrt(data[d][::-1, :])
+                    # avoid undefined values on a log scale
+                    data_[data_ < 1e-12] = 1e-12
+                    ims[d] = ax.imshow(data_, extent=extent,
+                                       norm=colors.LogNorm(vmin=1e-3, vmax=1))
+                    if i == 0:
+                        j0 = self.j0[0]
+                        ax.xaxis.set_label_position('top')
+                        if j == 0:
+                            ax.set_xlabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_xlabel(rf"$W_{j0+j-1}$")
+                    if j == 0:
+                        j0 = self.j0[1]
+                        if i == 0:
+                            ax.set_ylabel(rf"$V_{j0}$")
+                        else:
+                            ax.set_ylabel(rf"$W_{j0+i-1}$")
+
+        for d in range(self.dfree):
+            fig = figs[d]
+            ax = axs[d]
+            im = ims[d]
+            plt.setp(ax, xticks=[], yticks=[])
+            fig.colorbar(im, ax=ax)
+            fig.savefig(filename + str(self.free_dims[d]) + ".png", dpi=150,
+                        bbox_inches="tight")
+
+    def thresholding(self, q):
+        """Remove wavelet coefficients with small magnitudes."""
+        v_sq = q.vec_ro().array**2
+
+        mask = np.full_like(v_sq, False, dtype=bool)
+        c = v_sq.sum() * (1 - self.tol**2)
+        ind_sorted = np.argsort(-v_sq)
+        sum = 0.
+        for i in range(v_sq.size):
+            ii = ind_sorted[i]
+            sum += v_sq[ii]
+            mask[ii] = True
+            if sum > c:
+                break
+        n_sf = reduce(lambda x, y: x * y,
+                      [n_split[0] for n_split in self.n_split]) * self.dfree
+        mask[:n_sf] = True  # keep all scaling functions
+        indices = np.where(~mask)[0].astype(np.int32)
+        q.vec_wo().setValues(indices, np.zeros_like(indices))
+        q.vec_wo().assemble()
+        # print("Filtered {:.2%} entries".format(indices.size / v_sq.size))
+
+
 class ControlVector(ROL.Vector):
     """
     A ControlVector is a variable in the ControlSpace.
@@ -822,6 +1514,9 @@ class ControlVector(ROL.Vector):
         Overwrites the content.
         """
         self.inner_product.riesz_map(self, self)
+        if isinstance(self.controlspace, WaveletControlSpace) and \
+                self.controlspace.tol:
+            self.controlspace.thresholding(self)
 
     def vec_ro(self):
         if isinstance(self.data, fd.Function):
