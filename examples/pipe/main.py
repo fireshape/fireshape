@@ -3,6 +3,7 @@ from fireshape import *
 import fireshape.zoo as fsz
 import ROL
 
+
 class EnergyDissipation(PDEconstrainedObjective):
     """
     Energy dissipation due to viscosity in Navier-Stokes fluid.
@@ -32,34 +33,34 @@ class EnergyDissipation(PDEconstrainedObjective):
 
         # Dirichlet Boundary conditions
         X = SpatialCoordinate(mesh)
-        uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
+        uin = 4 * as_vector([(1-X[1])*X[1], 0])
         bcs = [DirichletBC(V.sub(0), 0., [12, 13]),
                DirichletBC(V.sub(0), uin, [10])]
 
         # PDE-solver parameters
-        #params = {
+        # params = {
         #    "snes_max_it": 20, "mat_type": "aij", "pc_type": "lu",
         #    "pc_factor_mat_solver_type": "superlu_dist",
         #     "snes_monitor": None, "ksp_monitor": None,
-        #}
-        params = { 
+        # }
+        pms = {
             "mat_type": "aij",  # Matrix type (e.g., sparse matrix format)
             "snes_type": "newtonls",  # Use Newton's method with line search
             "ksp_type": "gmres",  # Direct solver for the linear system
             "pc_type": "lu",  # Use LU decomposition for preconditioning
             "pc_factor_mat_solver_type": "superlu_dist",
-            #"snes_converged_reason": "",  # Print convergence reason
-            #"snes_monitor": "",  # Monitor iterations during the solve
+            # "snes_converged_reason": "",  # Print convergence reason
+            # "snes_monitor": "",  # Monitor iterations during the solve
             "ksp_rtol": 1.0e-10,
-            "snes_rtol": 1.0e-10,  # Set your desired relative tolerance for SNES here
-            "snes_atol": 1.0e-10, # You can also set the absolute tolerance for SNES
-            "snes_max_it": 50,    # And the maximum number of iterations
+            "snes_rtol": 1.0e-10,  # desired relative tolerance for SNES here
+            "snes_atol": 1.0e-10,  # absolute tolerance for SNES
+            "snes_max_it": 50,  # And the maximum number of iterations
             # "ksp_converged_reason":"",
             # "ksp_monitor":""
-        }   
+        }
 
-        stateproblem = NonlinearVariationalProblem(F, self.solution, bcs=bcs)
-        self.solver = NonlinearVariationalSolver(stateproblem, solver_parameters=params)
+        prb = NonlinearVariationalProblem(F, self.solution, bcs=bcs)
+        self.solver = NonlinearVariationalSolver(prb, solver_parameters=pms)
 
     def compute_velocity(self, name=None):
         """
