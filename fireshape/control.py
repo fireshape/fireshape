@@ -583,7 +583,7 @@ class BsplineControlSpace(ControlSpace):
             IM = PETSc.Mat().create(comm=self.comm)
             IM.setType(PETSc.Mat.Type.AIJ)
             lsize = x_int.dat.data_ro.size
-            gsize = x_int.dataset.layout_vec.size
+            gsize = x_int.dat.dataset.layout_vec.size
             IM.setSizes(((lsize, gsize), (local_n, n)))
 
             IM.setUp()
