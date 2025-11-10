@@ -296,8 +296,7 @@ class ReducedObjective(ShapeObjective):
         """
         Get the derivative from pyadjoint.
         """
-        opts = {"riesz_representation": None}
-        dJ = self.Jred.derivative(options=opts)
+        dJ = self.Jred.derivative()
         # transplant from moved to reference mesh
         with dJ.dat.vec as vec_dJ:
             with self.deriv_r.dat.vec as vec_r:
