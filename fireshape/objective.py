@@ -229,8 +229,7 @@ class PDEconstrainedObjective(Objective):
             self.createJred()
             self.value(None, None)
         if self.feasible_control:
-            opts = {"riesz_representation": None}
-            dJ = self.Jred.derivative(options=opts)
+            dJ = self.Jred.derivative()
             # transplant from moved to reference mesh
             with dJ.dat.vec as vec_dJ:
                 with self.deriv_r.dat.vec as vec_r:
