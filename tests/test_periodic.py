@@ -55,7 +55,7 @@ def test_periodic(dim, inner_t, pytestconfig):
         def value_form(self):
             # volume integral
             self.detDT.interpolate(fd.det(fd.grad(self.Q.T)))
-            if min(self.detDT.vector()) > 0.05:
+            if min(self.detDT.dat.data_ro) > 0.05:
                 integrand = (self.sigma - self.f)**2
             else:
                 integrand = np.nan*(self.sigma - self.f)**2
