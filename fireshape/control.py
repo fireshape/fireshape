@@ -159,7 +159,7 @@ class FeControlSpace(ControlSpace):
 
         # Create self.id and self.T, self.mesh_m, and self.V_m.
         X = fd.SpatialCoordinate(self.mesh_r)
-        self.id = fd.assemble(interpolate(X, self.V_r))
+        self.id = fd.assemble(fd.interpolate(X, self.V_r))
         self.T = fd.Function(self.V_r, name="T")
         self.T.assign(self.id)
         self.mesh_m = fd.Mesh(self.T)
@@ -175,15 +175,15 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             testfct_V_c = fd.TestFunction(self.V_c)
             # Create interpolator from V_c into V_r
-            self.Ip = Interpolator(testfct_V_c, self.V_r,
-                                   allow_missing_dofs=True)
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
+                                      allow_missing_dofs=True)
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree)
             self.V_c_dual = self.V_c.dual()
             testfct_V_c = fd.TestFunction(self.V_c)
             # Create interpolator from V_c into V_r
-            self.Ip = Interpolator(testfct_V_c, self.V_r)
+            self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
 
     def restrict(self, residual, out):
         if getattr(self, "is_DG", False):
@@ -563,7 +563,7 @@ class BsplineControlSpace(ControlSpace):
         # by replacing x_fct with self.id
         x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
-        x_int = fd.assemble(interpolate(x_fct[0], V.sub(0)))
+        x_int = fd.assemble(fd.interpolate(x_fct[0], V.sub(0)))
         self.M = x_int.vector().size()
 
         comm = self.comm
@@ -587,7 +587,7 @@ class BsplineControlSpace(ControlSpace):
             IM.setSizes(((lsize, gsize), (local_n, n)))
 
             IM.setUp()
-            x_int = fd.assemble(interpolate(x_fct[dim], V.sub(0)))
+            x_int = fd.assemble(fd.interpolate(x_fct[dim], V.sub(0)))
             x = x_int.vector().get_local()
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
