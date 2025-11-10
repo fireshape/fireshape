@@ -302,7 +302,7 @@ class SurfaceInnerProduct(InnerProduct):
         A = A.petscmat
         tdim = V.mesh().topological_dimension()
 
-        lsize = fd.Function(V).vector().local_size()
+        lsize = fd.Function(V).dat.data_ro.size
 
         def get_nodes_bc(bc):
             nodes = bc.nodes

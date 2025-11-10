@@ -31,24 +31,20 @@ class MoYoSpectralConstraint(fs.DeformationObjective):
     def update_state(self):
         lam = self.lam
         c = self.c
-        av = self.bound.vector()[:]
+        av = self.bound.dat.data_ro
         self.S.assign(self.T)
         self.S -= self.iden
         S = self.S
         self.gradS.project(fd.grad(S))
         lam_c_grad_S = self.lam_c_grad_S
         lam_c_grad_S.project(lam/c + self.gradS)
-        lam_c_grad_Sv = lam_c_grad_S.vector()
-        B = self.argmin.vector()[:].copy()
-        nucv = self.nuclear_norm.vector()[:].copy()
+        lam_c_grad_Sv = lam_c_grad_S.dat.data_ro
         for i in range(len(lam_c_grad_Sv)):
             W, Sigma, V = svd(lam_c_grad_Sv[i], full_matrices=False)
             for j in range(self.dim):
                 Sigma[j] = c * max(Sigma[j]-av[i], 0)
-            B[i] = np.dot(W, np.dot(np.diag(Sigma), V))
-            nucv[i] = av[i]*np.sum(Sigma)
-        self.argmin.vector().set_local(B.flatten())
-        self.nuclear_norm.vector().set_local(nucv.flatten())
+            self.argmin.dat.data_wo[i] = np.dot(W, np.dot(np.diag(Sigma), V))
+            self.nuclear_norm.dat.data_wo[i] = av[i]*np.sum(Sigma)
 
     def value_form(self):
         self.update_state()
@@ -69,13 +65,11 @@ class MoYoSpectralConstraint(fs.DeformationObjective):
         self.update_state()
 
     def violation(self):
-        gradSv = self.gradS.vector()[:]
-        av = self.upper_bound.vector()[:]
-        violv = self.viol.vector()[:].copy()
+        gradSv = self.gradS.dat.data_ro
+        av = self.upper_bound.dat.data_ro
         for i in range(len(gradSv)):
             W, Sigma, V = svd(gradSv[i], full_matrices=False)
             for j in range(self.dim):
                 Sigma[j] = max(Sigma[j]-av[i], 0)**2
-            violv[i] = self.c * 0.5 * np.sum(Sigma)
-        self.viol.vector().set_local(violv.flatten())
+            self.viol.dat.data_wo[i] = self.c * 0.5 * np.sum(Sigma)
         return fd.sqrt(fd.assemble(self.viol*fd.dx))

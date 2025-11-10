@@ -28,12 +28,10 @@ class MoYoBoxConstraint(fs.DeformationObjective):
 
     def value_form(self):
         lam = self.lam
-        # lamv = lam.vector()
         c = self.c
         psi = self.upper_bound
         phi = self.lower_bound
         T = self.T
-        # Tv = T.vector()
         temp0 = Max(lam[0] + c*(T[0]-psi[0]), fd.Constant(0.0)) \
             + Min(lam[0] + c*(T[0]-phi[0]), fd.Constant(0.0))
         temp1 = Max(lam[1] + c*(T[1]-psi[1]), fd.Constant(0.0)) \

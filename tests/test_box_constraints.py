@@ -72,7 +72,7 @@ def test_box_constraint(pytestconfig):
     problem = ROL.OptimizationProblem(J, q)
     solver = ROL.OptimizationSolver(problem, params)
     solver.solve()
-    Tvec = Q.T.vector()
+    Tvec = Q.T.dat.data_ro
     nodes = fd.DirichletBC(Q.V_r, fd.Constant((0.0, 0.0)), [2]).nodes
     assert np.all(Tvec[nodes, 0] <= 1.3 + 1e-4)
     assert np.all(Tvec[nodes, 1] <= 0.9 + 1e-4)
@@ -151,7 +151,7 @@ def test_objective_plus_box_constraint(pytestconfig):
     problem = ROL.OptimizationProblem(J, q)
     solver = ROL.OptimizationSolver(problem, params)
     solver.solve()
-    Tvec = Q.T.vector()
+    Tvec = Q.T.dat.data_ro
     nodes = fd.DirichletBC(Q.V_r, fd.Constant((0.0, 0.0)), [2]).nodes
     assert np.all(Tvec[nodes, 0] <= 1.2 + 1e-1)
     assert np.all(Tvec[nodes, 1] <= 1.2 + 1e-1)

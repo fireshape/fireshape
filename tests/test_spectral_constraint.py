@@ -55,7 +55,7 @@ def test_spectral_constraint(pytestconfig):
     problem = ROL.OptimizationProblem(J, q)
     solver = ROL.OptimizationSolver(problem, params)
     solver.solve()
-    Tvec = Q.T.vector()[:, :]
+    Tvec = Q.T.dat.data_ro
     for i in range(Tvec.shape[0]):
         assert abs(Tvec[i, 0]) < 0.55 + 1e-4
         assert abs(Tvec[i, 1]) < 0.55 + 1e-4

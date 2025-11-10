@@ -190,7 +190,7 @@ class PDEconstrainedObjective(Objective):
         Raise an error if the mesh is tangled.
         """
         self.detDT.interpolate(fd.det(fd.grad(self.Q.T)))
-        assert (min(self.detDT.vector()) > 0.05)
+        assert (min(self.detDT.dat.data_ro) > 0.05)
 
     def objective_value(self):
         """
@@ -229,8 +229,7 @@ class PDEconstrainedObjective(Objective):
             self.createJred()
             self.value(None, None)
         if self.feasible_control:
-            opts = {"riesz_representation": None}
-            dJ = self.Jred.derivative(options=opts)
+            dJ = self.Jred.derivative()
             # transplant from moved to reference mesh
             with dJ.dat.vec as vec_dJ:
                 with self.deriv_r.dat.vec as vec_r:
@@ -296,8 +295,7 @@ class ReducedObjective(ShapeObjective):
         """
         Get the derivative from pyadjoint.
         """
-        opts = {"riesz_representation": None}
-        dJ = self.Jred.derivative(options=opts)
+        dJ = self.Jred.derivative()
         # transplant from moved to reference mesh
         with dJ.dat.vec as vec_dJ:
             with self.deriv_r.dat.vec as vec_r:
