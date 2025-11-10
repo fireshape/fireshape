@@ -16,7 +16,7 @@ e = PoissonSolver(mesh_m)
 
 # save state variable evolution in file u.pvd
 e.solve()
-out = fd.File("u.pvd")
+out = fd.VTKFile("u.pvd")
 
 # create PDEconstrained objective functional
 J_ = L2trackingObjective(e, Q, cb=lambda: out.write(e.solution))
