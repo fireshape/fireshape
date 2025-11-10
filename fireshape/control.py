@@ -176,11 +176,13 @@ class FeControlSpace(ControlSpace):
             # Create interpolator and cointerpolator from V_c into V_r
             self.Ip_v = fd.Function(self.V_c)
             interp = fd.interpolate(self.Ip_v, self.V_r,
-                                    allow_missing_dofs=True, default_missing_val=0.)
+                                    allow_missing_dofs=True,
+                                    default_missing_val=0.)
             self.Ip = fd.Interpolator(interp, self.V_r)
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar,
-                                   allow_missing_dofs=True, default_missing_val=0.)
+                                   allow_missing_dofs=True,
+                                   default_missing_val=0.)
             self.CoIp = fd.Interpolator(restr, self.V_r)
 
         elif element.family() == 'Discontinuous Lagrange':
