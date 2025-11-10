@@ -564,7 +564,7 @@ class BsplineControlSpace(ControlSpace):
         x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
         x_int = fd.assemble(fd.interpolate(x_fct[0], V.sub(0)))
-        self.M = x_int.vector().size()
+        self.M = x_int.dat.dataset.layout_vec.size
 
         comm = self.comm
 
@@ -582,13 +582,13 @@ class BsplineControlSpace(ControlSpace):
             local_n = n // comm.size + int(comm.rank < (n % comm.size))
             IM = PETSc.Mat().create(comm=self.comm)
             IM.setType(PETSc.Mat.Type.AIJ)
-            lsize = x_int.vector().local_size()
-            gsize = x_int.vector().size()
+            lsize = x_int.dat.data_ro.size
+            gsize = x_int.dataset.layout_vec.size
             IM.setSizes(((lsize, gsize), (local_n, n)))
 
             IM.setUp()
             x_int = fd.assemble(fd.interpolate(x_fct[dim], V.sub(0)))
-            x = x_int.vector().get_local()
+            x = x_int.dat.data_ro
             for idx in range(n):
                 coeffs = np.zeros(knots.shape, dtype=float)
 

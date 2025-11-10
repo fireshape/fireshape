@@ -190,7 +190,7 @@ class PDEconstrainedObjective(Objective):
         Raise an error if the mesh is tangled.
         """
         self.detDT.interpolate(fd.det(fd.grad(self.Q.T)))
-        assert (min(self.detDT.vector()) > 0.05)
+        assert (min(self.detDT.dat.data_ro) > 0.05)
 
     def objective_value(self):
         """
