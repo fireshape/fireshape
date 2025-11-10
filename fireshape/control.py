@@ -173,37 +173,47 @@ class FeControlSpace(ControlSpace):
             # Create decoupled FE-control space of mesh_c
             self.V_c = fd.VectorFunctionSpace(mesh_c, "CG", degree_c)
             self.V_c_dual = self.V_c.dual()
-            testfct_V_c = fd.TestFunction(self.V_c)
-            # Create interpolator from V_c into V_r
-            self.Ip = fd.Interpolator(testfct_V_c, self.V_r,
-                                      allow_missing_dofs=True)
+            # Create interpolator and cointerpolator from V_c into V_r
+            self.Ip_v = fd.Function(self.V_c)
+            interp = fd.interpolate(self.Ip_v, self.V_r,
+                                    allow_missing_dofs=True, default_missing_val=0.)
+            self.Ip = fd.Interpolator(interp, self.V_r)
+            self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
+            restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar,
+                                   allow_missing_dofs=True, default_missing_val=0.)
+            self.CoIp = fd.Interpolator(restr, self.V_r)
+
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
             self.V_c = fd.VectorFunctionSpace(self.mesh_r, "CG", degree)
             self.V_c_dual = self.V_c.dual()
-            testfct_V_c = fd.TestFunction(self.V_c)
-            # Create interpolator from V_c into V_r
-            self.Ip = fd.Interpolator(testfct_V_c, self.V_r)
+            # Create interpolator and cointerpolator from V_c into V_r
+            self.Ip_v = fd.Function(self.V_c)
+            interp = fd.interpolate(self.Ip_v, self.V_r)
+            self.Ip = fd.Interpolator(interp, self.V_r)
+            self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
+            restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar)
+            self.CoIp = fd.Interpolator(restr, self.V_r)
 
     def restrict(self, residual, out):
         if getattr(self, "is_DG", False):
-            interp = self.Ip.interpolate(residual, transpose=True)
-            fd.assemble(interp, tensor=out.cofun)
+            self.CoIp_wstar.assign(residual)
+            self.CoIp.assemble(tensor=out.cofun)
         elif getattr(self, "is_decoupled", False):
             # it's not clear whether this is 100% correct for missing vals
-            interp = self.Ip.interpolate(residual, transpose=True)
-            fd.assemble(interp, tensor=out.cofun)
+            self.CoIp_wstar.assign(residual)
+            self.CoIp.assemble(tensor=out.cofun)
         else:
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
         if getattr(self, "is_DG", False):
-            interp = self.Ip.interpolate(vector.fun)
-            fd.assemble(interp, tensor=out)
+            self.Ip_v.assign(vector.fun)
+            self.Ip.assemble(tensor=out)
         elif getattr(self, "is_decoupled", False):
             # extend by zero
-            interp = self.Ip.interpolate(vector.fun, default_missing_val=0.)
-            fd.assemble(interp, tensor=out)
+            self.Ip_v.assign(vector.fun)
+            self.Ip.assemble(tensor=out)
         else:
             out.assign(vector.fun)
 
@@ -233,7 +243,6 @@ class FeControlSpace(ControlSpace):
         Store the vector to a file to be reused in a later computation.
         DumbCheckpoint requires that the mesh, FunctionSpace and parallel
         decomposition are identical between store and load.
-
         """
         with fd.DumbCheckpoint(filename, mode=fd.FILE_CREATE) as chk:
             chk.store(vec.fun, name=filename)
