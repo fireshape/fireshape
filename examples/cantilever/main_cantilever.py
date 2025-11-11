@@ -12,7 +12,7 @@ class Compliance(PDEconstrainedObjective):
         V = VectorFunctionSpace(self.Q.mesh_m, "CG", 1)
 
         # no displacement at the back
-        bcs = DirichletBC(V, Constant(as_vector([0,0,0])), 1)
+        bcs = DirichletBC(V, Constant(as_vector([0, 0, 0])), 1)
 
         # gravity and elasticity parameters
         rho = Constant(0.01)
@@ -24,13 +24,12 @@ class Compliance(PDEconstrainedObjective):
 
         # weak formulation
         Id = Identity(mesh.geometric_dimension())  # 2x2 Identity tensor
-        self.epsilon = lambda u: 0.5*(grad(u) + grad(u).T)
-        self.sigma = lambda u: lambda_*div(u)*Id + 2*mu*self.epsilon(u)
+        self.e = lambda u: 0.5*(grad(u) + grad(u).T)
+        self.s = lambda u: lambda_*div(u)*Id + 2*mu*self.epsilon(u)
         v = TestFunction(V)
         u = Function(V)
         self.u = u
-        F = ((inner(self.sigma(u), self.epsilon(v)) - dot(f, v))*dx
-             - dot(p, v)*ds(2))
+        F = ((inner(self.s(u), self.e(v)) - dot(f, v))*dx - dot(p, v)*ds(2))
         prb = NonlinearVariationalProblem(F, self.u, bcs=bcs)
         self.solver = NonlinearVariationalSolver(prb)
 
@@ -49,8 +48,8 @@ class Compliance(PDEconstrainedObjective):
     def objective_value(self):
         """Return the value of the objective function."""
         self.solver.solve()
-        eps_u = self.epsilon(self.u)
-        sigma_u = self.sigma(self.u)
+        eps_u = self.e(self.u)
+        sigma_u = self.s(self.u)
         return assemble(inner(eps_u, sigma_u)*dx)
 
 
@@ -71,18 +70,16 @@ if __name__ == "__main__":
     M = ROL.StdVector(1)
 
     # ROL parameters
-    params_dict = { 
-    'General': {'Secant': {'Type': 'Limited-Memory BFGS'}},
-    'Step': {'Type': 'Augmented Lagrangian',
-             'Augmented Lagrangian':
-               {'Subproblem Step Type': 'Trust Region',
-                'Subproblem Iteration Limit': 5,
-                }},
-    'Status Test': {'Gradient Tolerance': 1e-3,
-                    'Step Tolerance': 1e-3,
-                    'Constraint Tolerance': 1e-3,
-                    'Iteration Limit': 10}}
-    params = ROL.ParameterList(params_dict, "Parameters")
+    pd = {'General': {'Secant': {'Type': 'Limited-Memory BFGS'}},
+          'Step': {'Type': 'Augmented Lagrangian',
+                   'Augmented Lagrangian':
+                     {'Subproblem Step Type': 'Trust Region',
+                      'Subproblem Iteration Limit': 5}},
+          'Status Test': {'Gradient Tolerance': 1e-3,
+                          'Step Tolerance': 1e-3,
+                          'Constraint Tolerance': 1e-3,
+                          'Iteration Limit': 10}}
+    params = ROL.ParameterList(pd, "Parameters")
     problem = ROL.OptimizationProblem(J, q, econ=C, emul=M)
     solver = ROL.OptimizationSolver(problem, params)
 
