@@ -51,14 +51,14 @@ jobs:
       - name: Run linter
         run: |
           . venv-fireshape/bin/activate
-          make lint
+          make -C fireshape-repo lint
 
       - name: Run examples
         run: |
           . venv-fireshape/bin/activate
-          make examples
+          make -C fireshape-repo examples
 
       - name: Run tests
         run: |
           . venv-fireshape/bin/activate
-          pytest
+          pytest fireshape-repo/tests

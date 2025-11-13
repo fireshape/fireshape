@@ -7,7 +7,7 @@ on:
       - future
 
 jobs:
-  test_main:
+  test_master:
     if: github.base_ref == 'master'
     uses: ./.github/workflows/test.yml
     with:
