@@ -59,5 +59,6 @@ jobs:
           make examples
 
       - name: Run tests
+        run: |
           . venv-fireshape/bin/activate
           pytest
