@@ -12,18 +12,18 @@ inner = fs.LaplaceInnerProduct(Q, fixed_bids=[10, 11, 12])
 q = fs.ControlVector(Q, inner)
 
 # setup PDE constraint
-if mesh.topological_dimension() == 2:  # in 2D
+if mesh.topological_dimension == 2:  # in 2D
     viscosity = fd.Constant(1./400.)
-elif mesh.topological_dimension() == 3:  # in 3D
+elif mesh.topological_dimension == 3:  # in 3D
     viscosity = fd.Constant(1/10.)  # simpler problem in 3D
 else:
     raise NotImplementedError
 e = NavierStokesSolver(Q.mesh_m, viscosity)
 
 # save state variable evolution in file u2.pvd or u3.pvd
-if mesh.topological_dimension() == 2:  # in 2D
+if mesh.topological_dimension == 2:  # in 2D
     out = fd.File("solution/u2D.pvd")
-elif mesh.topological_dimension() == 3:  # in 3D
+elif mesh.topological_dimension == 3:  # in 3D
     out = fd.File("solution/u3D.pvd")
 
 

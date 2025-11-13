@@ -23,7 +23,7 @@ class Compliance(PDEconstrainedObjective):
         lambda_ = Constant(0.25)
 
         # weak formulation
-        Id = Identity(mesh.geometric_dimension())  # 2x2 Identity tensor
+        Id = Identity(mesh.geometric_dimension)  # 2x2 Identity tensor
         self.e = lambda u: 0.5*(grad(u) + grad(u).T)
         self.s = lambda u: lambda_*div(u)*Id + 2*mu*self.epsilon(u)
         v = TestFunction(V)
