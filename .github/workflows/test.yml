@@ -44,9 +44,9 @@ jobs:
       - name: Install Fireshape
         run: |
           . venv-fireshape/bin/activate
-          pip install ./fireshape-repo
-          pip install flake8 pytest
-          pip list
+          python -m pip install ./fireshape-repo
+          python -m pip install flake8 pytest
+          python -m pip list
 
       - name: Run linter
         run: |
@@ -61,4 +61,4 @@ jobs:
       - name: Run tests
         run: |
           . venv-fireshape/bin/activate
-          pytest fireshape-repo/tests
+          python -m pytest fireshape-repo/tests
