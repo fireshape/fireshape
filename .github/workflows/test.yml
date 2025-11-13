@@ -1,0 +1,63 @@
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: The Git ref to checkout
+        type: string
+        required: true
+      firedrake_docker_version:
+        description: The Firedrake Docker version to use ('dev-main' or 'dev-release')
+        type: string
+        required: true
+
+# Cancel jobs running if new commits are pushed
+concurrency:
+  group: >
+    ${{ github.workflow }}-
+    ${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test Fireshape
+    runs-on: ubuntu-latest
+    container:
+      image: firedrakeproject/firedrake-vanilla-default:${{ inputs.firedrake_docker_version }}
+    steps:
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get -y install gmsh
+
+      - uses: actions/checkout@v5
+        with:
+          # Download Fireshape into a subdirectory not called 'fireshape' to make sure
+          # that the package installs correctly. Otherwise 'import fireshape' may
+          # work even if the installation failed because it is a subdirectory.
+          ref: ${{ inputs.source_ref }}
+          path: fireshape-repo
+
+      - name: Create virtual environment
+        # pass '--system-site-packages' so Firedrake can be found
+        run: python3 -m venv --system-site-packages venv-fireshape
+
+      - name: Install Fireshape
+        run: |
+          . venv-fireshape/bin/activate
+          pip install ./fireshape-repo
+          pip install flake8 pytest
+          pip list
+
+      - name: Run linter
+        run: |
+          . venv-fireshape/bin/activate
+          make lint
+
+      - name: Run examples
+        run: |
+          . venv-fireshape/bin/activate
+          make examples
+
+      - name: Run tests
+          . venv-fireshape/bin/activate
+          pytest

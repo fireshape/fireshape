@@ -1,0 +1,24 @@
+name: Test push
+
+on:
+  push:
+    branches:
+      - master
+      - future
+
+jobs:
+  test_main:
+    if: github.ref_name == 'master'
+    uses: ./.github/workflows/test.yml
+    with:
+      source_ref: ${{ github.ref_name }}
+      firedrake_docker_version: dev-release
+    secrets: inherit
+
+  test_future:
+    if: github.ref_name == 'future'
+    uses: ./.github/workflows/test.yml
+    with:
+      source_ref: ${{ github.ref_name }}
+      firedrake_docker_version: dev-main
+    secrets: inherit
