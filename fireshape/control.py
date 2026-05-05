@@ -364,7 +364,7 @@ class FeMultiGridControlSpace(ControlSpace):
         # uncache physical node locations (which firedrake automatically
         # caches to speed up multrigrid transfer operators)
         for mesh in self.mh_mapped:
-            cache = mesh._geometric_shared_data_cache
+            cache = mesh.geometric_shared_data_cache
             if "hierarchy_physical_node_locations" in cache:
                 cache.pop("hierarchy_physical_node_locations")
         return True
