@@ -497,7 +497,7 @@ class BsplineControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.V_m_dual = self.V_m.dual()
 
-        assert self.dim == self.mesh_r.geometric_dimension()
+        assert self.dim == self.mesh_r.geometric_dimension
 
         # assemble correct interpolation matrix
         self.FullIFW = self.build_interpolation_matrix(self.V_r)

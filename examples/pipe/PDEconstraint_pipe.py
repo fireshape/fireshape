@@ -32,7 +32,7 @@ class NavierStokesSolver(PdeConstraint):
 
         # Dirichlet Boundary conditions
         X = fd.SpatialCoordinate(self.mesh_m)
-        dim = self.mesh_m.topological_dimension()
+        dim = self.mesh_m.topological_dimension
         if dim == 2:
             uin = 4 * fd.as_vector([(1-X[1])*X[1], 0])
         elif dim == 3:
@@ -65,9 +65,9 @@ class NavierStokesSolver(PdeConstraint):
 
 if __name__ == "__main__":
     mesh = fd.Mesh("pipe.msh")
-    if mesh.topological_dimension() == 2:  # in 2D
+    if mesh.topological_dimension == 2:  # in 2D
         viscosity = fd.Constant(1./400.)
-    elif mesh.topological_dimension() == 3:  # in 3D
+    elif mesh.topological_dimension == 3:  # in 3D
         viscosity = fd.Constant(1/10.)  # simpler problem in 3D
     else:
         raise NotImplementedError
