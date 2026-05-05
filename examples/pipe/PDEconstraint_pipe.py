@@ -74,5 +74,5 @@ if __name__ == "__main__":
     e = NavierStokesSolver(mesh, viscosity)
     e.solve()
     print(e.failed_to_solve)
-    out = fd.File("temp_PDEConstrained_u.pvd")
+    out = fd.VTKFile("temp_PDEConstrained_u.pvd")
     out.write(e.solution.split()[0])

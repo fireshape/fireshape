@@ -22,9 +22,9 @@ e = NavierStokesSolver(Q.mesh_m, viscosity)
 
 # save state variable evolution in file u2.pvd or u3.pvd
 if mesh.topological_dimension == 2:  # in 2D
-    out = fd.File("solution/u2D.pvd")
+    out = fd.VTKFile("solution/u2D.pvd")
 elif mesh.topological_dimension == 3:  # in 3D
-    out = fd.File("solution/u3D.pvd")
+    out = fd.VTKFile("solution/u3D.pvd")
 
 
 def cb():
