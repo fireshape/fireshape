@@ -26,7 +26,7 @@ class MoYoSpectralConstraint(fs.DeformationObjective):
         self.iden = fd.Function(self.V_r)
         self.iden.interpolate(fd.SpatialCoordinate(r_mesh))
         self.S = self.T.copy(deepcopy=True)
-        self.dim = r_mesh.topological_dimension()
+        self.dim = r_mesh.topological_dimension
 
     def update_state(self):
         lam = self.lam
