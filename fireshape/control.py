@@ -184,7 +184,8 @@ class FeControlSpace(ControlSpace):
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
 
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar,
-                                   default_missing_val=0., allow_missing_dofs=True)
+                                   default_missing_val=0.,
+                                   allow_missing_dofs=True)
             self.CoIp = fd.get_interpolator(restr)
             self.CoIp.assemble()
 
