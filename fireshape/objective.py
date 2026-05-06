@@ -190,7 +190,11 @@ class PDEconstrainedObjective(Objective):
         Raise an error if the mesh is tangled.
         """
         self.detDT.interpolate(fd.det(fd.grad(self.Q.T)))
-        assert (min(self.detDT.dat.data_ro) > 0.05)
+        with self.detDT.dat.vec_ro as vec:
+            global_min = vec.min()[1]
+
+        if global_min <= 0.05:
+            raise ValueError(f"Mesh tangled! Global min det(J): {global_min}")
 
     def objective_value(self):
         """
@@ -270,7 +274,7 @@ class ReducedObjective(ShapeObjective):
                   + " for shape objectives."
             raise NotImplementedError(msg)
 
-        msg = "ReducedObjective is deprecated and may be removed" \
+        msg = "ReducedObjective is deprecated and may be removed " \
               + "in the future. Use PDEconstrainedObjective instead."
         print(msg)
 

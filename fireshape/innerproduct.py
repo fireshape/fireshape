@@ -300,7 +300,7 @@ class SurfaceInnerProduct(InnerProduct):
         a += 1e-10 * fd.inner(u, v) * fd.dx
         A = fd.assemble(a, mat_type="aij")
         A = A.petscmat
-        tdim = V.mesh().topological_dimension()
+        tdim = V.mesh().topological_dimension
 
         lsize = fd.Function(V).dat.data_ro.size
 

@@ -11,7 +11,7 @@ class ElasticityExtension(object):
         self.V = V
         self.fixed_dims = fixed_dims
         self.direct_solve = direct_solve
-        self.zero = fd.Constant(V.mesh().topological_dimension() * (0,))
+        self.zero = fd.Constant(V.mesh().topological_dimension * (0,))
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         self.zero_fun = fd.Cofunction(V.dual())
@@ -23,7 +23,7 @@ class ElasticityExtension(object):
             bcs = [fd.DirichletBC(self.V, self.bc_fun, "on_boundary")]
         else:
             bcs = []
-            for i in range(self.V.mesh().topological_dimension()):
+            for i in range(self.V.mesh().topological_dimension):
                 if i in self.fixed_dims:
                     bcs.append(fd.DirichletBC(self.V.sub(i), 0, "on_boundary"))
                 else:

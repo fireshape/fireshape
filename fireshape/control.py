@@ -175,15 +175,19 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             # Create interpolator and cointerpolator from V_c into V_r
             self.Ip_v = fd.Function(self.V_c)
+
             interp = fd.interpolate(self.Ip_v, self.V_r,
-                                    default_missing_val=0.)
-            self.Ip = fd.Interpolator(interp, self.V_r,
-                                      allow_missing_dofs=True)
+                                    default_missing_val=0.,
+                                    allow_missing_dofs=True)
+            self.Ip = fd.get_interpolator(interp)
+            self.Ip.assemble()
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
+
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar,
-                                   default_missing_val=0.)
-            self.CoIp = fd.Interpolator(restr, self.V_r,
-                                        allow_missing_dofs=True)
+                                   default_missing_val=0.,
+                                   allow_missing_dofs=True)
+            self.CoIp = fd.get_interpolator(restr)
+            self.CoIp.assemble()
 
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
@@ -192,10 +196,12 @@ class FeControlSpace(ControlSpace):
             # Create interpolator and cointerpolator from V_c into V_r
             self.Ip_v = fd.Function(self.V_c)
             interp = fd.interpolate(self.Ip_v, self.V_r)
-            self.Ip = fd.Interpolator(interp, self.V_r)
+            self.Ip = fd.get_interpolator(interp)
+            self.Ip.assemble()
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar)
-            self.CoIp = fd.Interpolator(restr, self.V_r)
+            self.CoIp = fd.get_interpolator(restr)
+            self.CoIp.assemble()
 
     def restrict(self, residual, out):
         if getattr(self, "is_DG", False):
@@ -364,7 +370,7 @@ class FeMultiGridControlSpace(ControlSpace):
         # uncache physical node locations (which firedrake automatically
         # caches to speed up multrigrid transfer operators)
         for mesh in self.mh_mapped:
-            cache = mesh._geometric_shared_data_cache
+            cache = mesh.geometric_shared_data_cache
             if "hierarchy_physical_node_locations" in cache:
                 cache.pop("hierarchy_physical_node_locations")
         return True
@@ -497,7 +503,7 @@ class BsplineControlSpace(ControlSpace):
         self.V_m = fd.FunctionSpace(self.mesh_m, element)
         self.V_m_dual = self.V_m.dual()
 
-        assert self.dim == self.mesh_r.geometric_dimension()
+        assert self.dim == self.mesh_r.geometric_dimension
 
         # assemble correct interpolation matrix
         self.FullIFW = self.build_interpolation_matrix(self.V_r)

@@ -53,7 +53,7 @@ class LevelsetFct(fs.ShapeObjective):
         return integrand * fd.dx(metadata={"quadrature_degree": 1})
 
 
-CB = fd.File("domain.pvd")
+CB = fd.VTKFile("domain.pvd")
 J = LevelsetFct(sigma, f, Q, cb=lambda: CB.write(sigma))
 
 # ROL parameters
