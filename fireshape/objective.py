@@ -274,7 +274,7 @@ class ReducedObjective(ShapeObjective):
                   + " for shape objectives."
             raise NotImplementedError(msg)
 
-        msg = "ReducedObjective is deprecated and may be removed" \
+        msg = "ReducedObjective is deprecated and may be removed " \
               + "in the future. Use PDEconstrainedObjective instead."
         print(msg)
 
