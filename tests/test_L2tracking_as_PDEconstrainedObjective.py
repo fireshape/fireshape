@@ -60,6 +60,15 @@ class L2tracking(PDEconstrainedObjective):
         u = self.solution
         return fd.assemble((u - self.u_target)**2 * fd.dx)
 
+class CountingL2tracking(L2tracking):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hess_count = 0
+
+    def hessVec(self, hv, v, x, tol):
+        self.hess_count += 1
+        super().hessVec(hv, v, x, tol)
+
 
 def run_L2tracking_optimization(controlspace, write_output=False):
     """ Test template for fsz.LevelsetFunctional."""
@@ -301,6 +310,48 @@ def test_PDE_hessian():
     print("Taylor errors:", errors)
     print("Taylor rates:", rates)
     assert min(rates[-2:]) > 2.9
+
+@pytest.mark.parametrize("use_as_hessian, expected_hess", [
+    (False, True),
+    (True, False),
+])
+def test_ROL_hessian_selection(use_as_hessian, expected_hess):
+    mesh = fd.UnitSquareMesh(8, 8)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+    q = fs.ControlVector(Q, inner)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = CountingL2tracking(Q, solverparams=pms)
+
+    params_dict = {
+        "General": {
+            "Secant": {
+                "Type": "Limited-Memory BFGS",
+                "Use as Hessian": use_as_hessian,
+            },
+        },
+        "Step": {
+            "Type": "Trust Region",
+            "Trust Region": {
+                "Subproblem Solver": "Truncated CG",
+                "Initial Radius": 0.1,
+            },
+        },
+        "Status Test": {
+            "Gradient Tolerance": 1e-4,
+            "Step Tolerance": 1e-8,
+            "Iteration Limit": 2,
+        },
+    }
+
+    params = ROL.ParameterList(params_dict, "Parameters")
+    problem = ROL.OptimizationProblem(J, q)
+    solver = ROL.OptimizationSolver(problem, params)
+    solver.solve()
+
+    print("Hessian count = ", J.hess_count)
+    assert (J.hess_count > 0) == expected_hess
 
 
 if __name__ == '__main__':
