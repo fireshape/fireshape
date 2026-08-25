@@ -4,6 +4,7 @@ import fireshape as fs
 from fireshape import PDEconstrainedObjective
 import ROL
 from pyadjoint.tape import get_working_tape, pause_annotation, annotate_tape
+import numpy as np
 
 
 @pytest.fixture(autouse=True)
@@ -162,10 +163,8 @@ def test_gradient_without_value():
     J = L2tracking(Q, solverparams=pms)
 
     count = [0]
-
     def eval_cb_post(*args):
         count[0] += 1
-
     J.eval_cb_post = eval_cb_post
 
     # repeated calls on same control should not increase how many times
@@ -173,11 +172,9 @@ def test_gradient_without_value():
     J.update(q, None, -1)
     J.value(q, None)
     assert count[0] == 1
-
     g = q.clone()
     J.gradient(g, q, None)
     assert count[0] == 1
-
     J.value(q, None)
     assert count[0] == 1
 
@@ -191,9 +188,119 @@ def test_gradient_without_value():
     J.update(q1, None, -1)
     J.gradient(g, q1, None)
     assert count[0] == 2
-
     J.value(q1, None)
     assert count[0] == 2
+
+def test_PDE_hessian():
+    mesh = fd.UnitSquareMesh(5, 5)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+    Hv = q.clone()
+
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    v.fun.interpolate(fd.as_vector((x * (1 - x) * y,
+                                    0.3 * x * y * (1 - y))))
+
+    count = [0]
+    def eval_cb_post(*args):
+        count[0] += 1
+    J.eval_cb_post = eval_cb_post
+
+    J.update(q, None, -1)
+
+    # repeated calls on same control should not increase how many times
+    # ReducedFunctional.__value__() is called
+    g = q.clone()
+    J.gradient(g, q, None)
+    assert count[0] == 1
+    J.hessVec(Hv, v, q, None)
+    assert count[0] == 1
+    J.hessVec(Hv, v, q, None)
+    assert count[0] == 1
+
+    # centered finite differences test
+    eps = 1e-4
+
+    qp = q.clone()
+    qm = q.clone()
+    qp.set(q)
+    qm.set(q)
+    qp.axpy(eps, v)
+    qm.axpy(-eps, v)
+
+    gp = q.clone()
+    gm = q.clone()
+
+    J.update(qp, None, -1)
+    J.gradient(gp, qp, None)
+
+    J.update(qm, None, -1)
+    J.gradient(gm, qm, None)
+
+    Hfd = q.clone()
+    Hfd.set(gp)
+    Hfd.axpy(-1.0, gm)
+    Hfd.scale(0.5 / eps)
+
+    error = q.clone()
+    error.set(Hfd)
+    error.axpy(-1.0, Hv)
+
+    assert error.norm() / Hv.norm() < 1e-4
+
+    # symmetry test
+    w = q.clone()
+    w.fun.interpolate(fd.as_vector((-y * (1 - y) * x, x * y * (1 - x))))
+
+    Hv = q.clone()
+    Hw = q.clone()
+
+    J.update(q, None, -1)
+    J.hessVec(Hv, v, q, None)
+    J.hessVec(Hw, w, q, None)
+
+    assert np.isclose(w.dot(Hv), v.dot(Hw), rtol=1e-8, atol=1e-10)
+
+    # Taylor test
+    g = q.clone()
+    Hv = q.clone()
+
+    J.update(q, None, -1)
+    J0 = J.value(q, None)
+    J.gradient(g, q, None)
+    J.hessVec(Hv, v, q, None)
+
+    dJv = g.dot(v)
+    d2Jvv = v.dot(Hv)
+
+    epss = [1e-1, 5e-2, 2.5e-2, 1.25e-2]
+    errors = []
+
+    for eps in epss:
+        qe = q.clone()
+        qe.set(q)
+        qe.axpy(eps, v)
+
+        J.update(qe, None, -1)
+        Je = J.value(qe, None)
+
+        model = J0 + eps * dJv + 0.5 * eps**2 * d2Jvv
+        errors.append(abs(Je - model))
+
+    rates = []
+
+    for i in range(len(errors) - 1):
+        rates.append(np.log(errors[i] / errors[i + 1]) / np.log(2.0))
+
+    print("Taylor errors:", errors)
+    print("Taylor rates:", rates)
+    assert min(rates[-2:]) > 2.9
 
 
 if __name__ == '__main__':

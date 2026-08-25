@@ -228,15 +228,20 @@ class PDEconstrainedObjective(Objective):
         super().__init__(*args, **kwargs)
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
+        self.hess_dir_r = fd.Function(self.Q.V_r)
+        self.hess_dir_m = fd.Function(self.Q.V_m)
 
-        # cache variables to test whether derivative is called without first
-        # calling value, which would result in an incorrect differentiation
+        # Cache the forward and adjoint state to ensure differentiation is
+        # performed at the current control and to avoid unnecessary solves.
         self.dT_last = fd.Function(self.Q.V_r)
         self.dT_diff = fd.Function(self.Q.V_r)
         # True if pyadjoint tape is current at the deformation dT_last
-        # (Jred has been successfully evaluated at dT_last)
+        # (Jred has been successfully evaluated at dT_last).
         self.Jred_current = False
-        self.Jred_value = np.nan
+        self.Jred_value = np.inf
+        # Whether the adjoint values on the tape correspond to dT_last.
+        self.adjoint_current = False
+        self.dJ = None  # last value of Jred.derivative()
         self.feasible_control = False
 
         # variables to assess feasibility of control variable
@@ -290,13 +295,30 @@ class PDEconstrainedObjective(Objective):
             self.Jred_value = self.Jred(self.dT_m)
             self.dT_last.assign(self.dT_r)
             self.Jred_current = True
+            self.adjoint_current = False
+            self.dJ = None
             self.feasible_control = True
         except Exception:
             self.Jred_value = np.inf
             self.Jred_current = False
+            self.adjoint_current = False
+            self.dJ = None
             self.feasible_control = False
 
         return self.Jred_value
+
+    def _ensure_adjoint(self):
+        """
+        Ensure that adjoint values are current at the current control.
+        """
+        self._ensure_forward()
+
+        if not self.feasible_control:
+            return None
+
+        if not self.adjoint_current:
+            self.dJ = self.Jred.derivative()
+            self.adjoint_current = True
 
     def value(self, x, tol):
         """
@@ -309,15 +331,44 @@ class PDEconstrainedObjective(Objective):
         """
         Get the derivative from pyadjoint.
         """
-        self._ensure_forward()
+        self._ensure_adjoint()
 
         if self.feasible_control:
-            dJ = self.Jred.derivative()
             # transplant from moved to reference mesh
-            with dJ.dat.vec as vec_dJ:
-                with self.deriv_r.dat.vec as vec_r:
+            with self.dJ.dat.vec_ro as vec_dJ:
+                with self.deriv_r.dat.vec_wo as vec_r:
                     vec_dJ.copy(vec_r)
             out.from_first_derivative(self.deriv_r)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        if v.boundary_extension is not None:
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        self._ensure_adjoint()
+
+        if not self.feasible_control:
+            raise RuntimeError("Cannot compute Hessian at an infeasible control.")
+
+        v.to_coordinatefield(self.hess_dir_r)
+
+        with self.hess_dir_r.dat.vec_ro as vec_r:
+            with self.hess_dir_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        d2J = self.Jred.hessian(self.hess_dir_m)
+
+        with d2J.dat.vec_ro as vec_d2J:
+            with self.deriv_r.dat.vec_wo as vec_r:
+                vec_d2J.copy(vec_r)
+
+        hv.from_first_derivative(self.deriv_r)
+        hv.apply_riesz_map()
 
     def createJred(self):
         """Create reduced functional using pyadjiont."""
