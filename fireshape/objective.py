@@ -228,9 +228,21 @@ class PDEconstrainedObjective(Objective):
         super().__init__(*args, **kwargs)
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
+
+        # cache variables to test whether derivative is called without first
+        # calling value, which would result in an incorrect differentiation
+        self.dT_last = fd.Function(self.Q.V_r)
+        self.dT_diff = fd.Function(self.Q.V_r)
+        # True if pyadjoint tape is current at the deformation dT_last
+        # (Jred has been successfully evaluated at dT_last)
+        self.Jred_current = False
+        self.Jred_value = np.nan
         self.feasible_control = False
+
+        # variables to assess feasibility of control variable
         self.Vdet = fd.FunctionSpace(self.Q.mesh_r, "DG", 0)
         self.detDT = fd.Function(self.Vdet)
+
         # pyadjiont post-evaluation callback, signature:
         # self.eval_cb_post(func_value, self.controls.delist(values))
         self.eval_cb_post = lambda J, *args: None
@@ -255,34 +267,50 @@ class PDEconstrainedObjective(Objective):
         """
         raise NotImplementedError
 
+    def _ensure_forward(self):
+        """
+        Ensure that Jred has been evaluated at the current control.
+        """
+        if not hasattr(self, "Jred"):
+            self.createJred()
+
+        self.dT_r.assign(self.Q.T - self.Q.id)
+
+        if self.Jred_current:
+            self.dT_diff.assign(self.dT_r - self.dT_last)
+            with self.dT_diff.dat.vec_ro as vec:
+                if vec.norm() < 1e-20:
+                    return self.Jred_value
+
+        with self.dT_r.dat.vec_ro as vec_r:
+            with self.dT_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        try:
+            self.Jred_value = self.Jred(self.dT_m)
+            self.dT_last.assign(self.dT_r)
+            self.Jred_current = True
+            self.feasible_control = True
+        except Exception:
+            self.Jred_value = np.inf
+            self.Jred_current = False
+            self.feasible_control = False
+
+        return self.Jred_value
+
     def value(self, x, tol):
         """
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
-        if not hasattr(self, 'Jred'):
-            self.createJred()
-        self.dT_r.assign(self.Q.T - self.Q.id)
-        with self.dT_r.dat.vec_ro as a:
-            with self.dT_m.dat.vec_wo as b:
-                a.copy(b)
-        try:
-            J = self.Jred(self.dT_m)
-            self.feasible_control = True
-        except Exception:
-            J = np.nan
-            self.feasible_control = False
-        return J
+        return self._ensure_forward()
 
     def derivative(self, out):
         """
         Get the derivative from pyadjoint.
         """
-        if not hasattr(self, 'Jred'):
-            # create Jred and evaluate it so pyadjoint
-            # computes the correct gradient in the first iteration
-            self.createJred()
-            self.value(None, None)
+        self._ensure_forward()
+
         if self.feasible_control:
             dJ = self.Jred.derivative()
             # transplant from moved to reference mesh

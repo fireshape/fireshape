@@ -152,6 +152,49 @@ def test_L2tracking(controlspace, pytestconfig):
     verbose = False
     run_L2tracking_optimization(controlspace, write_output=verbose)
 
+def test_gradient_without_value():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+    q = fs.ControlVector(Q, inner)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    count = [0]
+
+    def eval_cb_post(*args):
+        count[0] += 1
+
+    J.eval_cb_post = eval_cb_post
+
+    # repeated calls on same control should not increase how many times
+    # ReducedFunctional.__value__() is called
+    J.update(q, None, -1)
+    J.value(q, None)
+    assert count[0] == 1
+
+    g = q.clone()
+    J.gradient(g, q, None)
+    assert count[0] == 1
+
+    J.value(q, None)
+    assert count[0] == 1
+
+    # changing domain should increase number of calls to
+    # ReducedFunctional.__value__()
+    q1 = q.clone()
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    deformation = fd.as_vector((0.05 * x * (1 - x), 0.0))
+    q1.fun.interpolate(deformation)
+
+    J.update(q1, None, -1)
+    J.gradient(g, q1, None)
+    assert count[0] == 2
+
+    J.value(q1, None)
+    assert count[0] == 2
+
 
 if __name__ == '__main__':
     pytest.main()
