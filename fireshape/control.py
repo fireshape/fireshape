@@ -329,15 +329,13 @@ class FeMultiGridControlSpace(ControlSpace):
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
-        # out is unused, but keep it for API compatibility
         if self.coarse_control:  # prolong from coarse to fine
-            self.Ts[0].assign(vector.fun)
-            for (prev, next) in zip(self.Ts, self.Ts[1:]):
-                fd.prolong(prev, next)
+            if len(self.Vs) == 1:
+                out.assign(vector.fun)
+            else:
+                fd.prolong(vector.fun, out)
         else:  # inject from fine to coarse
-            self.Ts[-1].assign(vector.fun)
-            for (prev, next) in zip(self.Ts[::-1], self.Ts[:-1][::-1]):
-                fd.inject(prev, next)
+            out.assign(vector.fun)
 
     def update_domain(self, q: 'ControlVector'):
         """
@@ -362,7 +360,17 @@ class FeMultiGridControlSpace(ControlSpace):
                 return False
             else:
                 self.lastq.set(q)
-        q.to_coordinatefield(self.Ts[0])
+
+        # propagate control through the hierarchy
+        if self.coarse_control:
+            self.Ts[0].assign(q.fun)
+            for coarse, fine in zip(self.Ts, self.Ts[1:]):
+                fd.prolong(coarse, fine)
+        else:
+            self.Ts[-1].assign(q.fun)
+            for fine, coarse in zip(self.Ts[::-1], self.Ts[:-1][::-1]):
+                fd.inject(fine, coarse)
+
         # add identity to every function in the hierarchy
         # this is the only reason we need to overwrite update_domain
         [T.assign(T + id_) for (T, id_) in zip(self.Ts, self.ids)]

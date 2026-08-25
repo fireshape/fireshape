@@ -66,16 +66,29 @@ def test_regularization(controlspace_t, use_extension):
         check_result(run_taylor_test(J4))
     check_result(run_taylor_test(Js))
 
-def test_deformation_objective_hessian():
+@pytest.mark.parametrize("control_type, coarse_control", [
+    ("fe", None),
+    ("multigrid", True),
+    ("multigrid", False),
+])
+def test_deformation_objective_hessian(control_type, coarse_control):
     mesh = fd.UnitSquareMesh(4, 4)
-    Q = fs.FeControlSpace(mesh)
+
+    if control_type == "fe":
+        Q = fs.FeControlSpace(mesh)
+    else:
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh, coarse_control=coarse_control)
+
     inner = fs.H1InnerProduct(Q, direct_solve=True)
 
     J = fsz.DeformationRegularization(Q)
     q = fs.ControlVector(Q, inner)
     v = q.clone()
 
-    x, y = fd.SpatialCoordinate(mesh)
+    mesh_q = Q.mesh_r if control_type == "fe" else mh[0]
+    x, y = fd.SpatialCoordinate(mesh_q)
+
     q.fun.interpolate(fd.as_vector((0.1 * x * y, -0.05 * x)))
     v.fun.interpolate(fd.as_vector((x * (1 - x), 0.3 * y * (1 - y))))
 
