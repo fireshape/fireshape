@@ -200,9 +200,22 @@ def test_gradient_without_value():
     J.value(q1, None)
     assert count[0] == 2
 
-def test_PDE_hessian():
+@pytest.mark.parametrize(
+    "control_type",
+    ["fe", "multigrid"],
+    ids=["fe", "mg-coarse"],
+)
+def test_PDE_hessian(control_type):
     mesh = fd.UnitSquareMesh(5, 5)
-    Q = fs.FeControlSpace(mesh)
+
+    if control_type == "fe":
+        Q = fs.FeControlSpace(mesh)
+        mesh_q = mesh
+    else:
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
+        mesh_q = mh[0]
+
     inner = fs.H1InnerProduct(Q, direct_solve=True)
 
     pms = {"ksp_type": "preonly", "pc_type": "lu"}
@@ -212,7 +225,7 @@ def test_PDE_hessian():
     v = q.clone()
     Hv = q.clone()
 
-    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    x, y = fd.SpatialCoordinate(mesh_q)
     v.fun.interpolate(fd.as_vector((x * (1 - x) * y,
                                     0.3 * x * y * (1 - y))))
 
