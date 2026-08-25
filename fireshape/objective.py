@@ -94,6 +94,8 @@ class ShapeObjective(Objective):
         """
         super().__init__(*args, **kwargs)
         self.deriv_m = fd.Cofunction(self.V_m_dual)
+        self.hess_direction_r = fd.Function(self.V_r)
+        self.hess_direction_m = fd.Function(self.V_m)
 
     def derivative(self, out):
         """
@@ -112,6 +114,55 @@ class ShapeObjective(Objective):
                 vec_m.copy(vec_r)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
+
+    def hessian_form(self, v, w):
+        """
+        UFL form for the second shape derivative in directions v and w.
+        """
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.derivative_form(v), X, w)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action H v.
+
+        Function signature imposed by ROL.
+        """
+        if (v.boundary_extension is not None
+                or hv.boundary_extension is not None):
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        # Map the ControlSpace direction into the coordinate FE space
+        # on the reference mesh.
+        v.to_coordinatefield(self.hess_direction_r)
+
+        # Transplant the direction from reference to moved mesh.
+        with self.hess_direction_r.dat.vec_ro as vec_r:
+            with self.hess_direction_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        # Assemble w -> D^2 J[v, w] on the moved mesh.
+        w = fd.TestFunction(self.V_m)
+        fd.assemble(
+            self.hessian_form(self.hess_direction_m, w),
+            tensor=self.deriv_m,
+            form_compiler_parameters=self.params,
+        )
+
+        # Transplant the resulting dual vector back to the reference mesh.
+        with self.deriv_m.dat.vec_ro as vec_m:
+            with self.deriv_r.dat.vec_wo as vec_r:
+                vec_m.copy(vec_r)
+
+        # Restrict to the ControlSpace.
+        hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
+
+        # ROL expects the Hessian action as a primal ControlVector,
+        # just as gradient() returns the Riesz representative.
+        hv.apply_riesz_map()
 
 
 class DeformationObjective(Objective):
