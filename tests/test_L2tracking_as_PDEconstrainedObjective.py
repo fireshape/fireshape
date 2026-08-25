@@ -353,6 +353,48 @@ def test_ROL_hessian_selection(use_as_hessian, expected_hess):
     print("Hessian count = ", J.hess_count)
     assert (J.hess_count > 0) == expected_hess
 
+def test_PDE_objective_scale():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    v.fun.interpolate(fd.as_vector((x * (1 - x) * y,
+                                    0.3 * x * y * (1 - y))))
+
+    g0 = q.clone()
+    H0 = q.clone()
+    g = q.clone()
+    H = q.clone()
+
+    J.update(q, None, -1)
+
+    J.scale = 1.0
+    value0 = J.value(q, None)
+    J.gradient(g0, q, None)
+    J.hessVec(H0, v, q, None)
+
+    alpha = 2.7
+    J.scale = alpha
+    value = J.value(q, None)
+    J.gradient(g, q, None)
+    J.hessVec(H, v, q, None)
+
+    g0.scale(alpha)
+    H0.scale(alpha)
+    g.axpy(-1.0, g0)
+    H.axpy(-1.0, H0)
+
+    assert np.isclose(value, alpha * value0)
+    assert g.norm() < 1e-10
+    assert H.norm() < 1e-10
+
 
 if __name__ == '__main__':
     pytest.main()

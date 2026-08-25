@@ -175,6 +175,7 @@ class DeformationObjective(Objective):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.hess_dir_r = fd.Function(self.V_r)
 
     def derivative(self, out):
         """
@@ -185,6 +186,28 @@ class DeformationObjective(Objective):
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        if v.boundary_extension is not None:
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        v.to_coordinatefield(self.hess_dir_r)
+
+        w = fd.TestFunction(self.V_r)
+        form = fd.derivative(self.derivative_form(w), self.Q.T,
+                             self.hess_dir_r)
+        fd.assemble(form, tensor=self.deriv_r,
+                    form_compiler_parameters=self.params)
+
+        hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
+        hv.apply_riesz_map()
 
 
 class ControlObjective(Objective):
@@ -212,6 +235,20 @@ class ControlObjective(Objective):
                     form_compiler_parameters=self.params)
         out.cofun.assign(self.deriv_r_coarse)
         out.scale(self.scale)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        w = fd.TestFunction(self.Q.Vs[0])
+        form = fd.derivative(self.derivative_form(w), self.f, v.fun)
+        fd.assemble(form, tensor=self.deriv_r_coarse,
+                    form_compiler_parameters=self.params)
+
+        hv.cofun.assign(self.deriv_r_coarse)
+        hv.scale(self.scale)
+        hv.apply_riesz_map()
 
     def update(self, x, flag, iteration):
         self.f.assign(x.fun)
@@ -325,7 +362,10 @@ class PDEconstrainedObjective(Objective):
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
-        return self._ensure_forward()
+        J = self._ensure_forward()
+        if not self.feasible_control:
+            return J
+        return self.scale * J
 
     def derivative(self, out):
         """
@@ -339,6 +379,7 @@ class PDEconstrainedObjective(Objective):
                 with self.deriv_r.dat.vec_wo as vec_r:
                     vec_dJ.copy(vec_r)
             out.from_first_derivative(self.deriv_r)
+            out.scale(self.scale)
 
     def hessVec(self, hv, v, x, tol):
         """
@@ -368,6 +409,7 @@ class PDEconstrainedObjective(Objective):
                 vec_d2J.copy(vec_r)
 
         hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
         hv.apply_riesz_map()
 
     def createJred(self):
@@ -435,6 +477,12 @@ class ReducedObjective(ShapeObjective):
             with self.deriv_r.dat.vec as vec_r:
                 vec_dJ.copy(vec_r)
         out.from_first_derivative(self.deriv_r)
+
+    def hessVec(self, hv, v, x, tol):
+        raise NotImplementedError(
+            "Hessian actions are not supported by the deprecated "
+            "ReducedObjective. Use PDEconstrainedObjective instead."
+        )
 
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
