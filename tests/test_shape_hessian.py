@@ -127,3 +127,60 @@ def test_shape_hessian_kernel():
     J.hessVec(Hv, v, q, None)
 
     assert Hv.norm() < 1e-10
+
+def test_objective_sum_hessian():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    J1 = GeometryObjective(Q)
+    J2 = VolumeObjective(Q)
+    J = J1 + J2
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    v.fun.interpolate(fd.as_vector((0.2 * x * y, -0.1 * x * (1 + y))))
+
+    H1 = q.clone()
+    H2 = q.clone()
+    H = q.clone()
+
+    J.update(q, None, -1)
+    J1.hessVec(H1, v, q, None)
+    J2.hessVec(H2, v, q, None)
+    J.hessVec(H, v, q, None)
+
+    H1.plus(H2)
+    H.axpy(-1.0, H1)
+
+    assert H.norm() < 1e-10
+
+
+def test_scaled_objective_hessian():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    J1 = GeometryObjective(Q)
+    alpha = 2.7
+    J = alpha * J1
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    v.fun.interpolate(fd.as_vector((0.2 * x * y, -0.1 * x * (1 + y))))
+
+    H1 = q.clone()
+    H = q.clone()
+
+    J.update(q, None, -1)
+    J1.hessVec(H1, v, q, None)
+    J.hessVec(H, v, q, None)
+
+    H1.scale(alpha)
+    H.axpy(-1.0, H1)
+
+    assert H.norm() < 1e-10

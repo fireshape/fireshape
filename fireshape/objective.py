@@ -490,6 +490,12 @@ class ObjectiveSum(Objective):
         self.b.derivative(temp)
         out.plus(temp)
 
+    def hessVec(self, hv, v, x, tol):
+        temp = hv.clone()
+        self.a.hessVec(hv, v, x, tol)
+        self.b.hessVec(temp, v, x, tol)
+        hv.plus(temp)
+
     def update(self, *args):
         self.a.update(*args)
         self.b.update(*args)
@@ -508,6 +514,10 @@ class ScaledObjective(Objective):
     def derivative(self, out):
         self.J.derivative(out)
         out.scale(self.alpha)
+
+    def hessVec(self, hv, v, x, tol):
+        self.J.hessVec(hv, v, x, tol)
+        hv.scale(self.alpha)
 
     def update(self, *args):
         self.J.update(*args)
