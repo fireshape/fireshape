@@ -94,6 +94,8 @@ class ShapeObjective(Objective):
         """
         super().__init__(*args, **kwargs)
         self.deriv_m = fd.Cofunction(self.V_m_dual)
+        self.hess_direction_r = fd.Function(self.V_r)
+        self.hess_direction_m = fd.Function(self.V_m)
 
     def derivative(self, out):
         """
@@ -113,6 +115,55 @@ class ShapeObjective(Objective):
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
 
+    def hessian_form(self, v, w):
+        """
+        UFL form for the second shape derivative in directions v and w.
+        """
+        X = fd.SpatialCoordinate(self.mesh_m)
+        return fd.derivative(self.derivative_form(v), X, w)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action H v.
+
+        Function signature imposed by ROL.
+        """
+        if (v.boundary_extension is not None
+                or hv.boundary_extension is not None):
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        # Map the ControlSpace direction into the coordinate FE space
+        # on the reference mesh.
+        v.to_coordinatefield(self.hess_direction_r)
+
+        # Transplant the direction from reference to moved mesh.
+        with self.hess_direction_r.dat.vec_ro as vec_r:
+            with self.hess_direction_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        # Assemble w -> D^2 J[v, w] on the moved mesh.
+        w = fd.TestFunction(self.V_m)
+        fd.assemble(
+            self.hessian_form(self.hess_direction_m, w),
+            tensor=self.deriv_m,
+            form_compiler_parameters=self.params,
+        )
+
+        # Transplant the resulting dual vector back to the reference mesh.
+        with self.deriv_m.dat.vec_ro as vec_m:
+            with self.deriv_r.dat.vec_wo as vec_r:
+                vec_m.copy(vec_r)
+
+        # Restrict to the ControlSpace.
+        hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
+
+        # ROL expects the Hessian action as a primal ControlVector,
+        # just as gradient() returns the Riesz representative.
+        hv.apply_riesz_map()
+
 
 class DeformationObjective(Objective):
     """
@@ -124,6 +175,7 @@ class DeformationObjective(Objective):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.hess_dir_r = fd.Function(self.V_r)
 
     def derivative(self, out):
         """
@@ -134,6 +186,28 @@ class DeformationObjective(Objective):
                     form_compiler_parameters=self.params)
         out.from_first_derivative(self.deriv_r)
         out.scale(self.scale)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        if v.boundary_extension is not None:
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        v.to_coordinatefield(self.hess_dir_r)
+
+        w = fd.TestFunction(self.V_r)
+        form = fd.derivative(self.derivative_form(w), self.Q.T,
+                             self.hess_dir_r)
+        fd.assemble(form, tensor=self.deriv_r,
+                    form_compiler_parameters=self.params)
+
+        hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
+        hv.apply_riesz_map()
 
 
 class ControlObjective(Objective):
@@ -162,6 +236,20 @@ class ControlObjective(Objective):
         out.cofun.assign(self.deriv_r_coarse)
         out.scale(self.scale)
 
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        w = fd.TestFunction(self.Q.Vs[0])
+        form = fd.derivative(self.derivative_form(w), self.f, v.fun)
+        fd.assemble(form, tensor=self.deriv_r_coarse,
+                    form_compiler_parameters=self.params)
+
+        hv.cofun.assign(self.deriv_r_coarse)
+        hv.scale(self.scale)
+        hv.apply_riesz_map()
+
     def update(self, x, flag, iteration):
         self.f.assign(x.fun)
         super().update(x, flag, iteration)
@@ -177,9 +265,26 @@ class PDEconstrainedObjective(Objective):
         super().__init__(*args, **kwargs)
         self.dT_m = fd.Function(self.Q.V_m)
         self.dT_r = fd.Function(self.Q.V_r)
+        self.hess_dir_r = fd.Function(self.Q.V_r)
+        self.hess_dir_m = fd.Function(self.Q.V_m)
+
+        # Cache the forward and adjoint state to ensure differentiation is
+        # performed at the current control and to avoid unnecessary solves.
+        self.dT_last = fd.Function(self.Q.V_r)
+        self.dT_diff = fd.Function(self.Q.V_r)
+        # True if pyadjoint tape is current at the deformation dT_last
+        # (Jred has been successfully evaluated at dT_last).
+        self.Jred_current = False
+        self.Jred_value = np.inf
+        # Whether the adjoint values on the tape correspond to dT_last.
+        self.adjoint_current = False
+        self.dJ = None  # last value of Jred.derivative()
         self.feasible_control = False
+
+        # variables to assess feasibility of control variable
         self.Vdet = fd.FunctionSpace(self.Q.mesh_r, "DG", 0)
         self.detDT = fd.Function(self.Vdet)
+
         # pyadjiont post-evaluation callback, signature:
         # self.eval_cb_post(func_value, self.controls.delist(values))
         self.eval_cb_post = lambda J, *args: None
@@ -204,41 +309,109 @@ class PDEconstrainedObjective(Objective):
         """
         raise NotImplementedError
 
+    def _ensure_forward(self):
+        """
+        Ensure that Jred has been evaluated at the current control.
+        """
+        if not hasattr(self, "Jred"):
+            self.createJred()
+
+        self.dT_r.assign(self.Q.T - self.Q.id)
+
+        if self.Jred_current:
+            self.dT_diff.assign(self.dT_r - self.dT_last)
+            with self.dT_diff.dat.vec_ro as vec:
+                if vec.norm() < 1e-20:
+                    return self.Jred_value
+
+        with self.dT_r.dat.vec_ro as vec_r:
+            with self.dT_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        try:
+            self.Jred_value = self.Jred(self.dT_m)
+            self.dT_last.assign(self.dT_r)
+            self.Jred_current = True
+            self.adjoint_current = False
+            self.dJ = None
+            self.feasible_control = True
+        except Exception:
+            self.Jred_value = np.inf
+            self.Jred_current = False
+            self.adjoint_current = False
+            self.dJ = None
+            self.feasible_control = False
+
+        return self.Jred_value
+
+    def _ensure_adjoint(self):
+        """
+        Ensure that adjoint values are current at the current control.
+        """
+        self._ensure_forward()
+
+        if not self.feasible_control:
+            return None
+
+        if not self.adjoint_current:
+            self.dJ = self.Jred.derivative()
+            self.adjoint_current = True
+
     def value(self, x, tol):
         """
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
-        if not hasattr(self, 'Jred'):
-            self.createJred()
-        self.dT_r.assign(self.Q.T - self.Q.id)
-        with self.dT_r.dat.vec_ro as a:
-            with self.dT_m.dat.vec_wo as b:
-                a.copy(b)
-        try:
-            J = self.Jred(self.dT_m)
-            self.feasible_control = True
-        except Exception:
-            J = np.nan
-            self.feasible_control = False
-        return J
+        J = self._ensure_forward()
+        if not self.feasible_control:
+            return J
+        return self.scale * J
 
     def derivative(self, out):
         """
         Get the derivative from pyadjoint.
         """
-        if not hasattr(self, 'Jred'):
-            # create Jred and evaluate it so pyadjoint
-            # computes the correct gradient in the first iteration
-            self.createJred()
-            self.value(None, None)
+        self._ensure_adjoint()
+
         if self.feasible_control:
-            dJ = self.Jred.derivative()
             # transplant from moved to reference mesh
-            with dJ.dat.vec as vec_dJ:
-                with self.deriv_r.dat.vec as vec_r:
+            with self.dJ.dat.vec_ro as vec_dJ:
+                with self.deriv_r.dat.vec_wo as vec_r:
                     vec_dJ.copy(vec_r)
             out.from_first_derivative(self.deriv_r)
+            out.scale(self.scale)
+
+    def hessVec(self, hv, v, x, tol):
+        """
+        Compute the Riesz representative of the Hessian action.
+        Function signature imposed by ROL.
+        """
+        if v.boundary_extension is not None:
+            raise NotImplementedError(
+                "Hessian actions with boundary_extension are not supported."
+            )
+
+        self._ensure_adjoint()
+
+        if not self.feasible_control:
+            msg = "Cannot compute Hessian at an infeasible control."
+            raise RuntimeError(msg)
+
+        v.to_coordinatefield(self.hess_dir_r)
+
+        with self.hess_dir_r.dat.vec_ro as vec_r:
+            with self.hess_dir_m.dat.vec_wo as vec_m:
+                vec_r.copy(vec_m)
+
+        d2J = self.Jred.hessian(self.hess_dir_m)
+
+        with d2J.dat.vec_ro as vec_d2J:
+            with self.deriv_r.dat.vec_wo as vec_r:
+                vec_d2J.copy(vec_r)
+
+        hv.from_first_derivative(self.deriv_r)
+        hv.scale(self.scale)
+        hv.apply_riesz_map()
 
     def createJred(self):
         """Create reduced functional using pyadjiont."""
@@ -306,6 +479,12 @@ class ReducedObjective(ShapeObjective):
                 vec_dJ.copy(vec_r)
         out.from_first_derivative(self.deriv_r)
 
+    def hessVec(self, hv, v, x, tol):
+        raise NotImplementedError(
+            "Hessian actions are not supported by the deprecated "
+            "ReducedObjective. Use PDEconstrainedObjective instead."
+        )
+
     def update(self, x, flag, iteration):
         """Update domain and solution to state and adjoint equation."""
         if self.Q.update_domain(x):
@@ -360,6 +539,12 @@ class ObjectiveSum(Objective):
         self.b.derivative(temp)
         out.plus(temp)
 
+    def hessVec(self, hv, v, x, tol):
+        temp = hv.clone()
+        self.a.hessVec(hv, v, x, tol)
+        self.b.hessVec(temp, v, x, tol)
+        hv.plus(temp)
+
     def update(self, *args):
         self.a.update(*args)
         self.b.update(*args)
@@ -378,6 +563,10 @@ class ScaledObjective(Objective):
     def derivative(self, out):
         self.J.derivative(out)
         out.scale(self.alpha)
+
+    def hessVec(self, hv, v, x, tol):
+        self.J.hessVec(hv, v, x, tol)
+        hv.scale(self.alpha)
 
     def update(self, *args):
         self.J.update(*args)

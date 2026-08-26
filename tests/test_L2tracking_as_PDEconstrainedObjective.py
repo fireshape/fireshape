@@ -4,6 +4,7 @@ import fireshape as fs
 from fireshape import PDEconstrainedObjective
 import ROL
 from pyadjoint.tape import get_working_tape, pause_annotation, annotate_tape
+import numpy as np
 
 
 @pytest.fixture(autouse=True)
@@ -58,6 +59,16 @@ class L2tracking(PDEconstrainedObjective):
         self.solver.solve()
         u = self.solution
         return fd.assemble((u - self.u_target)**2 * fd.dx)
+
+
+class CountingL2tracking(L2tracking):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hess_count = 0
+
+    def hessVec(self, hv, v, x, tol):
+        self.hess_count += 1
+        super().hessVec(hv, v, x, tol)
 
 
 def run_L2tracking_optimization(controlspace, write_output=False):
@@ -151,6 +162,260 @@ def run_L2tracking_optimization(controlspace, write_output=False):
 def test_L2tracking(controlspace, pytestconfig):
     verbose = False
     run_L2tracking_optimization(controlspace, write_output=verbose)
+
+
+def test_gradient_without_value():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+    q = fs.ControlVector(Q, inner)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    count = [0]
+
+    def eval_cb_post(*args):
+        count[0] += 1
+
+    J.eval_cb_post = eval_cb_post
+
+    # repeated calls on same control should not increase how many times
+    # ReducedFunctional.__value__() is called
+    J.update(q, None, -1)
+    J.value(q, None)
+    assert count[0] == 1
+    g = q.clone()
+    J.gradient(g, q, None)
+    assert count[0] == 1
+    J.value(q, None)
+    assert count[0] == 1
+
+    # changing domain should increase number of calls to
+    # ReducedFunctional.__value__()
+    q1 = q.clone()
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    deformation = fd.as_vector((0.05 * x * (1 - x), 0.0))
+    q1.fun.interpolate(deformation)
+
+    J.update(q1, None, -1)
+    J.gradient(g, q1, None)
+    assert count[0] == 2
+    J.value(q1, None)
+    assert count[0] == 2
+
+
+@pytest.mark.parametrize(
+    "control_type",
+    ["fe", "multigrid"],
+    ids=["fe", "mg-coarse"],
+)
+def test_PDE_hessian(control_type):
+    mesh = fd.UnitSquareMesh(5, 5)
+
+    if control_type == "fe":
+        Q = fs.FeControlSpace(mesh)
+        mesh_q = mesh
+    else:
+        mh = fd.MeshHierarchy(mesh, 1)
+        Q = fs.FeMultiGridControlSpace(mh, coarse_control=True)
+        mesh_q = mh[0]
+
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+    Hv = q.clone()
+
+    x, y = fd.SpatialCoordinate(mesh_q)
+    v.fun.interpolate(fd.as_vector((x * (1 - x) * y,
+                                    0.3 * x * y * (1 - y))))
+
+    count = [0]
+
+    def eval_cb_post(*args):
+        count[0] += 1
+
+    J.eval_cb_post = eval_cb_post
+
+    J.update(q, None, -1)
+
+    # repeated calls on same control should not increase how many times
+    # ReducedFunctional.__value__() is called
+    g = q.clone()
+    J.gradient(g, q, None)
+    assert count[0] == 1
+    J.hessVec(Hv, v, q, None)
+    assert count[0] == 1
+    J.hessVec(Hv, v, q, None)
+    assert count[0] == 1
+
+    # centered finite differences test
+    eps = 1e-4
+
+    qp = q.clone()
+    qm = q.clone()
+    qp.set(q)
+    qm.set(q)
+    qp.axpy(eps, v)
+    qm.axpy(-eps, v)
+
+    gp = q.clone()
+    gm = q.clone()
+
+    J.update(qp, None, -1)
+    J.gradient(gp, qp, None)
+
+    J.update(qm, None, -1)
+    J.gradient(gm, qm, None)
+
+    Hfd = q.clone()
+    Hfd.set(gp)
+    Hfd.axpy(-1.0, gm)
+    Hfd.scale(0.5 / eps)
+
+    error = q.clone()
+    error.set(Hfd)
+    error.axpy(-1.0, Hv)
+
+    assert error.norm() / Hv.norm() < 1e-4
+
+    # symmetry test
+    w = q.clone()
+    w.fun.interpolate(fd.as_vector((-y * (1 - y) * x, x * y * (1 - x))))
+
+    Hv = q.clone()
+    Hw = q.clone()
+
+    J.update(q, None, -1)
+    J.hessVec(Hv, v, q, None)
+    J.hessVec(Hw, w, q, None)
+
+    assert np.isclose(w.dot(Hv), v.dot(Hw), rtol=1e-8, atol=1e-10)
+
+    # Taylor test
+    g = q.clone()
+    Hv = q.clone()
+
+    J.update(q, None, -1)
+    J0 = J.value(q, None)
+    J.gradient(g, q, None)
+    J.hessVec(Hv, v, q, None)
+
+    dJv = g.dot(v)
+    d2Jvv = v.dot(Hv)
+
+    epss = [1e-1, 5e-2, 2.5e-2, 1.25e-2]
+    errors = []
+
+    for eps in epss:
+        qe = q.clone()
+        qe.set(q)
+        qe.axpy(eps, v)
+
+        J.update(qe, None, -1)
+        Je = J.value(qe, None)
+
+        model = J0 + eps * dJv + 0.5 * eps**2 * d2Jvv
+        errors.append(abs(Je - model))
+
+    rates = []
+
+    for i in range(len(errors) - 1):
+        rates.append(np.log(errors[i] / errors[i + 1]) / np.log(2.0))
+
+    print("Taylor errors:", errors)
+    print("Taylor rates:", rates)
+    assert min(rates[-2:]) > 2.9
+
+
+@pytest.mark.parametrize("use_as_hessian, expected_hess", [
+    (False, True),
+    (True, False),
+])
+def test_ROL_hessian_selection(use_as_hessian, expected_hess):
+    mesh = fd.UnitSquareMesh(8, 8)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+    q = fs.ControlVector(Q, inner)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = CountingL2tracking(Q, solverparams=pms)
+
+    params_dict = {
+        "General": {
+            "Secant": {
+                "Type": "Limited-Memory BFGS",
+                "Use as Hessian": use_as_hessian,
+            },
+        },
+        "Step": {
+            "Type": "Trust Region",
+            "Trust Region": {
+                "Subproblem Solver": "Truncated CG",
+                "Initial Radius": 0.1,
+            },
+        },
+        "Status Test": {
+            "Gradient Tolerance": 1e-4,
+            "Step Tolerance": 1e-8,
+            "Iteration Limit": 2,
+        },
+    }
+
+    params = ROL.ParameterList(params_dict, "Parameters")
+    problem = ROL.OptimizationProblem(J, q)
+    solver = ROL.OptimizationSolver(problem, params)
+    solver.solve()
+
+    print("Hessian count = ", J.hess_count)
+    assert (J.hess_count > 0) == expected_hess
+
+
+def test_PDE_objective_scale():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    inner = fs.H1InnerProduct(Q, direct_solve=True)
+
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+    J = L2tracking(Q, solverparams=pms)
+
+    q = fs.ControlVector(Q, inner)
+    v = q.clone()
+
+    x, y = fd.SpatialCoordinate(Q.mesh_r)
+    v.fun.interpolate(fd.as_vector((x * (1 - x) * y,
+                                    0.3 * x * y * (1 - y))))
+
+    g0 = q.clone()
+    H0 = q.clone()
+    g = q.clone()
+    H = q.clone()
+
+    J.update(q, None, -1)
+
+    J.scale = 1.0
+    value0 = J.value(q, None)
+    J.gradient(g0, q, None)
+    J.hessVec(H0, v, q, None)
+
+    alpha = 2.7
+    J.scale = alpha
+    value = J.value(q, None)
+    J.gradient(g, q, None)
+    J.hessVec(H, v, q, None)
+
+    g0.scale(alpha)
+    H0.scale(alpha)
+    g.axpy(-1.0, g0)
+    H.axpy(-1.0, H0)
+
+    assert np.isclose(value, alpha * value0)
+    assert g.norm() < 1e-10
+    assert H.norm() < 1e-10
 
 
 if __name__ == '__main__':
