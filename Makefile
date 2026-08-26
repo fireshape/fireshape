@@ -10,4 +10,4 @@ examples:
 
 
 lint:
-	flake8 --ignore=F403,F405,E226
+	flake8
