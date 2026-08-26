@@ -394,7 +394,8 @@ class PDEconstrainedObjective(Objective):
         self._ensure_adjoint()
 
         if not self.feasible_control:
-            raise RuntimeError("Cannot compute Hessian at an infeasible control.")
+            msg = "Cannot compute Hessian at an infeasible control."
+            raise RuntimeError(msg)
 
         v.to_coordinatefield(self.hess_dir_r)
 
