@@ -128,8 +128,8 @@ class ShapeObjective(Objective):
 
         Function signature imposed by ROL.
         """
-        if (v.boundary_extension is not None
-                or hv.boundary_extension is not None):
+        if (v.boundary_extension is not None or
+                hv.boundary_extension is not None):
             raise NotImplementedError(
                 "Hessian actions with boundary_extension are not supported."
             )
