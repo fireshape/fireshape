@@ -60,6 +60,7 @@ class L2tracking(PDEconstrainedObjective):
         u = self.solution
         return fd.assemble((u - self.u_target)**2 * fd.dx)
 
+
 class CountingL2tracking(L2tracking):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -162,6 +163,7 @@ def test_L2tracking(controlspace, pytestconfig):
     verbose = False
     run_L2tracking_optimization(controlspace, write_output=verbose)
 
+
 def test_gradient_without_value():
     mesh = fd.UnitSquareMesh(4, 4)
     Q = fs.FeControlSpace(mesh)
@@ -172,8 +174,10 @@ def test_gradient_without_value():
     J = L2tracking(Q, solverparams=pms)
 
     count = [0]
+
     def eval_cb_post(*args):
         count[0] += 1
+
     J.eval_cb_post = eval_cb_post
 
     # repeated calls on same control should not increase how many times
@@ -199,6 +203,7 @@ def test_gradient_without_value():
     assert count[0] == 2
     J.value(q1, None)
     assert count[0] == 2
+
 
 @pytest.mark.parametrize(
     "control_type",
@@ -230,8 +235,10 @@ def test_PDE_hessian(control_type):
                                     0.3 * x * y * (1 - y))))
 
     count = [0]
+
     def eval_cb_post(*args):
         count[0] += 1
+
     J.eval_cb_post = eval_cb_post
 
     J.update(q, None, -1)
@@ -324,6 +331,7 @@ def test_PDE_hessian(control_type):
     print("Taylor rates:", rates)
     assert min(rates[-2:]) > 2.9
 
+
 @pytest.mark.parametrize("use_as_hessian, expected_hess", [
     (False, True),
     (True, False),
@@ -365,6 +373,7 @@ def test_ROL_hessian_selection(use_as_hessian, expected_hess):
 
     print("Hessian count = ", J.hess_count)
     assert (J.hess_count > 0) == expected_hess
+
 
 def test_PDE_objective_scale():
     mesh = fd.UnitSquareMesh(4, 4)

@@ -66,6 +66,7 @@ def test_regularization(controlspace_t, use_extension):
         check_result(run_taylor_test(J4))
     check_result(run_taylor_test(Js))
 
+
 @pytest.mark.parametrize("control_type, coarse_control", [
     ("fe", None),
     ("multigrid", True),
@@ -118,6 +119,7 @@ def test_deformation_objective_hessian(control_type, coarse_control):
     gp.axpy(-1.0, Hv)
 
     assert gp.norm() / Hv.norm() < 1e-6
+
 
 def test_control_objective_hessian():
     mesh = fd.UnitSquareMesh(4, 4)

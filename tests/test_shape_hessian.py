@@ -14,6 +14,7 @@ class VolumeObjective(fs.ShapeObjective):
     def value_form(self):
         return fd.Constant(1.0) * fd.dx(domain=self.mesh_m)
 
+
 @pytest.mark.parametrize(
     "control_type, coarse_control",
     [
@@ -105,6 +106,7 @@ def test_shape_hessian_action(control_type, coarse_control):
 
     assert error.norm() / Hv.norm() < 1e-5
 
+
 def test_shape_hessian_kernel():
     mesh = fd.UnitSquareMesh(4, 4)
 
@@ -125,6 +127,7 @@ def test_shape_hessian_kernel():
     J.hessVec(Hv, v, q, None)
 
     assert Hv.norm() < 1e-10
+
 
 def test_objective_sum_hessian():
     mesh = fd.UnitSquareMesh(4, 4)
