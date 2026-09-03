@@ -415,6 +415,13 @@ class PDEconstrainedObjective(Objective):
 
     def createJred(self):
         """Create reduced functional using pyadjiont."""
+        with self.dT_m.dat.vec_ro as vec:
+            if vec.norm() > 1e-14:
+                raise RuntimeError(
+                    "Cannot create a pyadjoint tape at a nonzero deformation. "
+                    "Retaping a moved mesh is not supported."
+                )
+
         try:
             # We use pyadjoint to calculate adjoint and shape derivatives,
             # in order to do this we need to "record a tape of the forward
