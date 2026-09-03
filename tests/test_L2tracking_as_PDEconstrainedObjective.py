@@ -11,7 +11,8 @@ import numpy as np
 def handle_taping():
     yield
     tape = get_working_tape()
-    tape.clear_tape()
+    if tape is not None:
+        tape.clear_tape()
 
 
 @pytest.fixture(autouse=True, scope="function")
@@ -203,6 +204,22 @@ def test_gradient_without_value():
     assert count[0] == 2
     J.value(q1, None)
     assert count[0] == 2
+
+
+def test_createJred_requires_zero_deformation():
+    mesh = fd.UnitSquareMesh(4, 4)
+    Q = fs.FeControlSpace(mesh)
+    pms = {"ksp_type": "preonly", "pc_type": "lu"}
+
+    J = L2tracking(Q, solverparams=pms)
+
+    J.dT_m.interpolate(fd.as_vector((0.01, 0.0)))
+
+    with pytest.raises(
+        RuntimeError,
+        match="Cannot create a pyadjoint tape at a nonzero deformation",
+    ):
+        J.createJred()
 
 
 @pytest.mark.parametrize(
