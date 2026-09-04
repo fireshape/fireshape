@@ -60,7 +60,7 @@ class Objective(ROL.Objective):
         Compute Riesz representative of shape directional derivative.
         Function signature imposed by ROL.
         """
-
+        self.Q.update_domain(x)
         self.derivative(g)
         g.apply_riesz_map()
 
@@ -362,6 +362,7 @@ class PDEconstrainedObjective(Objective):
         Evaluate reduced objective.
         Function signature imposed by ROL.
         """
+        self.Q.update_domain(x)
         J = self._ensure_forward()
         if not self.feasible_control:
             return J
@@ -391,6 +392,7 @@ class PDEconstrainedObjective(Objective):
                 "Hessian actions with boundary_extension are not supported."
             )
 
+        self.Q.update_domain(x)
         self._ensure_adjoint()
 
         if not self.feasible_control:
