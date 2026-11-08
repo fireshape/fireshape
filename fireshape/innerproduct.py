@@ -92,7 +92,7 @@ class UflInnerProduct(InnerProduct):
         # and set up a ksp solver for self.riesz_map
         if I_interp is not None:
             self.interpolated = True
-            ITAI = self.A.PtAP(I_interp)
+            ITAI = self.A.ptap(I_interp)
             from firedrake.petsc import PETSc
             import numpy as np
             zero_rows = []

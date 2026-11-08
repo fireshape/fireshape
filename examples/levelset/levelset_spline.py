@@ -18,7 +18,7 @@ mesh_m = Q.mesh_m
 
 f = (pow(x, 2))+pow(2*y, 2) - 1
 outdef = fd.VTKFile("deformation.pvd")
-out = fd.File("domain.pvd")
+out = fd.VTKFile("domain.pvd")
 V, IM = Q.get_space_for_inner()
 T = fd.Function(V)
 

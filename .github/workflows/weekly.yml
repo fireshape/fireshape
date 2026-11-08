@@ -1,0 +1,32 @@
+
+name: Weekly Firedrake compatibility
+
+on:
+  schedule:
+    # Every Monday at 06:17 UTC
+    - cron: "17 6 * * 1"
+
+  # Also allow manual runs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Fireshape ${{ matrix.fireshape }} / Firedrake ${{ matrix.firedrake }}
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - fireshape: master
+            firedrake: latest
+          - fireshape: future
+            firedrake: dev-main
+
+    uses: ./.github/workflows/test.yml
+    with:
+      source_ref: ${{ matrix.fireshape }}
+      firedrake_docker_version: ${{ matrix.firedrake }}
