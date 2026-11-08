@@ -47,7 +47,7 @@ class UflInnerProduct(InnerProduct):
         I: type PETSc.Mat, interpolation matrix between V and  ControlSpace
         """
         (V, I_interp) = Q.get_space_for_inner()
-        free_bids = list(V.mesh().topology.exterior_facets.unique_markers)
+        free_bids = list(V.mesh().topology.facet_markers)
         self.free_bids = [int(i) for i in free_bids]  # np.int->int
         for bid in self.fixed_bids:
             self.free_bids.remove(bid)
@@ -92,7 +92,7 @@ class UflInnerProduct(InnerProduct):
         # and set up a ksp solver for self.riesz_map
         if I_interp is not None:
             self.interpolated = True
-            ITAI = self.A.PtAP(I_interp)
+            ITAI = self.A.ptap(I_interp)
             from firedrake.petsc import PETSc
             import numpy as np
             zero_rows = []

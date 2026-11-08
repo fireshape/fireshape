@@ -175,15 +175,19 @@ class FeControlSpace(ControlSpace):
             self.V_c_dual = self.V_c.dual()
             # Create interpolator and cointerpolator from V_c into V_r
             self.Ip_v = fd.Function(self.V_c)
+
             interp = fd.interpolate(self.Ip_v, self.V_r,
-                                    default_missing_val=0.)
-            self.Ip = fd.Interpolator(interp, self.V_r,
-                                      allow_missing_dofs=True)
+                                    default_missing_val=0.,
+                                    allow_missing_dofs=True)
+            self.Ip = fd.get_interpolator(interp)
+            self.Ip.assemble()
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
+
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar,
-                                   default_missing_val=0.)
-            self.CoIp = fd.Interpolator(restr, self.V_r,
-                                        allow_missing_dofs=True)
+                                   default_missing_val=0.,
+                                   allow_missing_dofs=True)
+            self.CoIp = fd.get_interpolator(restr)
+            self.CoIp.assemble()
 
         elif element.family() == 'Discontinuous Lagrange':
             self.is_DG = True
@@ -192,10 +196,12 @@ class FeControlSpace(ControlSpace):
             # Create interpolator and cointerpolator from V_c into V_r
             self.Ip_v = fd.Function(self.V_c)
             interp = fd.interpolate(self.Ip_v, self.V_r)
-            self.Ip = fd.Interpolator(interp, self.V_r)
+            self.Ip = fd.get_interpolator(interp)
+            self.Ip.assemble()
             self.CoIp_wstar = fd.Cofunction(self.V_r.dual())
             restr = fd.interpolate(fd.TestFunction(self.V_c), self.CoIp_wstar)
-            self.CoIp = fd.Interpolator(restr, self.V_r)
+            self.CoIp = fd.get_interpolator(restr)
+            self.CoIp.assemble()
 
     def restrict(self, residual, out):
         if getattr(self, "is_DG", False):
@@ -323,15 +329,13 @@ class FeMultiGridControlSpace(ControlSpace):
             out.cofun.assign(residual)
 
     def interpolate(self, vector, out):
-        # out is unused, but keep it for API compatibility
         if self.coarse_control:  # prolong from coarse to fine
-            self.Ts[0].assign(vector.fun)
-            for (prev, next) in zip(self.Ts, self.Ts[1:]):
-                fd.prolong(prev, next)
+            if len(self.Vs) == 1:
+                out.assign(vector.fun)
+            else:
+                fd.prolong(vector.fun, out)
         else:  # inject from fine to coarse
-            self.Ts[-1].assign(vector.fun)
-            for (prev, next) in zip(self.Ts[::-1], self.Ts[:-1][::-1]):
-                fd.inject(prev, next)
+            out.assign(vector.fun)
 
     def update_domain(self, q: 'ControlVector'):
         """
@@ -356,7 +360,17 @@ class FeMultiGridControlSpace(ControlSpace):
                 return False
             else:
                 self.lastq.set(q)
-        q.to_coordinatefield(self.Ts[0])
+
+        # propagate control through the hierarchy
+        if self.coarse_control:
+            self.Ts[0].assign(q.fun)
+            for coarse, fine in zip(self.Ts, self.Ts[1:]):
+                fd.prolong(coarse, fine)
+        else:
+            self.Ts[-1].assign(q.fun)
+            for fine, coarse in zip(self.Ts[::-1], self.Ts[:-1][::-1]):
+                fd.inject(fine, coarse)
+
         # add identity to every function in the hierarchy
         # this is the only reason we need to overwrite update_domain
         [T.assign(T + id_) for (T, id_) in zip(self.Ts, self.ids)]
@@ -364,7 +378,7 @@ class FeMultiGridControlSpace(ControlSpace):
         # uncache physical node locations (which firedrake automatically
         # caches to speed up multrigrid transfer operators)
         for mesh in self.mh_mapped:
-            cache = mesh._geometric_shared_data_cache
+            cache = mesh.geometric_shared_data_cache
             if "hierarchy_physical_node_locations" in cache:
                 cache.pop("hierarchy_physical_node_locations")
         return True
@@ -575,7 +589,7 @@ class BsplineControlSpace(ControlSpace):
         x_fct = fd.SpatialCoordinate(self.mesh_r)  # used for x_int
         # compute self.M, x_int will be overwritten below
         x_int = fd.assemble(fd.interpolate(x_fct[0], V.sub(0)))
-        self.M = x_int.dat.dataset.layout_vec.size
+        self.M = V.sub(0).dim()
 
         comm = self.comm
 
@@ -594,7 +608,7 @@ class BsplineControlSpace(ControlSpace):
             IM = PETSc.Mat().create(comm=self.comm)
             IM.setType(PETSc.Mat.Type.AIJ)
             lsize = x_int.dat.data_ro.size
-            gsize = x_int.dat.dataset.layout_vec.size
+            gsize = self.M
             IM.setSizes(((lsize, gsize), (local_n, n)))
 
             IM.setUp()
