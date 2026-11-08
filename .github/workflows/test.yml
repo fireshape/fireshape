@@ -27,7 +27,7 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update
-          apt-get -y install gmsh
+          apt-get -y install gmsh libboost-dev
 
       - uses: actions/checkout@v5
         with:
