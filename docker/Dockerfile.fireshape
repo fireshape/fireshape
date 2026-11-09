@@ -4,9 +4,10 @@ FROM firedrakeproject/firedrake:latest
 MAINTAINER Alberto Paganini <admp1@le.ac.uk>
 
 RUN apt-get update \
-    && apt-get -y dist-upgrade \
-    && apt-get -y install gmsh \
+    && apt-get install -y --no-install-recommends \
+       gmsh libboost-dev \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Now install fireshape
 RUN pip install --verbose --src /opt \
